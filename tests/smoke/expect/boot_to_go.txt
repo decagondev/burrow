@@ -16,12 +16,14 @@ BURROW:GO:OK goroutine says 42
 [go-selftest] gc_stress ok
 [go-selftest] irq ok
 BURROW:GO:SELFTEST:OK
+[ata] INFO: hda: "QEMU HARDDISK"
 [bga] INFO: 1024x768x32 linear framebuffer at 0xfd000000
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
 [ps2] INFO: keyboard ready on irq 1
 [serial] INFO: receive interrupts on irq 4
-[driver] INFO: started: [bga pci ps2 serial]
+[driver] INFO: started: [ata bga pci ps2 serial]
+[block] INFO: hda sector 1: boot manifest "BRWMNFST" found
 [console] INFO: ready
 burrow> echo hello from the keyboar
 hello from the keyboard
@@ -40,5 +42,7 @@ Dcrw--w----        0 console
 Dcrw-rw-rw-        0 null
 burrow> write /dev/console written to the console device
 written to the console device
+burrow> disks
+hda 
 burrow> poweroff
 [console] INFO: poweroff

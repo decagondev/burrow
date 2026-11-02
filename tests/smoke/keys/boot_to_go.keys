@@ -20,6 +20,8 @@ type ls /dev
 key ret
 type write /dev/console written to the console device
 key ret
+type disks
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

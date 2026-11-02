@@ -19,7 +19,7 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 ### [x] W8-S05 Framebuffer: BGA + text console (E07.F04)
 `drivers/bga`: finds PCI `1234:1111`, sets 1024x768x32 through the Bochs dispi ports (`0x1CE/0x1CF`), maps BAR0 with `nu_mmio_map`. `kernel/gfx`: a pure `Framebuffer` (pitch-aware, PIT-27) with fills, a gradient and an embedded bitmap font; a text console that mirrors the serial console. `make go-smoke` saves a `screendump` and checks pixels.
 
-### [ ] W8-S06 Block layer + ATA PIO in Go (E07.F05)
+### [x] W8-S06 Block layer + ATA PIO in Go (E07.F05)
 `kernel/block`: `Device` (sector size, count, `ReadAt`), a RAM disk, and one conformance test both must pass. `drivers/ata`: IDENTIFY and 28-bit LBA PIO reads on the primary channel (`hal.PortIO16`). On target: read the boot disk's manifest sector and check its magic.
 
 ### [ ] W8-S07 FAT32 read-only (E07.F06)

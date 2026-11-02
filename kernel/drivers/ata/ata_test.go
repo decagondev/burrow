@@ -1,0 +1,143 @@
+package ata
+
+import (
+	"testing"
+
+	"burrow/kernel/block"
+	"burrow/kernel/block/blocktest"
+)
+
+// fakeChannel is an IDE channel with up to two disks that implements the
+// PIO protocol the driver uses: IDENTIFY and READ SECTORS (LBA28), with
+// DRQ set while a sector waits in the data port.
+type fakeChannel struct {
+	disks    [2][]byte // nil = no drive
+	models   [2]string
+	regs     [8]uint8
+	cur      int // selected drive
+	out      []uint16
+	reading  int // sectors still to deliver for the current READ
+	nextLBA  uint64
+	commands int
+}
+
+func (f *fakeChannel) drive() []byte { return f.disks[f.cur] }
+
+func (f *fakeChannel) In8(port uint16) uint8 {
+	switch {
+	case port == ctlBase:
+		return f.In8(ioBase + regStatus)
+	case port == ioBase+regStatus:
+		if f.drive() == nil {
+			return 0
+		}
+		if len(f.out) > 0 {
+			return 0x40 | stDRQ
+		}
+		return 0x40
+	case port > ioBase && port < ioBase+8:
+		return f.regs[port-ioBase]
+	}
+	return 0xFF
+}
+
+func (f *fakeChannel) Out8(port uint16, v uint8) {
+	switch {
+	case port == ioBase+regDrive:
+		f.regs[regDrive] = v
+		f.cur = int(v>>4) & 1
+	case port == ioBase+regCommand:
+		f.command(v)
+	case port > ioBase && port < ioBase+8:
+		f.regs[port-ioBase] = v
+	}
+}
+
+func (f *fakeChannel) command(cmd uint8) {
+	d := f.drive()
+	if d == nil {
+		return
+	}
+	f.commands++
+	switch cmd {
+	case cmdIdentify:
+		id := make([]uint16, 256)
+		n := len(d) / SectorSize
+		id[60], id[61] = uint16(n), uint16(n>>16)
+		m := []byte(f.models[f.cur] + "                                        ")[:40]
+		for i := 0; i < 20; i++ {
+			id[27+i] = uint16(m[2*i])<<8 | uint16(m[2*i+1])
+		}
+		f.out = id
+	case cmdRead:
+		f.reading = int(f.regs[regCount])
+		if f.reading == 0 {
+			f.reading = 256
+		}
+		f.nextLBA = uint64(f.regs[regLBA0]) | uint64(f.regs[regLBA1])<<8 |
+			uint64(f.regs[regLBA2])<<16 | uint64(f.regs[regDrive]&0x0F)<<24
+		f.loadSector()
+	}
+}
+
+func (f *fakeChannel) loadSector() {
+	if f.reading == 0 {
+		return
+	}
+	s := f.drive()[f.nextLBA*SectorSize:][:SectorSize]
+	for i := 0; i < SectorSize; i += 2 {
+		f.out = append(f.out, uint16(s[i])|uint16(s[i+1])<<8)
+	}
+	f.reading--
+	f.nextLBA++
+}
+
+func (f *fakeChannel) In16(port uint16) uint16 {
+	if port != ioBase+regData || len(f.out) == 0 {
+		return 0xFFFF
+	}
+	w := f.out[0]
+	f.out = f.out[1:]
+	if len(f.out) == 0 {
+		f.loadSector()
+	}
+	return w
+}
+
+func (f *fakeChannel) Out16(uint16, uint16) {}
+
+func TestIdentifyAndConformance(t *testing.T) {
+	master := blocktest.Pattern(600, SectorSize) // more than one 256-sector command
+	f := &fakeChannel{models: [2]string{"QEMU HARDDISK", ""}}
+	f.disks[0] = master
+	ch := NewChannel(f)
+	d, err := ch.Identify(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Model != "QEMU HARDDISK" || d.Sectors() != 600 {
+		t.Errorf("Identify = %q, %d sectors", d.Model, d.Sectors())
+	}
+	if _, err := ch.Identify(true); err == nil {
+		t.Error("Identify found a slave that is not there")
+	}
+	f.commands = 0
+	blocktest.Run(t, d, master)
+	whole := make([]byte, 600*SectorSize)
+	f.commands = 0
+	if err := d.ReadSectors(0, whole); err != nil || f.commands != 3 {
+		t.Errorf("600 sectors took %d READ commands (%v), want 3", f.commands, err)
+	}
+}
+
+func TestSlaveDisk(t *testing.T) {
+	f := &fakeChannel{models: [2]string{"A", "B"}}
+	f.disks[0] = blocktest.Pattern(8, SectorSize)
+	f.disks[1] = blocktest.Pattern(16, SectorSize)[512:] // different contents
+	d, err := NewChannel(f).Identify(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocktest.Run(t, d, f.disks[1])
+	var _ block.Device = d
+}

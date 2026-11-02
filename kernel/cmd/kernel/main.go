@@ -25,7 +25,8 @@ import (
 	"burrow/kernel/bootinfo"
 	"burrow/kernel/console"
 	"burrow/kernel/driver"
-	_ "burrow/kernel/drivers/bga" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/ata" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/bga"
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
@@ -86,6 +87,7 @@ func main() {
 		Dev:     dev,
 		MapMMIO: amd64.MapMMIO,
 	})
+	checkBootDisk(log.With("block"))
 
 	if screen := startScreen(); screen != nil {
 		out.Add(screen) // the console on serial and on screen
