@@ -1,0 +1,6 @@
+# Every text file is stored and checked out with LF, on every OS.
+# Shell scripts and Makefiles break with CRLF; asm/C do not care but stay consistent.
+* text=auto eol=lf
+*.img binary
+*.bin binary
+*.wad binary
