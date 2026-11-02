@@ -2,6 +2,7 @@
  * every M is a nucleus thread, every runtime lock and note a futex. */
 #include "shim.h"
 #include "sched.h"
+#include "futex.h"
 #include "trap.h"
 #include "gdt.h"
 #include "errno.h"
@@ -40,6 +41,25 @@ long sys_exit(struct syscall_frame *f) { (void)f; thread_exit(); }
 static int64_t timespec_ns(const int64_t *ts) {
     if (ts[0] < 0 || ts[1] < 0 || ts[1] >= 1000000000ll) return -1;
     return ts[0] * 1000000000ll + ts[1];
+}
+
+#define FUTEX_WAIT         0
+#define FUTEX_WAKE         1
+#define FUTEX_PRIVATE_FLAG 128          /* one address space anyway */
+
+/* futex(addr, op, val, timeout): WAIT with a relative timespec (or none)
+ * and WAKE; everything the Go runtime's lock_futex.go uses. */
+long sys_futex(struct syscall_frame *f) {
+    uint32_t *addr = (uint32_t *)SYSARG0(f);
+    int op = (int)SYSARG1(f) & ~FUTEX_PRIVATE_FLAG;
+    uint32_t val = (uint32_t)SYSARG2(f);
+    if (op == FUTEX_WAKE) return futex_wake(addr, val);
+    if (op != FUTEX_WAIT) return -ENOSYS;
+    const int64_t *ts = (const int64_t *)SYSARG3(f);
+    if (!ts) return futex_wait(addr, val, 0);
+    int64_t ns = timespec_ns(ts);
+    if (ns < 0) return -EINVAL;
+    return futex_wait(addr, val, ns ? (uint64_t)ns : 1);   /* 0 means "do not wait", not forever */
 }
 
 long sys_sched_yield(struct syscall_frame *f) { (void)f; thread_yield(); return 0; }

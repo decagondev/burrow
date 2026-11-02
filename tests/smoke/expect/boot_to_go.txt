@@ -3,3 +3,5 @@
 BURROW:NUCLEUS:OK
 [nucleus] go kernel mapped
 [nucleus] starting the Go kernel
+[kernel] INFO: hello from Go
+BURROW:GO:OK goroutine says 42

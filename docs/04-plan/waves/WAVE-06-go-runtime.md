@@ -27,7 +27,7 @@ Honour free hints; otherwise allocate from `0x7D00_0000_0000`. Test: runtime rea
 ### [x] W6-S08 clone (E05.F04)
 `thread_clone(rip, rsp, tls, rflags)`; child returns 0 from the gate. Test: sysmon thread appears in the nucleus thread list (`[sched] threads=2+`).
 
-### [ ] W6-S09 futex, nanosleep, sched_yield, clock_gettime, gettid (E05.F04)
+### [x] W6-S09 futex, nanosleep, sched_yield, clock_gettime, gettid (E05.F04)
 Test: `main()` starts; `BURROW:GO:OK goroutine says 42`.
 
 ### [ ] W6-S10 Netpoller minimum: pipe2 + epoll (E05.F04)

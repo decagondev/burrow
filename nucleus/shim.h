@@ -18,6 +18,9 @@ enum {
     SYS_MAX = 512,
 };
 
+/* Nucleus-private calls, NUCLEUS_ABI.md (numbers never reused). */
+enum { NU_BASE = 0x1000, NU_physmap_base = 0x1003, NU_debug_exit = 0x1004 };
+
 typedef long (*sys_fn)(struct syscall_frame *f);
 
 /* shim_proc.c: identity, signals (accepted, never delivered), fds, time */
@@ -47,6 +50,7 @@ long sys_munmap(struct syscall_frame *f);
 /* shim_thread.c: threads, sleep, futex */
 long sys_clone(struct syscall_frame *f);
 long sys_exit(struct syscall_frame *f);
+long sys_futex(struct syscall_frame *f);
 long sys_sched_yield(struct syscall_frame *f);
 long sys_nanosleep(struct syscall_frame *f);
 #endif

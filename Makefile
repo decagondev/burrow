@@ -4,7 +4,9 @@
 #   make            build disk image (build/disk.img)
 #   make run        boot it in QEMU (serial on your terminal, Ctrl-A X quits)
 #   make debug      boot paused, waiting for gdb on :1234 (see docs/06-guides)
-#   make test       unit tests (host) + smoke + ktest + regression (QEMU)
+#   make test       unit tests (host) + smoke + go-smoke + ktest + regression (QEMU)
+#   make go-smoke   boot build/go.img (nucleus + Go kernel), check the Go markers
+#   make run-go     boot the Go image interactively
 #   make test-unit  host-only tests: C (gcc) + Go (go test)
 #   make smoke      boot headless, assert serial markers, check exit code
 #   make ktest      boot one image per tests/ktest suite, run in-kernel tests
@@ -147,7 +149,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit smoke ktest regress
+test: test-unit smoke go-smoke ktest regress
 
 test-unit: test-c test-go
 

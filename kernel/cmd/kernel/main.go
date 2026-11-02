@@ -32,5 +32,6 @@ func main() {
 	done := make(chan int)
 	go func() { done <- 42 }()
 	fmt.Fprintf(com1, "BURROW:GO:OK goroutine says %d\n", <-done)
-	select {} // the nucleus scheduler idles the CPU when every thread blocks
+	amd64.DebugExit(0x10) // ends a QEMU test run; returns everywhere else
+	select {}             // the nucleus scheduler idles the CPU when every thread blocks
 }

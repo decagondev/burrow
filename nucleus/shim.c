@@ -7,6 +7,8 @@
  * Numbers and errno values are Linux's, so musl user programs (W9) reuse
  * the table. */
 #include "shim.h"
+#include "boot.h"
+#include "io.h"
 #include "gdt.h"
 #include "errno.h"
 #include "cpu.h"
@@ -32,6 +34,7 @@ static const sys_fn g_table[SYS_MAX] = {
     [SYS_mmap] = sys_mmap,               [SYS_munmap] = sys_munmap,
     [SYS_sched_yield] = sys_sched_yield, [SYS_nanosleep] = sys_nanosleep,
     [SYS_clone] = sys_clone,             [SYS_exit] = sys_exit,
+    [SYS_futex] = sys_futex,
     /* tgkill would be async preemption (SIGURG); GODEBUG=asyncpreemptoff=1
      * means it should never come, so leaving it out makes the census shout. */
 };
@@ -57,9 +60,23 @@ static int first_report(uint64_t nr) {
     return 1;                                               /* list full: keep logging */
 }
 
+/* Nucleus-private calls (docs/02-architecture/NUCLEUS_ABI.md), 0x1000-0x1FFF. */
+static long nu_physmap_base(struct syscall_frame *f) { (void)f; return (long)boot_info()->physmap_base; }
+static long nu_debug_exit(struct syscall_frame *f) {
+    kprintf("[shim] nu_debug_exit(%llx)\n", (unsigned long long)SYSARG0(f));
+    qemu_exit((uint8_t)SYSARG0(f));    /* ends a QEMU test run; a no-op without the device */
+    return 0;
+}
+static const sys_fn g_nu_table[] = {
+    [NU_physmap_base - NU_BASE] = nu_physmap_base,
+    [NU_debug_exit - NU_BASE] = nu_debug_exit,
+};
+
 long nu_syscall_dispatch(struct syscall_frame *f) {
     uint64_t nr = f->nr;
     if (nr < SYS_MAX && g_table[nr]) return g_table[nr](f);
+    if (nr >= NU_BASE && nr - NU_BASE < sizeof g_nu_table / sizeof g_nu_table[0] && g_nu_table[nr - NU_BASE])
+        return g_nu_table[nr - NU_BASE](f);
     if (first_report(nr)) {
         g_reports++;
         kprintf("[shim] UNIMPLEMENTED syscall %llu rip=%llx args=%llx %llx %llx %llx\n",
