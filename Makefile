@@ -118,7 +118,7 @@ test-unit: test-c test-go
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	loader/kprintf.c loader/crc32.c loader/manifest.c loader/memmap.c \
 	loader/elf64.c loader/lib_string.c loader/palloc.c loader/paging.c loader/image.c \
-	loader/elf_load.c
+	loader/elf_load.c loader/vmsetup.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h include/burrow/*.h) | $(BUILD)

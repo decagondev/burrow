@@ -25,6 +25,9 @@
 #include "palloc.h"
 #include "image.h"
 #include "elf_load.h"
+#include "paging.h"
+#include "vmsetup.h"
+#include "cpu.h"
 
 extern char __loader_start[], __loader_image_end[], __bss_end[];
 
@@ -140,6 +143,34 @@ static void load_nucleus(struct disk_image img, struct elf_loaded *out) {
     kprintf("[loader] nucleus loaded entry=%llx\n", (unsigned long long)out->entry);
 }
 
+static uint64_t frame_alloc(void *env) { return palloc_alloc(env, 1); }
+static void *frame_ptr(void *env, uint64_t pa) { (void)env; return (void *)(uintptr_t)pa; }
+
+/* The nucleus's first address space: identity + physmap + nucleus (vmsetup.h).
+ * Returns the PML4's physical address. Tables are built, not yet loaded. */
+static uint64_t build_page_tables(const struct boot_info *bi, const struct elf_loaded *n) {
+    int nx = cpu_has_nx();
+    if (nx) wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NXE);   /* before bit 63 is ever live (PIT-20) */
+    struct pt_ctx c = { frame_alloc, frame_ptr, &g_palloc, 0 };
+    if (pt_init(&c) != PT_OK) panic("out of memory for page tables");
+    const struct e820_entry *map = (const struct e820_entry *)(uintptr_t)bi->e820_addr;
+    struct vm_plan plan = { map, bi->e820_count, n, nx };
+    const char *what;
+    enum pt_status st = vm_build(&c, &plan, &what);
+    if (st != PT_OK) {
+        kprintf("[loader] %s: %s\n", what, pt_status_str(st));
+        panic("could not build page tables");
+    }
+    uint64_t pa, fl;
+    if (pt_translate(&c, PHYSMAP_BASE + BOOTINFO_PHYS_ADDR, &pa, &fl) != PT_OK || pa != BOOTINFO_PHYS_ADDR ||
+        pt_translate(&c, n->entry, &pa, &fl) != PT_OK || (fl & PTE_NX))
+        panic("page tables fail their own walk");
+    kprintf("[loader] page tables ok (pml4=%llx, physmap %llu MiB, nx=%s)\n",
+            (unsigned long long)c.root,
+            (unsigned long long)(vm_physmap_size(map, bi->e820_count) >> 20), nx ? "on" : "off");
+    return c.root;
+}
+
 void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -157,6 +188,8 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     init_frames(bi);
     struct elf_loaded nucleus;
     load_nucleus(read_nucleus_image(m), &nucleus);
+    uint64_t pml4 = build_page_tables(bi, &nucleus);
+    (void)pml4;
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */

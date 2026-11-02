@@ -25,7 +25,7 @@ Test: marker `[loader] nucleus loaded entry=ffffffff80100000`.
 File: `loader/paging.c`: `pt_map(ctx, va, pa, size, flags)` where `ctx` provides `alloc_frame()` and `phys_to_ptr()` (DIP: on the host they are malloc + identity).
 Test: host tests walk the produced tables and assert translations for 4 KiB/2 MiB pages, flags, and non-canonical rejection.
 
-### [ ] W4-S06 Build the three mappings (E03.F04.S02)
+### [x] W4-S06 Build the three mappings (E03.F04.S02)
 Identity first 1 GiB (temporary), physmap of all usable RAM at `0xFFFF800000000000` (2 MiB pages), nucleus segments with W^X flags. Enable NX (EFER.NXE) before using bit 63.
 
 ### [ ] W4-S07 boot_info v2 (E03.F04.S03)

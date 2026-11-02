@@ -3,3 +3,4 @@
 [loader] ata ok
 [loader] nucleus image crc ok
 [loader] nucleus loaded entry=ffffffff80100000
+[loader] page tables ok
