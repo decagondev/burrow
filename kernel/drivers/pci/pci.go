@@ -23,6 +23,7 @@ const (
 	offID     = 0x00 // vendor 15:0, device 31:16
 	offClass  = 0x08 // revision 7:0, prog-if 15:8, subclass 23:16, class 31:24
 	offHeader = 0x0C // header type 23:16 (bit 23 = multi-function)
+	offBAR0   = 0x10 // six base address registers, 4 bytes each
 	offIRQ    = 0x3C // interrupt line 7:0
 
 	noVendor = 0xFFFF
@@ -54,6 +55,15 @@ type Device struct {
 	Vendor, ID              uint16
 	Class, Subclass, ProgIF uint8
 	Revision, IRQLine       uint8
+	BAR                     [6]uint32
+}
+
+// MemBase is a memory BAR's address (flag bits cleared); 0 for an I/O BAR.
+func (d Device) MemBase(i int) uint64 {
+	if d.BAR[i]&1 != 0 {
+		return 0
+	}
+	return uint64(d.BAR[i] &^ 0xF)
 }
 
 func (d Device) String() string {
@@ -93,7 +103,12 @@ func read(cs ConfigSpace, bus, dev, fn uint8) (Device, bool) {
 		return Device{}, false
 	}
 	class := cs.Read32(bus, dev, fn, offClass)
+	var bars [6]uint32
+	for i := range bars {
+		bars[i] = cs.Read32(bus, dev, fn, uint8(offBAR0+4*i))
+	}
 	return Device{
+		BAR: bars,
 		Bus: bus, Dev: dev, Fn: fn,
 		Vendor: uint16(id), ID: uint16(id >> 16),
 		Class: uint8(class >> 24), Subclass: uint8(class >> 16), ProgIF: uint8(class >> 8),

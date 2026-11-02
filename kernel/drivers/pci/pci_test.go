@@ -71,7 +71,7 @@ func TestEnumerateQEMU(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("Enumerate:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if b.reads > 256*32+64 {
+	if b.reads > 256*32+16*10 { // every slot once, then about 10 words per function found
 		t.Errorf("%d config reads: functions 1-7 of single-function devices were probed", b.reads)
 	}
 }
@@ -82,5 +82,23 @@ func TestAddressAndPresent(t *testing.T) {
 	}
 	if !Present(&fakeBus{words: map[uint32]uint32{}}) {
 		t.Error("Present = false for a bus whose address port reads back")
+	}
+}
+
+func TestBARsAndFind(t *testing.T) {
+	b := qemuPC()
+	b.words[Address(0, 2, 0, offBAR0)] = 0xFD000008    // prefetchable memory
+	b.words[Address(0, 1, 1, offBAR0+16)] = 0x0000C041 // I/O BAR 4 of the IDE controller
+	devs := Enumerate(PortConfig{IO: b})
+	vga, ok := Find(devs, 0x1234, 0x1111)
+	if !ok || vga.MemBase(0) != 0xFD000000 {
+		t.Fatalf("vga = %+v, %v", vga, ok)
+	}
+	ide, _ := Find(devs, 0x8086, 0x7010)
+	if ide.MemBase(4) != 0 || ide.BAR[4] != 0xC041 {
+		t.Errorf("an I/O BAR is not memory: %#x", ide.BAR[4])
+	}
+	if _, ok := Find(devs, 0xdead, 0xbeef); ok {
+		t.Error("found a device that was never enumerated")
 	}
 }

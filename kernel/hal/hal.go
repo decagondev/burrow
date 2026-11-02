@@ -33,3 +33,10 @@ type PortIO32 interface {
 	In32(port uint16) uint32
 	Out32(port uint16, v uint32)
 }
+
+// PortIO16 is 16-bit port I/O: the ATA data port and the Bochs display
+// (BGA) registers need it.
+type PortIO16 interface {
+	In16(port uint16) uint16
+	Out16(port uint16, v uint16)
+}

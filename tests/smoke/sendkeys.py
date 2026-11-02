@@ -7,6 +7,7 @@ The keys file is a small script, one step per line ('#' comments):
     wait <text>    block until <text> appears in the serial log
     type <text>    press each character (letters, digits, space, - . / , = ;)
     key <name>     press one QEMU key name (ret, backspace, ctrl-u, ...)
+    screendump <f> save the screen as a PPM (checked by checkscreen.py)
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -51,6 +52,18 @@ def wait_for(log, text, deadline):
     raise SystemExit(f'sendkeys: {text!r} never appeared in {log}')
 
 
+def wait_for_file(path, deadline):
+    """QEMU writes the dump asynchronously: wait until its size settles."""
+    last = -1
+    while time.time() < deadline:
+        size = os.path.getsize(path) if os.path.exists(path) else -1
+        if size > 0 and size == last:
+            return
+        last = size
+        time.sleep(0.1)
+    raise SystemExit(f'sendkeys: QEMU never wrote {path}')
+
+
 def main():
     mon, log, keys = sys.argv[1:4]
     deadline = time.time() + float(sys.argv[4] if len(sys.argv) > 4 else 30)
@@ -73,6 +86,12 @@ def main():
                     press(key_name(ch))
             elif op == 'key':
                 press(arg)
+            elif op == 'screendump':
+                path = os.path.abspath(arg)
+                if os.path.exists(path):
+                    os.remove(path)
+                s.sendall(f'screendump {path}\n'.encode())
+                wait_for_file(path, deadline)
             else:
                 raise SystemExit(f'sendkeys: unknown step {line!r}')
     s.close()

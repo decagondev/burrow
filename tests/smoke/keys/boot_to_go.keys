@@ -1,6 +1,7 @@
 # Typed into the Go kernel's console over the PS/2 keyboard (W7-S05), after
 # the console is up. A typo corrected with backspace, then a clean exit.
 wait burrow> 
+screendump build/screen-boot_to_go.ppm
 type echo hello from the keyboarx
 key backspace
 type d
@@ -19,5 +20,6 @@ type ls /dev
 key ret
 type write /dev/console written to the console device
 key ret
+screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

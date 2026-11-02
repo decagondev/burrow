@@ -21,11 +21,14 @@ import (
 // Env is what a driver may touch.
 type Env struct {
 	Ports   hal.PortIO
+	Ports16 hal.PortIO16
 	Ports32 hal.PortIO32
 	IRQ     func(line int) hal.IRQLine
 	Log     *klog.Logger // StartAll gives each driver its own "[name]" child
 	Input   chan<- byte  // console input: keyboards and serial lines write here
 	Dev     *devfs.FS    // where a driver registers its device files (/dev)
+	// MapMMIO maps device memory (a PCI BAR) and returns it.
+	MapMMIO func(pa, n uint64) ([]byte, error)
 }
 
 // Driver is one device driver.

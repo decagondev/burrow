@@ -10,7 +10,8 @@
 #   1. every non-comment line of <expect-file> appears in the serial log,
 #      IN ORDER (a stage printing out of order is a bug too);
 #   2. QEMU exits with status 33 = isa-debug-exit code 0x10 (success);
-#   3. no line containing "PANIC" or "FAIL".
+#   3. no line containing "PANIC" or "FAIL";
+#   4. if <expect-file> with .screen for .txt exists, its pixel checks pass.
 # The full serial log is kept in build/smoke-<name>.log for the bug tracker.
 set -euo pipefail
 
@@ -53,4 +54,9 @@ while IFS= read -r want || [ -n "$want" ]; do
 done < "$EXPECT"
 
 [ "$STATUS" -eq 33 ] || fail "QEMU exit status $STATUS, want 33 (debug-exit 0x10)"
+# Screen checks: pixels of the keys file's screendumps (tests/smoke/checkscreen.py).
+SCREEN="${EXPECT%.txt}.screen"
+if [ -f "$SCREEN" ]; then
+  python3 "$(dirname "$0")/checkscreen.py" "$SCREEN" || fail "screen does not match $SCREEN"
+fi
 echo "SMOKE PASS [$NAME] ($(grep -c . "$LOG.clean") log lines)"

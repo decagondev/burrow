@@ -18,13 +18,15 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"burrow/kernel/arch/amd64"
 	"burrow/kernel/bootinfo"
 	"burrow/kernel/console"
 	"burrow/kernel/driver"
-	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/bga" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/hal"
@@ -55,7 +57,8 @@ func main() {
 		amd64.DebugExit(0x11)
 	}
 	k.modules = mods
-	dev := k.mountFiles(log.Writer())
+	out := &consoleOut{ws: []io.Writer{log.Writer()}}
+	dev := k.mountFiles(out)
 
 	done := make(chan int)
 	go func() { done <- 42 }()
@@ -75,14 +78,19 @@ func main() {
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
 	driver.StartAll(&driver.Env{
 		Ports:   amd64.Ports{},
+		Ports16: amd64.Ports{},
 		Ports32: amd64.Ports{},
 		IRQ:     func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
 		Log:     log,
 		Input:   input,
 		Dev:     dev,
+		MapMMIO: amd64.MapMMIO,
 	})
 
-	con := console.New(log.Writer(), input)
+	if screen := startScreen(); screen != nil {
+		out.Add(screen) // the console on serial and on screen
+	}
+	con := console.New(out, input)
 	addCommands(con, k)
 	log.With("console").Infof("ready: type on the keyboard or the serial line (help lists commands)")
 	con.Run()

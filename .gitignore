@@ -4,3 +4,4 @@ build/
 node_modules/
 tools/doccheck/package-lock.json
 *.wad
+__pycache__/

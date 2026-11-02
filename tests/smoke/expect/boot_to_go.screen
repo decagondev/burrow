@@ -1,0 +1,14 @@
+# Pixels of the Go kernel's screen (kernel/cmd/kernel/screen.go), dumped by
+# tests/smoke/keys/boot_to_go.keys right after the first prompt. Append-only.
+size  build/screen-boot_to_go.ppm 1024 768
+# the band: a gradient from #007d9c at x=0 to #5dc9e2 at x=1023
+pixel build/screen-boot_to_go.ppm 0 2 #007d9c
+pixel build/screen-boot_to_go.ppm 1023 2 #5dc9e2
+pixel build/screen-boot_to_go.ppm 1000 90 #5ac7e0
+# the title: the stem of the "B" of "Burrow" (scale 6 from (24,18))
+pixel build/screen-boot_to_go.ppm 26 20 #ffffff
+# the console below the band: the prompt's "b" stem, the paper beside it,
+# and paper in the right margin no text cell reaches
+pixel build/screen-boot_to_go.ppm 1 97 #e6e6e6
+pixel build/screen-boot_to_go.ppm 3 97 #1e1e28
+pixel build/screen-boot_to_go.ppm 1022 700 #1e1e28
