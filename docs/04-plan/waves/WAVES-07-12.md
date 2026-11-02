@@ -12,7 +12,7 @@ Stories: E07.F01 initrd tarfs · E07.F02 VFS · E07.F03 devfs · E07.F04 framebu
 Demo: `cat /etc/motd`; Go draws a gopher-coloured gradient and a text console on the framebuffer.
 Test idea: VFS conformance suite run against tarfs, ramfs and devfs (Liskov).
 
-## W9 First Process (M9)
+## W9 First Process (M9) — sliced: [WAVE-09](WAVE-09-first-process.md)
 Stories: E08.F01 address spaces · E08.F02 user ELF loader · E08.F03 ring 3 · E08.F04 syscall ring · E08.F05 first syscalls · E08.F06 POSIX_COVERAGE.md.
 Demo: `/bin/hello` (static musl) prints and exits; user page fault kills only that process.
 First user program is 20 lines of asm doing `write` + `exit`, before musl.

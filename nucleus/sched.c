@@ -60,6 +60,7 @@ static void schedule(void) {
     g_percpu.kstack_bottom = next->kstack_bottom;
     tss_set_rsp0(next->kstack_top);
     if (next->fs_base != prev->fs_base) wrmsr(MSR_FS_BASE, next->fs_base);
+    if (next->cr3 != prev->cr3) write_cr3(next->cr3);   /* flushes the TLB's user half */
     fpu_save(prev->fx);
     fpu_restore(next->fx);
     g_switches++;
@@ -128,6 +129,7 @@ static struct thread *thread_alloc(const char *name) {
         return 0;
     }
     t->fs_base = 0;
+    t->cr3 = vmm_kernel()->pt.root;
     t->timed_out = 0;
     t->wait_next = 0;
     t->name = name;
@@ -182,6 +184,7 @@ void sched_init(void) {
     main->state = T_RUNNING;
     main->id = g_next_id++;
     main->name = "main";
+    main->cr3 = vmm_kernel()->pt.root;
     main->kstack_bottom = (uint64_t)(uintptr_t)boot_stack;
     main->kstack_top = (uint64_t)(uintptr_t)boot_stack_top;
     g_percpu.current = main;

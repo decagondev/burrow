@@ -1,0 +1,5 @@
+# Ordered markers for ktest suite "user" (tests/ktest/user.txt). Append-only.
+[ktest] running suite
+[ktest] uspace_map_translate ok
+[ktest] uspace_kernel_half_shared ok
+BURROW:KTEST:OK

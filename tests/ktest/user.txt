@@ -1,0 +1,3 @@
+# Suite "user": address spaces and ring 3 (W9), through the nucleus calls.
+uspace_map_translate
+uspace_kernel_half_shared

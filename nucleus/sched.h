@@ -5,7 +5,8 @@
  * it. Interrupts taken while it runs land on that stack (trap.asm), so a
  * thread can be switched out from inside an IRQ handler and resumed later.
  * PIT-22 checklist, done on every switch before switch.asm runs:
- * percpu kstack bounds, TSS.RSP0, FS_BASE. */
+ * percpu kstack bounds, TSS.RSP0, FS_BASE, CR3 (a user thread's own page
+ * tables; every other thread runs on the kernel's). */
 #ifndef NUCLEUS_SCHED_H
 #define NUCLEUS_SCHED_H
 #include <stdint.h>
@@ -27,6 +28,7 @@ struct thread {
     const char *name;
     struct thread *wait_next;   /* futex wait queue link (futex.c) */
     uint64_t futex_key;         /* address this thread waits on (futex.c) */
+    uint64_t cr3;               /* page tables it runs on: the kernel's, or its process's (W9) */
     uint8_t  fx[512] __attribute__((aligned(16)));   /* FXSAVE area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");

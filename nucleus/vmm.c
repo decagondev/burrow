@@ -39,6 +39,38 @@ void vmm_init(void) {
             (unsigned long long)g_kernel.pt.root, g_nx_mask == ~0ull ? "on" : "off");
 }
 
+/* A process's address space: an empty lower half and the kernel's upper
+ * half. The upper PML4 entries point at the kernel's own PDPTs, so later
+ * kernel mappings inside them (thread stacks, MMIO) appear everywhere; the
+ * kernel never adds an upper-half PML4 entry after boot. */
+int vm_as_init_user(struct addr_space *as) {
+    uint64_t root = frame_alloc_zeroed();
+    if (!root) return -1;
+    uint64_t *pml4 = phys_to_virt(root);
+    const uint64_t *kernel = phys_to_virt(g_kernel.pt.root);
+    for (int i = PML4_KERNEL_FIRST; i < 512; i++) pml4[i] = kernel[i];
+    as->pt = (struct pt_ctx){ pt_alloc, pt_ptr, 0, root };
+    return 0;
+}
+
+/* Frees one table and, below the PDPT level, the tables it points to.
+ * Leaves (and 2 MiB pages) are left alone: their frames are not ours. */
+static void free_table(uint64_t pa, int level) {
+    uint64_t *t = phys_to_virt(pa);
+    if (level > 1)
+        for (int i = 0; i < 512; i++)
+            if ((t[i] & PTE_P) && !(t[i] & PTE_PS)) free_table(t[i] & PTE_ADDR_MASK, level - 1);
+    frame_free(pa);
+}
+
+void vm_as_free_tables(struct addr_space *as) {
+    uint64_t *pml4 = phys_to_virt(as->pt.root);
+    for (int i = 0; i < PML4_KERNEL_FIRST; i++)
+        if (pml4[i] & PTE_P) free_table(pml4[i] & PTE_ADDR_MASK, 3);   /* PDPT, PD, PT */
+    frame_free(as->pt.root);
+    as->pt.root = 0;
+}
+
 enum pt_status vm_map(struct addr_space *as, uint64_t va, uint64_t pa, uint64_t len, uint64_t flags) {
     uint64_t f = irq_save();
     enum pt_status st = pt_map(&as->pt, va, pa, len, flags & g_nx_mask);

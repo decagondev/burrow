@@ -21,6 +21,13 @@ struct addr_space {
 void vmm_init(void);
 struct addr_space *vmm_kernel(void);
 
+#define PML4_KERNEL_FIRST 256   /* PML4 entries 256-511 = the upper half */
+
+/* User address spaces (uspace.c): a new PML4 sharing the kernel half; and
+ * freeing every lower-half table (not the frames they map) plus the PML4. */
+int  vm_as_init_user(struct addr_space *as);   /* 0, or -1 out of memory */
+void vm_as_free_tables(struct addr_space *as);
+
 /* flags: PTE_W, PTE_U, PTE_PCD/PWT, PTE_G, PTE_NX (P implied). */
 enum pt_status vm_map(struct addr_space *as, uint64_t va, uint64_t pa, uint64_t len, uint64_t flags);
 /* free_frames: hand every unmapped frame back to frames.c. */

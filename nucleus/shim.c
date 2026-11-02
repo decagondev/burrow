@@ -16,6 +16,7 @@
 #include "panic.h"
 #include "irq.h"
 #include "vmm.h"
+#include "uspace.h"
 #include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
@@ -94,6 +95,17 @@ static long nu_mmio_map(struct syscall_frame *f) {
     return (long)(boot_info()->physmap_base + pa);
 }
 
+/* User address spaces (uspace.c): thin wrappers, the checks live there. */
+static long nu_as_create(struct syscall_frame *f)    { (void)f; return uspace_create(); }
+static long nu_as_map(struct syscall_frame *f) {
+    return uspace_map(SYSARG0(f), SYSARG1(f), SYSARG2(f), SYSARG3(f), SYSARG4(f));
+}
+static long nu_as_unmap(struct syscall_frame *f)     { return uspace_unmap(SYSARG0(f), SYSARG1(f), SYSARG2(f)); }
+static long nu_as_translate(struct syscall_frame *f) { return uspace_translate(SYSARG0(f), SYSARG1(f)); }
+static long nu_as_destroy(struct syscall_frame *f)   { return uspace_destroy(SYSARG0(f)); }
+static long nu_page_alloc(struct syscall_frame *f)   { return uspace_page_alloc(SYSARG0(f)); }
+static long nu_page_free(struct syscall_frame *f)    { return uspace_page_free(SYSARG0(f), SYSARG1(f)); }
+
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
@@ -101,6 +113,13 @@ static const sys_fn g_nu_table[] = {
     [NU_mmio_map - NU_BASE] = nu_mmio_map,
     [NU_physmap_base - NU_BASE] = nu_physmap_base,
     [NU_debug_exit - NU_BASE] = nu_debug_exit,
+    [NU_as_create - NU_BASE] = nu_as_create,
+    [NU_as_map - NU_BASE] = nu_as_map,
+    [NU_as_unmap - NU_BASE] = nu_as_unmap,
+    [NU_as_translate - NU_BASE] = nu_as_translate,
+    [NU_page_alloc - NU_BASE] = nu_page_alloc,
+    [NU_page_free - NU_BASE] = nu_page_free,
+    [NU_as_destroy - NU_BASE] = nu_as_destroy,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {

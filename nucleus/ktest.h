@@ -56,4 +56,8 @@ int kt_syscall_write(void);
 int kt_shim_unknown_once(void);
 int kt_madvise_dontneed_zeroes(void);
 int kt_nu_bootinfo_mmio(void);
+
+/* ktest_user.c */
+int kt_uspace_map_translate(void);
+int kt_uspace_kernel_half_shared(void);
 #endif
