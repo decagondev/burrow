@@ -25,15 +25,19 @@ long sys_madvise(struct syscall_frame *f) { (void)f; return 0; }   /* advice onl
 
 /* fds 0-2 are the console (Go >= 1.22 checks them at start-up). */
 long sys_write(struct syscall_frame *f) {
-    if (SYSARG0(f) != 1 && SYSARG0(f) != 2) return -EBADF;
+    if (SYSARG0(f) > 2) return poll_write((int)SYSARG0(f), (const void *)SYSARG1(f), SYSARG2(f));
+    if (SYSARG0(f) == 0) return -EBADF;
     const char *buf = (const char *)SYSARG1(f);
     uint64_t n = SYSARG2(f), flags = irq_save();
     for (uint64_t i = 0; i < n; i++) serial_putc(COM1_PORT, buf[i]);
     irq_restore(flags);
     return (long)n;
 }
-long sys_read(struct syscall_frame *f)  { return SYSARG0(f) == 0 ? 0 : -EBADF; }  /* stdin: EOF */
-long sys_close(struct syscall_frame *f) { (void)f; return 0; }
+long sys_read(struct syscall_frame *f) {
+    if (SYSARG0(f) > 2) return poll_read((int)SYSARG0(f), (void *)SYSARG1(f), SYSARG2(f));
+    return SYSARG0(f) == 0 ? 0 : -EBADF;                  /* stdin: EOF */
+}
+long sys_close(struct syscall_frame *f) { return SYSARG0(f) > 2 ? poll_close((int)SYSARG0(f)) : 0; }
 
 /* Old action: "default, no flags" (32 bytes: handler, flags, restorer, mask). */
 long sys_rt_sigaction(struct syscall_frame *f) {

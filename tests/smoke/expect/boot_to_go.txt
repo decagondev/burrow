@@ -5,3 +5,5 @@ BURROW:NUCLEUS:OK
 [nucleus] starting the Go kernel
 [kernel] INFO: hello from Go
 BURROW:GO:OK goroutine says 42
+[go-selftest] sleep ok
+BURROW:GO:SELFTEST:OK

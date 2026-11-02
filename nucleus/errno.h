@@ -12,6 +12,8 @@
 #define EEXIST    17
 #define ENODEV    19
 #define EINVAL    22
+#define EMFILE    24
+#define ENOSPC    28
 #define ENOSYS    38
 #define ETIMEDOUT 110
 #endif

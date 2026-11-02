@@ -53,4 +53,13 @@ long sys_exit(struct syscall_frame *f);
 long sys_futex(struct syscall_frame *f);
 long sys_sched_yield(struct syscall_frame *f);
 long sys_nanosleep(struct syscall_frame *f);
+
+/* shim_poll.c: eventfd + epoll for the netpoller, and fds >= 3 */
+long sys_eventfd2(struct syscall_frame *f);
+long sys_epoll_create1(struct syscall_frame *f);
+long sys_epoll_ctl(struct syscall_frame *f);
+long sys_epoll_pwait(struct syscall_frame *f);
+long poll_read(int fd, void *buf, uint64_t n);
+long poll_write(int fd, const void *buf, uint64_t n);
+long poll_close(int fd);
 #endif

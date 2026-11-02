@@ -30,7 +30,7 @@ Honour free hints; otherwise allocate from `0x7D00_0000_0000`. Test: runtime rea
 ### [x] W6-S09 futex, nanosleep, sched_yield, clock_gettime, gettid (E05.F04)
 Test: `main()` starts; `BURROW:GO:OK goroutine says 42`.
 
-### [ ] W6-S10 Netpoller minimum: pipe2 + epoll (E05.F04)
+### [x] W6-S10 Netpoller minimum: pipe2 + epoll (E05.F04)
 One wake pipe object; `epoll_pwait` = futex-style wait on (pipe written OR timeout). Test: `time.Sleep(100ms)` x 10 within 10%.
 
 ### [ ] W6-S11 Selftest package (E05.F05)

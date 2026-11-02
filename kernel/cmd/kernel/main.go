@@ -17,10 +17,12 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"burrow/kernel/arch/amd64"
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/klog"
+	"burrow/kernel/selftest"
 )
 
 func main() {
@@ -32,6 +34,14 @@ func main() {
 	done := make(chan int)
 	go func() { done <- 42 }()
 	fmt.Fprintf(com1, "BURROW:GO:OK goroutine says %d\n", <-done)
+
+	if err := selftest.Run(com1, selftest.Kernel()); err != nil {
+		log.Infof("selftest FAILED: %v", err)
+		amd64.DebugExit(0x11)
+	}
+	fmt.Fprintln(com1, "BURROW:GO:SELFTEST:OK")
 	amd64.DebugExit(0x10) // ends a QEMU test run; returns everywhere else
-	select {}             // the nucleus scheduler idles the CPU when every thread blocks
+	for {
+		time.Sleep(time.Hour) // idle: the nucleus halts the CPU while every thread sleeps
+	}
 }
