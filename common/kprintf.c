@@ -4,8 +4,14 @@
 #include "kprintf.h"
 
 static struct char_sink g_sink;   /* zero => output discarded until set */
+static uint64_t (*g_guard_enter)(void);
+static void (*g_guard_leave)(uint64_t token);
 
 void kprintf_set_sink(struct char_sink sink) { g_sink = sink; }
+void kprintf_set_guard(uint64_t (*enter)(void), void (*leave)(uint64_t token)) {
+    g_guard_enter = enter;
+    g_guard_leave = leave;
+}
 
 struct out { struct char_sink sink; int count; };
 
@@ -68,12 +74,17 @@ int kvprintf_to(struct char_sink sink, const char *fmt, va_list ap) {
     return o.count;
 }
 
-int kprintf(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
+int kvprintf(const char *fmt, va_list ap) {
+    uint64_t token = g_guard_enter ? g_guard_enter() : 0;
     int n = kvprintf_to(g_sink, fmt, ap);
-    va_end(ap);
+    if (g_guard_leave) g_guard_leave(token);
     return n;
 }
 
-int kvprintf(const char *fmt, va_list ap) { return kvprintf_to(g_sink, fmt, ap); }
+int kprintf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int n = kvprintf(fmt, ap);
+    va_end(ap);
+    return n;
+}

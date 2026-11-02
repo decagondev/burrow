@@ -39,4 +39,9 @@ int kt_sched_ping_pong(void);
 int kt_sched_preempts(void);
 int kt_sched_sleep_and_fs_base(void);
 int kt_sched_stack_guard(void);
+
+/* ktest_sync.c */
+int kt_spinlock_counter(void);
+int kt_futex_ping_pong(void);
+int kt_futex_timeout_and_eagain(void);
 #endif

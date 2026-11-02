@@ -9,4 +9,7 @@
 [ktest] sched_preempts ok
 [ktest] sched_sleep_and_fs_base ok
 [ktest] sched_stack_guard ok
+[ktest] spinlock_counter ok
+[ktest] futex_ping_pong ok
+[ktest] futex_timeout_and_eagain ok
 BURROW:KTEST:OK

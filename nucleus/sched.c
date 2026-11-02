@@ -1,5 +1,6 @@
 /* sched.c - see sched.h. All scheduler state is touched with interrupts off. */
 #include "sched.h"
+#include "spinlock.h"
 #include "percpu.h"
 #include "gdt.h"
 #include "time.h"
@@ -45,7 +46,10 @@ static struct thread *pick_next(struct thread *from) {
 static void schedule(void) {
     struct thread *prev = g_percpu.current, *next = pick_next(prev);
     g_slice = 0;
-    if (next == prev) return;
+    if (next == prev) {                 /* also: woken again before it could switch out */
+        prev->state = T_RUNNING;
+        return;
+    }
     if (prev->state == T_RUNNING) prev->state = T_RUNNABLE;
     next->state = T_RUNNING;
     g_percpu.current = next;
@@ -167,11 +171,21 @@ void thread_yield(void) {
     irq_restore(f);
 }
 
-void thread_block(uint64_t timeout_ns) {
+static void mark_blocked(uint64_t timeout_ns) {
     struct thread *t = g_percpu.current;
     t->timed_out = 0;
     t->wake_ns = timeout_ns ? time_monotonic_ns() + timeout_ns : 0;
     t->state = T_BLOCKED;
+}
+
+void thread_block(uint64_t timeout_ns) {
+    mark_blocked(timeout_ns);
+    schedule();
+}
+
+void thread_block_unlock(uint64_t timeout_ns, struct spinlock *lock) {
+    mark_blocked(timeout_ns);
+    spin_unlock(lock);
     schedule();
 }
 

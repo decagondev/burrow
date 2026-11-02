@@ -23,6 +23,9 @@ static const struct ktest g_tests[] = {
     { "sched_preempts",     kt_sched_preempts },
     { "sched_sleep_and_fs_base", kt_sched_sleep_and_fs_base },
     { "sched_stack_guard",  kt_sched_stack_guard },
+    { "spinlock_counter",   kt_spinlock_counter },
+    { "futex_ping_pong",    kt_futex_ping_pong },
+    { "futex_timeout_and_eagain", kt_futex_timeout_and_eagain },
 };
 
 static const char *g_current;

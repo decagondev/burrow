@@ -26,6 +26,7 @@ struct thread {
     uint32_t id;
     const char *name;
     struct thread *wait_next;   /* futex wait queue link (futex.c) */
+    uint64_t futex_key;         /* address this thread waits on (futex.c) */
     void    *fx_area;           /* 512-byte FXSAVE area, 16-aligned (W5-S12) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
@@ -42,6 +43,10 @@ void thread_set_fs_base(struct thread *t, uint64_t fs);
 
 /* For blocking primitives (futex.c). Call with interrupts OFF. */
 void thread_block(uint64_t timeout_ns);        /* 0 = no timeout; sets current->timed_out */
+struct spinlock;
+/* Marks current blocked, THEN releases lock (IF stays off), then switches:
+ * a waker that takes the lock afterwards always sees us blocked (PIT-23). */
+void thread_block_unlock(uint64_t timeout_ns, struct spinlock *lock);
 void thread_wake(struct thread *t);            /* T_BLOCKED -> T_RUNNABLE */
 uint64_t sched_switch_count(void);
 #endif

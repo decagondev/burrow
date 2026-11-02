@@ -34,7 +34,7 @@ Calibrate TSC with PIT channel 2; LAPIC timer periodic 1 kHz; `time_monotonic_ns
 `struct thread { rsp, kstack, fs_base, state, ... }`; `switch_to` in asm saves callee-saved regs, switches RSP, writes FS_BASE, updates TSS.RSP0 and per-CPU kstack top. Round-robin preemptive on timer tick. Idle thread `sti; hlt`.
 ktest: two threads print alternately 5 times.
 
-### [ ] W5-S11 Spinlocks + futex (E04.F06)
+### [x] W5-S11 Spinlocks + futex (E04.F06)
 IRQ-saving spinlocks; futex hash table of wait queues; timeout via sleep queue. ktest: ping-pong 10,000 round trips; wait with timeout returns `-ETIMEDOUT`.
 
 ### [ ] W5-S12 SSE enable + FPU state save (prep for Go)

@@ -3,9 +3,14 @@
 #ifndef COMMON_KPRINTF_H
 #define COMMON_KPRINTF_H
 #include <stdarg.h>
+#include <stdint.h>
 #include "char_sink.h"
 
 void kprintf_set_sink(struct char_sink sink);              /* where kprintf goes */
+/* Optional: bracket every kprintf call so lines from different threads never
+ * interleave (the nucleus passes irq_save/irq_restore). enter's result is
+ * handed to leave. */
+void kprintf_set_guard(uint64_t (*enter)(void), void (*leave)(uint64_t token));
 int  kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int  kvprintf_to(struct char_sink sink, const char *fmt, va_list ap); /* pure, testable */
 int  kvprintf(const char *fmt, va_list ap);                        /* to the current sink */
