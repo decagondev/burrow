@@ -12,4 +12,5 @@ BURROW:LOADER:OK
 [nucleus] boot_info v2 ok
 [nucleus] gdt ok
 [nucleus] idt ok
+[nucleus] pmm ok
 BURROW:NUCLEUS:OK

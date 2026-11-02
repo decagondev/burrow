@@ -18,7 +18,7 @@ A manifest entry `ktest` (a tiny text file) selects which in-kernel tests run; e
 ### [ ] W5-S05 PIC remap + mask all, LAPIC enable (E04.F04)
 Remap 8259 to 0x20-0x2F then mask (we use the LAPIC). Spurious vector 0xFF.
 
-### [ ] W5-S06 PMM (E04.F02)
+### [x] W5-S06 PMM (E04.F02)
 Free-list of 4 KiB frames built from boot_info modules + E820. Pure core unit-tested on host. ktest: allocate all, free all, counts match.
 
 ### [ ] W5-S07 VMM mechanism (E04.F03)

@@ -23,6 +23,8 @@ TEST(elf_load_copies_and_zeroes); TEST(elf_load_rejects_outside_window);
 TEST(elf_load_rejects_overlap_and_bad_entry);
 TEST(vm_physmap_size_rounds_to_2m); TEST(vm_build_three_mappings);
 TEST(vm_build_nucleus_is_w_xor_x); TEST(vm_build_without_nx); TEST(vm_build_rejects_shared_pages);
+TEST(pmm_counts_usable_frames); TEST(pmm_never_hands_out_reserved); TEST(pmm_alloc_all_free_all);
+TEST(pmm_skips_frame_zero);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -49,6 +51,8 @@ int main(void) {
     puts("[vmsetup]");  RUN(vm_physmap_size_rounds_to_2m); RUN(vm_build_three_mappings);
                         RUN(vm_build_nucleus_is_w_xor_x); RUN(vm_build_without_nx);
                         RUN(vm_build_rejects_shared_pages);
+    puts("[pmm]");      RUN(pmm_counts_usable_frames); RUN(pmm_never_hands_out_reserved);
+                        RUN(pmm_alloc_all_free_all); RUN(pmm_skips_frame_zero);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

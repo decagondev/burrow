@@ -37,6 +37,10 @@ static inline uint64_t read_rflags(void) { uint64_t v; __asm__ volatile("pushfq;
 static inline void cpu_cli(void) { __asm__ volatile("cli" ::: "memory"); }
 static inline void cpu_sti(void) { __asm__ volatile("sti" ::: "memory"); }
 #define RFLAGS_IF (1ull << 9)
+/* Disable interrupts, return the previous RFLAGS for irq_restore. On one CPU
+ * this alone makes a short section atomic with respect to IRQ handlers. */
+static inline uint64_t irq_save(void) { uint64_t f = read_rflags(); cpu_cli(); return f; }
+static inline void irq_restore(uint64_t flags) { if (flags & RFLAGS_IF) cpu_sti(); }
 
 /* CPUID 0x80000001 EDX bit 20: execute-disable. */
 static inline int cpu_has_nx(void) {

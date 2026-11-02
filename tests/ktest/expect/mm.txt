@@ -1,0 +1,5 @@
+# Ordered markers for ktest suite "mm" (tests/ktest/mm.txt). Append-only.
+[nucleus] pmm ok
+[ktest] running suite
+[ktest] pmm_alloc_all_free_all ok
+BURROW:KTEST:OK

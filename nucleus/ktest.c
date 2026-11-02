@@ -11,6 +11,7 @@ static const struct ktest g_tests[] = {
     { "trap_gp_fixup",      kt_trap_gp_fixup },
     { "trap_pf_fixup",      kt_trap_pf_fixup },
     { "trap_unhandled_ud",  kt_trap_unhandled_ud },
+    { "pmm_alloc_all_free_all", kt_pmm_alloc_all_free_all },
 };
 
 static const char *g_current;

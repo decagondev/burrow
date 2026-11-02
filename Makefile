@@ -136,16 +136,17 @@ test: test-unit smoke ktest regress
 test-unit: test-c test-go
 
 # Host-testable sources: everything in common/ except serial.c (port I/O),
-# plus the loader's pure modules.
+# plus the pure modules of the loader and the nucleus.
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c loader/paging.c \
-	loader/image.c loader/elf_load.c loader/vmsetup.c
+	loader/image.c loader/elf_load.c loader/vmsetup.c \
+	nucleus/pmm.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
-$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h) $(COMMON_H) | $(BUILD)
+$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
 	$(HOSTCC) -std=c11 -O0 -g -Wall -Wextra -Werror -fno-builtin \
-		-fsanitize=address,undefined -Iinclude -Icommon -Iloader -Itests/unit/c \
+		-fsanitize=address,undefined -Iinclude -Icommon -Iloader -Inucleus -Itests/unit/c \
 		$(UNIT_SRC) -o $@
 
 test-c: $(BUILD)/unit_tests

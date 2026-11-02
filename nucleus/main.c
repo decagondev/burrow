@@ -18,6 +18,7 @@
 #include "boot.h"
 #include "gdt.h"
 #include "trap.h"
+#include "frames.h"
 #include "ktest.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
@@ -49,6 +50,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     boot_init(bi);
     init_gdt();
     init_idt();
+    frames_init();
 
     const struct boot_module *kt = boot_module_find("ktest");
     if (kt) {

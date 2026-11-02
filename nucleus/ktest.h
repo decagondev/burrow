@@ -21,4 +21,7 @@ int kt_trap_ud_fixup(void);
 int kt_trap_gp_fixup(void);
 int kt_trap_pf_fixup(void);
 int kt_trap_unhandled_ud(void);   /* deliberately panics: REG-0005 */
+
+/* ktest_mm.c */
+int kt_pmm_alloc_all_free_all(void);
 #endif
