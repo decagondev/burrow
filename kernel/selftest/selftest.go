@@ -52,12 +52,36 @@ var checks = []check{
 // Run executes every check in order and stops at the first failure.
 func Run(w io.Writer, cfg Config) error {
 	for _, c := range checks {
-		detail, err := c.run(cfg)
-		if err != nil {
-			return fmt.Errorf("%s: %w", c.name, err)
+		if err := report(w, c.name, func() (string, error) { return c.run(cfg) }); err != nil {
+			return err
 		}
-		fmt.Fprintf(w, "[go-selftest] %s ok (%s)\n", c.name, detail)
 	}
+	return nil
+}
+
+// Check is a self-test that needs something this package must not import
+// (hardware, the nucleus): the kernel builds it and hands it to RunChecks.
+type Check struct {
+	Name string
+	Run  func() (detail string, err error)
+}
+
+// RunChecks runs extra checks with the same markers as Run.
+func RunChecks(w io.Writer, cs ...Check) error {
+	for _, c := range cs {
+		if err := report(w, c.Name, c.Run); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func report(w io.Writer, name string, run func() (string, error)) error {
+	detail, err := run()
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	fmt.Fprintf(w, "[go-selftest] %s ok (%s)\n", name, detail)
 	return nil
 }
 

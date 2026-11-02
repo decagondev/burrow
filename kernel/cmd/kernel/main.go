@@ -35,7 +35,11 @@ func main() {
 	go func() { done <- 42 }()
 	fmt.Fprintf(com1, "BURROW:GO:OK goroutine says %d\n", <-done)
 
-	if err := selftest.Run(com1, selftest.Kernel()); err != nil {
+	err := selftest.Run(com1, selftest.Kernel())
+	if err == nil {
+		err = selftest.RunChecks(com1, irqCheck())
+	}
+	if err != nil {
 		log.Infof("selftest FAILED: %v", err)
 		amd64.DebugExit(0x11)
 	}

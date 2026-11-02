@@ -10,4 +10,5 @@ BURROW:GO:OK goroutine says 42
 [go-selftest] goroutine_ping_pong ok
 [go-selftest] sync ok
 [go-selftest] gc_stress ok
+[go-selftest] irq ok
 BURROW:GO:SELFTEST:OK

@@ -1,6 +1,7 @@
 package selftest
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -22,5 +23,17 @@ func TestRunOnHost(t *testing.T) {
 		if !strings.Contains(out.String(), "[go-selftest] "+c.name+" ok") {
 			t.Errorf("missing marker for %s in %q", c.name, out.String())
 		}
+	}
+}
+
+func TestRunChecksMarkersAndErrors(t *testing.T) {
+	var out strings.Builder
+	ok := Check{"fine", func() (string, error) { return "detail", nil }}
+	if err := RunChecks(&out, ok); err != nil || out.String() != "[go-selftest] fine ok (detail)\n" {
+		t.Fatalf("RunChecks = %v, output %q", err, out.String())
+	}
+	bad := Check{"broken", func() (string, error) { return "", errors.New("boom") }}
+	if err := RunChecks(&out, bad, ok); err == nil || err.Error() != "broken: boom" {
+		t.Fatalf("RunChecks(bad) = %v, want \"broken: boom\"", err)
 	}
 }

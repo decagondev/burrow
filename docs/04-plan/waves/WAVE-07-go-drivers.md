@@ -7,7 +7,7 @@ Interrupt routing in this wave: the ISA lines (0-15) come through the 8259 pair 
 ### [x] W7-S01 `nu_irq_wait` / `nu_irq_ack` (E06.F01)
 `nucleus/irq.c`: one waiter per ISA line. The ISR masks the line in the 8259, sends EOI to the 8259 (not the LAPIC: ExtINT), sets `pending` and wakes the waiter. `irq_wait(n)` unmasks the line on first use and blocks until `pending`; `irq_ack(n)` unmasks it again. Spurious IRQ 7/15 (ISR bit clear) are dropped (PIT-28). An interrupt that fires before anyone waits is kept as `pending` (PIT-29). Shim rows `0x1000`/`0x1001`. ktests (suite `irq`): PIT channel 0 one-shot through IRQ 0; pending-before-wait; the line stays masked until ack; the call through the `syscall` gate.
 
-### [ ] W7-S02 Go `IRQ` (E06.F01, E06.F03)
+### [x] W7-S02 Go `IRQ` (E06.F01, E06.F03)
 Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscall.Syscall`, so the runtime hands the P to another thread while one waits). `haltest.FakeIRQ`: channel-driven, for host tests. On target: `[go-selftest] irq ok` from a check that programs PIT channel 0 from Go and waits on line 0.
 
 ### [ ] W7-S03 Driver registry + PCI (E06.F02, E06.F07)

@@ -1,6 +1,7 @@
 //go:build burrow
 
-// irq_goroutine.go - reference for slice W7-S02: "interrupts become goroutine
+// irq_goroutine.go - reference for slice W7-S02 (done: kernel/arch/amd64/irq.go,
+// kernel/driver.Serve): "interrupts become goroutine
 // wake-ups". Copy into kernel/arch/amd64 when you reach that slice.
 //
 // The nucleus owns the IDT. When IRQ n fires it masks the line, acknowledges
