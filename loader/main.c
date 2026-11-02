@@ -5,7 +5,7 @@
  * given. Each check prints a stable marker line that tests/smoke/ greps for.
  *
  * Later waves extend this file by calling NEW modules (Open/Closed):
- *   W5: load "nucleus" ELF via block_device + elf64, build higher-half tables
+ *   W4: load "nucleus" ELF via block_device + elf64, build higher-half tables
  *   W6: load "kernel" (Go) ELF and "initrd", hand everything to the nucleus
  *
  * RULE: keep all mutable globals zero-initialised (.bss). The self-CRC check
@@ -21,6 +21,9 @@
 #include "manifest.h"
 #include "crc32.h"
 #include "ata_pio.h"
+#include "layout.h"
+#include "palloc.h"
+#include "image.h"
 
 extern char __loader_start[], __loader_image_end[], __bss_end[];
 
@@ -28,6 +31,11 @@ static uint16_t g_com1;                 /* .bss: serial_sink keeps a pointer to 
 static struct ata_channel g_ata0;
 static struct block_device g_disk;
 static uint8_t g_sector[512];
+static struct palloc g_palloc;
+
+/* An image read from disk into palloc'd frames (identity-mapped, so the
+ * physical address is also a usable pointer). */
+struct disk_image { const uint8_t *bytes; uint64_t size_bytes; };
 
 static void __attribute__((noreturn)) panic(const char *what) {
     kprintf("[loader] PANIC: %s\n", what);
@@ -88,6 +96,32 @@ static void check_disk(const struct boot_info *bi) {
     kprintf("[loader] ata ok\n");
 }
 
+/* Frames for images and page tables: usable RAM in [1 MiB, 1 GiB), except the
+ * window the nucleus is linked to load into. */
+static void init_frames(const struct boot_info *bi) {
+    palloc_init(&g_palloc, (const struct e820_entry *)(uintptr_t)bi->e820_addr, bi->e820_count,
+                PALLOC_FLOOR, LOADER_IDENTITY_LIMIT);
+    if (palloc_reserve(&g_palloc, NUCLEUS_PHYS_BASE, NUCLEUS_PHYS_LIMIT - NUCLEUS_PHYS_BASE) != 0)
+        panic("palloc reserve table full");
+}
+
+static struct disk_image read_nucleus_image(const struct manifest *m) {
+    const struct manifest_entry *e = manifest_find(m, "nucleus");
+    if (!e) panic("no nucleus entry in manifest");
+    uint64_t buf_bytes = ((uint64_t)e->sectors * 512 + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    uint64_t pa = palloc_alloc(&g_palloc, buf_bytes / PAGE_SIZE);
+    if (!pa) panic("out of memory for the nucleus image");
+    switch (image_read(&g_disk, e, (void *)(uintptr_t)pa, buf_bytes)) {
+    case IMAGE_OK:           break;
+    case IMAGE_CRC_MISMATCH: panic("nucleus CRC mismatch");
+    default:                 panic("nucleus image could not be read");
+    }
+    kprintf("[loader] nucleus image crc ok (%llu bytes at phys %llx)\n",
+            (unsigned long long)e->size_bytes, (unsigned long long)pa);
+    struct disk_image img = { (const uint8_t *)(uintptr_t)pa, e->size_bytes };
+    return img;
+}
+
 void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -102,7 +136,9 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     check_self_crc(m);
     check_disk(bi);
 
-    /* ---- Wave 5 starts here: load nucleus + kernel, build page tables, jump ---- */
+    init_frames(bi);
+    struct disk_image nucleus = read_nucleus_image(m);
+    (void)nucleus;
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */

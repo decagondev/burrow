@@ -17,6 +17,8 @@ TEST(palloc_exhaustion_and_limit); TEST(palloc_reserved_table_full);
 TEST(paging_maps_4k_pages); TEST(paging_maps_2m_pages); TEST(paging_mixes_page_sizes);
 TEST(paging_user_bit_reaches_every_level); TEST(paging_rejects_bad_input);
 TEST(paging_refuses_to_overwrite); TEST(paging_out_of_memory);
+TEST(image_reads_and_verifies); TEST(image_detects_corruption);
+TEST(image_rejects_small_dest_and_read_errors);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -36,6 +38,8 @@ int main(void) {
                         RUN(paging_mixes_page_sizes); RUN(paging_user_bit_reaches_every_level);
                         RUN(paging_rejects_bad_input); RUN(paging_refuses_to_overwrite);
                         RUN(paging_out_of_memory);
+    puts("[image]");    RUN(image_reads_and_verifies); RUN(image_detects_corruption);
+                        RUN(image_rejects_small_dest_and_read_errors);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

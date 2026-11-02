@@ -117,7 +117,7 @@ test-unit: test-c test-go
 
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	loader/kprintf.c loader/crc32.c loader/manifest.c loader/memmap.c \
-	loader/elf64.c loader/lib_string.c loader/palloc.c loader/paging.c
+	loader/elf64.c loader/lib_string.c loader/palloc.c loader/paging.c loader/image.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h include/burrow/*.h) | $(BUILD)
@@ -132,8 +132,11 @@ test-go:
 	cd tools && $(GO) vet ./... && $(GO) test ./...
 	cd kernel && $(GO) vet ./... && $(GO) test ./...
 
+# Every expect file must pass on the same boot: older ones guard old markers.
+SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to_nucleus.txt
+
 smoke: $(BUILD)/disk.img
-	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img tests/smoke/expect/boot_to_loader.txt
+	@for e in $(SMOKE_EXPECT); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done
 
 regress: $(BUILD)/disk.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img

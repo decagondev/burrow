@@ -1,0 +1,4 @@
+# Ordered markers for Wave 4 "boot to higher-half nucleus". Append-only.
+# boot_to_loader.txt still guards the stage1/stage2/loader markers.
+[loader] ata ok
+[loader] nucleus image crc ok

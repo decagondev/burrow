@@ -33,13 +33,29 @@ case_run() { # case_run <name> <expected-text> <expected-status> <mutator...>
   local name="$1" want="$2" want_status="$3"; shift 3
   local img="$WORK/$name.img" log="$WORK/$name.log"
   cp "$IMG" "$img"
-  "$@" "$img"
+  if ! "$@" "$img"; then
+    echo "  FAIL  $name (mutator $1 failed)"; failn=$((failn+1)); return
+  fi
   boot "$img" "$log"
   if grep -qF -- "$want" "$log" && { [ "$want_status" = any ] || [ "$STATUS" -eq "$want_status" ]; }; then
     echo "  ok    $name"; pass=$((pass+1))
   else
     echo "  FAIL  $name (status=$STATUS, wanted '$want' / $want_status)"; tail -5 "$log"; failn=$((failn+1))
   fi
+}
+
+lba_of() { # lba_of <img> <manifest-name> -> first sector of that payload
+  python3 - "$1" "$2" <<'PY'
+import struct, sys
+b = open(sys.argv[1], 'rb').read(1024)[512:]
+count = struct.unpack_from('<H', b, 10)[0]
+for i in range(count):
+    off = 16 + 40 * i
+    if b[off:off + 16].rstrip(bytes(1)).decode() == sys.argv[2]:
+        print(struct.unpack_from('<I', b, off + 16)[0]); break
+else:
+    sys.exit('no manifest entry ' + sys.argv[2])
+PY
 }
 
 # --- cases -------------------------------------------------------------------
@@ -49,10 +65,13 @@ corrupt_loader()   { flip_byte "$1" $((34*512 + 3000)); }
 corrupt_manifest() { flip_byte "$1" $((1*512)); }
 # stage2 magic 'S2' at LBA 2 offset 2: stage1 must refuse with code M.
 corrupt_stage2()   { flip_byte "$1" $((2*512 + 2)); }
+# One byte inside the nucleus text: the loader must refuse it before loading.
+corrupt_nucleus()  { local lba; lba=$(lba_of "$1" nucleus) || return 1; flip_byte "$1" $((lba*512 + 0x1000 + 16)); }
 
 echo "[regression]"
 case_run REG-0001-loader-crc   "[stage2] FAIL K"            35  corrupt_loader
 case_run REG-0002-manifest     "[stage2] FAIL F"            35  corrupt_manifest
 case_run REG-0003-stage2-magic "[stage1] FAIL M"            35  corrupt_stage2
+case_run REG-0004-nucleus-crc  "PANIC: nucleus CRC"         35  corrupt_nucleus
 echo "$pass passed, $failn failed"
 [ "$failn" -eq 0 ]

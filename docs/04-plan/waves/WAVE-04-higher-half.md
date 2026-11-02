@@ -13,7 +13,7 @@ Test: `readelf -lW build/nucleus.elf` shows VirtAddr `0xffffffff80100000`, PhysA
 File: `loader/palloc.c` (pure: takes the E820 array + reserved ranges, hands out 4 KiB frames above 1 MiB, never inside reserved ranges or images).
 Test: host unit tests with synthetic maps (overlaps, holes, exhaustion).
 
-### [ ] W4-S03 Load a manifest entry into RAM (E03.F03.S02)
+### [x] W4-S03 Load a manifest entry into RAM (E03.F03.S02)
 File: `loader/image.c`: `image_read(block_device*, entry, dest)` + CRC check.
 Test: marker `[loader] nucleus image crc ok`; regression REG-0004 (corrupt nucleus byte => `PANIC: nucleus CRC`).
 
