@@ -23,3 +23,14 @@ _start:
     cli
     hlt
     jmp .halt
+
+; void enter_nucleus(uint64_t cr3, uint64_t entry, uint64_t boot_info_virt)
+; Switch to the nucleus address space and jump; never returns. This code runs
+; from identity-mapped low memory, which the new tables still map (PIT-21).
+; Interrupts stay off; the nucleus sets its own stack first thing.
+section .text
+global enter_nucleus
+enter_nucleus:
+    mov cr3, rdi                ; rdi = PML4 physical address
+    mov rdi, rdx                ; SysV arg 1 for nucleus_main: &boot_info (physmap)
+    jmp rsi                     ; rsi = ELF entry (higher half)

@@ -8,3 +8,4 @@ break *0x7c00
 echo \n[burrow] breakpoint at stage1 (0x7c00). 'c' to continue.\n
 echo [burrow] For the loader: 'set architecture i386:x86-64' then\n
 echo [burrow]   'add-symbol-file build/loader.elf' and 'break loader_main'\n
+echo [burrow] For the nucleus: 'add-symbol-file build/nucleus.elf' and 'break nucleus_main'\n

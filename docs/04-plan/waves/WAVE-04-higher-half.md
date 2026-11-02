@@ -31,7 +31,7 @@ Identity first 1 GiB (temporary), physmap of all usable RAM at `0xFFFF8000000000
 ### [x] W4-S07 boot_info v2 (E03.F04.S03)
 Add `modules[]` (name, phys start, size) and `physmap_base` inside `reserved`; bump version to 2; update BOOT_PROTOCOL.md, both asserts. Stage2 keeps writing v1 fields; the loader upgrades to v2.
 
-### [ ] W4-S08 Jump (E03.F04.S04)
+### [x] W4-S08 Jump (E03.F04.S04)
 Load CR3, jump to entry with `RDI = physmap_base + 0x1000`. Nucleus checks magic/version 2 and prints `BURROW:NUCLEUS:OK`; append markers to a new expect file `boot_to_nucleus.txt`; make it the default smoke.
 
 ### [ ] W4-S09 CI + diagram validation (E00.F01.S03, E00.F03.S02)

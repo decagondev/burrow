@@ -1,11 +1,11 @@
 /*
- * main.c - Burrow loader (Wave 3 scope).
+ * main.c - Burrow loader (Wave 4 scope).
  *
- * Today it proves the boot chain end-to-end and checks every input it was
- * given. Each check prints a stable marker line that tests/smoke/ greps for.
+ * Checks every input it was given, loads the "nucleus" ELF from disk, builds
+ * the nucleus's page tables, upgrades boot_info to v2 and jumps to the higher
+ * half. Each step prints a stable marker line that tests/smoke/ greps for.
  *
  * Later waves extend this file by calling NEW modules (Open/Closed):
- *   W4: load "nucleus" ELF via block_device + elf64, build higher-half tables
  *   W6: load "kernel" (Go) ELF and "initrd", hand everything to the nucleus
  *
  * RULE: keep all mutable globals zero-initialised (.bss). The self-CRC check
@@ -30,6 +30,8 @@
 #include "cpu.h"
 
 extern char __loader_start[], __loader_image_end[], __bss_end[];
+/* entry.asm: load CR3, then jump to entry with RDI = boot_info_virt. */
+extern void __attribute__((noreturn)) enter_nucleus(uint64_t cr3, uint64_t entry, uint64_t boot_info_virt);
 
 static uint16_t g_com1;                 /* .bss: serial_sink keeps a pointer to it */
 static struct ata_channel g_ata0;
@@ -221,11 +223,10 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     struct elf_loaded nucleus;
     load_nucleus(read_nucleus_image(m), &nucleus);
     uint64_t pml4 = build_page_tables(bi, &nucleus);
-    (void)pml4;
     upgrade_boot_info(bi, &nucleus);
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */
-    qemu_exit(QEMU_EXIT_SUCCESS);       /* no-op outside the test harness */
-    cpu_halt_forever();
+    kprintf("[loader] jumping to nucleus\n");
+    enter_nucleus(pml4, nucleus.entry, PHYSMAP_BASE + (uint64_t)(uintptr_t)bi);
 }
