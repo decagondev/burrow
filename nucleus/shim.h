@@ -45,6 +45,8 @@ long sys_mmap(struct syscall_frame *f);
 long sys_munmap(struct syscall_frame *f);
 
 /* shim_thread.c: threads, sleep, futex */
+long sys_clone(struct syscall_frame *f);
+long sys_exit(struct syscall_frame *f);
 long sys_sched_yield(struct syscall_frame *f);
 long sys_nanosleep(struct syscall_frame *f);
 #endif
