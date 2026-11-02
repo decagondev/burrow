@@ -10,4 +10,5 @@ BURROW:LOADER:OK
 [loader] jumping to nucleus
 [nucleus] hello from the higher half
 [nucleus] boot_info v2 ok
+[nucleus] gdt ok
 BURROW:NUCLEUS:OK

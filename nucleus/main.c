@@ -1,31 +1,26 @@
 /*
- * main.c - Burrow nucleus entry point (Wave 4 scope: "hello from the higher half").
+ * main.c - Burrow nucleus entry point: brings up each module in order.
  *
- * Runs at 0xFFFFFFFF80100000 on page tables the loader built. Today it only
- * proves the hand-off: it runs in the top 2 GiB, reads boot_info v2 and the
- * module list through the physmap, and stops. Wave 5 grows it into the real
- * nucleus (GDT/TSS/IDT, PMM, VMM, threads) by calling NEW modules.
+ * Runs at 0xFFFFFFFF80100000 on page tables the loader built. Each init step
+ * lives in its own module and prints one marker (tests/smoke/expect/). Wave 6
+ * adds "load and start the Go kernel" as the last step.
  *
- * Shares the freestanding serial/kprintf/string code with the loader (built
- * twice, with -mcmodel=kernel here). Must never return.
+ * Must never return.
  */
 #include <stdint.h>
 #include <burrow/boot_info.h>
 #include "io.h"
+#include "cpu.h"
 #include "serial.h"
 #include "kprintf.h"
+#include "panic.h"
+#include "gdt.h"
 
 #define NUCLEUS_VIRT_BASE 0xFFFFFFFF80000000ull   /* nucleus/linker.ld KERNEL_VMA */
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
 
 void __attribute__((noreturn)) nucleus_main(struct boot_info *bi);
-
-static void __attribute__((noreturn)) panic(const char *what) {
-    kprintf("[nucleus] PANIC: %s\n", what);
-    qemu_exit(QEMU_EXIT_FAILURE);
-    cpu_halt_forever();
-}
 
 /* bi is a physmap address; every address INSIDE it is physical. */
 static void check_boot_info(const struct boot_info *bi) {
@@ -44,6 +39,12 @@ static void check_boot_info(const struct boot_info *bi) {
             (unsigned long long)bi->physmap_base, bi->module_count, bi->e820_count);
 }
 
+static void init_gdt(void) {
+    gdt_init();
+    if (read_cs() != SEL_KCODE || read_tr() != SEL_TSS) panic("GDT reload did not take");
+    kprintf("[nucleus] gdt ok (cs=%x, tr=%x)\n", read_cs(), read_tr());
+}
+
 void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -52,6 +53,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
             (void *)nucleus_main, (void *)bi);
 
     check_boot_info(bi);
+    init_gdt();
 
     kprintf("BURROW:NUCLEUS:OK\n");
     qemu_exit(QEMU_EXIT_SUCCESS);

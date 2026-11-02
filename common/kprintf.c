@@ -75,3 +75,5 @@ int kprintf(const char *fmt, ...) {
     va_end(ap);
     return n;
 }
+
+int kvprintf(const char *fmt, va_list ap) { return kvprintf_to(g_sink, fmt, ap); }

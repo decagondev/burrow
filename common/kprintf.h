@@ -8,4 +8,5 @@
 void kprintf_set_sink(struct char_sink sink);              /* where kprintf goes */
 int  kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int  kvprintf_to(struct char_sink sink, const char *fmt, va_list ap); /* pure, testable */
+int  kvprintf(const char *fmt, va_list ap);                        /* to the current sink */
 #endif

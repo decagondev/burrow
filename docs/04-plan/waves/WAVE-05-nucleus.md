@@ -5,7 +5,7 @@ Goal: a robust ring-0 base. Everything Go will need in W6 exists and is self-tes
 ### [x] W5-S01 Nucleus console + kprintf reuse
 Move `kprintf.c`, `lib_string.c`, `crc32.c`, `char_sink.h` into `common/` built for both loader and nucleus (DRY). Test: all unit tests still pass.
 
-### [ ] W5-S02 GDT + TSS with IST stacks (E04.F01)
+### [x] W5-S02 GDT + TSS with IST stacks (E04.F01)
 Selectors: 0x08 kcode, 0x10 kdata, 0x18 udata32 placeholder, 0x20 udata (0x23 RPL3), 0x28 ucode (0x2B RPL3), 0x30 TSS (16 bytes). Order chosen for SYSRET (STAR layout); document in BOOT_PROTOCOL. IST1 = interrupts, IST2 = #DF, IST3 = NMI.
 
 ### [ ] W5-S03 IDT + exception stubs (E04.F01)

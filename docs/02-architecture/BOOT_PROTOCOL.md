@@ -88,3 +88,19 @@ Every stage prints a one-letter code on COM1 and the screen (real mode only), th
 ## 6. Serial markers
 
 Markers are the test interface of the boot chain. Format: `[component] message`, and the final success line `BURROW:<STAGE>:OK`. Markers are append-only: once a smoke expect-file lists a marker, changing its text is a breaking change requiring a DEVLOG entry. Current ordered lists: `tests/smoke/expect/boot_to_loader.txt` and `boot_to_nucleus.txt`; `make smoke` checks every expect file against the same boot.
+
+## 7. Nucleus GDT and TSS (W5)
+
+The nucleus replaces stage2's GDT first thing (`nucleus/gdt.c`). The order is dictated by `SYSCALL`/`SYSRET`: `STAR[47:32] = 0x08` gives kernel CS 0x08 / SS 0x10; `STAR[63:48] = 0x18` makes `SYSRET` (64-bit) load CS = 0x18 + 16 = 0x28 and SS = 0x18 + 8 = 0x20, both with RPL 3.
+
+| Selector | Descriptor | Notes |
+|---|---|---|
+| 0x00 | null | |
+| 0x08 | kernel code, 64-bit, DPL 0 | `SEL_KCODE` |
+| 0x10 | kernel data, DPL 0 | `SEL_KDATA`; DS/ES/SS |
+| 0x18 | null placeholder | only fixes the SYSRET base (32-bit user code would go here) |
+| 0x20 | user data, DPL 3 | used as 0x23 |
+| 0x28 | user code, 64-bit, DPL 3 | used as 0x2B |
+| 0x30 | 64-bit TSS (16 bytes) | `SEL_TSS`, loaded with `ltr` |
+
+TSS: `RSP0` is the current thread's kernel stack top (ring 3 → 0, W9). IST1 = every vector except #DF and NMI; IST2 = #DF; IST3 = NMI; 16 KiB each. FS and GS selectors are 0: their bases come from `FS_BASE`/`GS_BASE` MSRs.
