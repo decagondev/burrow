@@ -1,4 +1,4 @@
-# W8 Files and Pixels  (M8)  — status: in progress
+# W8 Files and Pixels  (M8)  — status: done
 
 Goal: the Go kernel has a file tree (initrd, a writable `/tmp`, device files, a FAT32 data disk) and draws on a linear framebuffer. Demo: `cat /etc/motd` at the console; a gradient and a text console on the screen (checked with QEMU's `screendump`). Stories: E07.F01-F06 ([BACKLOG.md](../BACKLOG.md)).
 
@@ -26,3 +26,5 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 `tools/mkfat` builds a FAT32 image from a directory (also used by host tests); `make` puts `build/data.img` on the primary slave. `kernel/fs/fat`: `fs.FS` over a `block.Device`, `fstest.TestFS` on a generated image; mounted at `/mnt`.
 
 Exit: **M8 demo — files and pixels.** `make clean test` green; DEVLOG wave entry.
+
+As built: one commit per slice. ramfs needed no package of its own: `/tmp` is a writable `fs/memfs`, the same tree tarfs freezes. `/dev/fb0` waits for W11, where fbdev needs `ioctl` and `mmap` anyway; S05 instead mirrors the console onto the screen and checks it with QEMU `screendump` pixels (`tests/smoke/checkscreen.py`). The font is drawn by hand (5x8, `kernel/gfx/font.go`) to keep the kernel free of external modules. `pci.Scan` caches one enumeration because `bga` (and `ata`) start before `pci` in name order. A file name with spaces cannot be a Make prerequisite, so the data disk's long-name file is `A-Long-File-Name.text`; spaces in long names are covered by the Go tests. The FAT interop check (`make fat-interop`) needs dosfstools and mtools, which CI installs; without them it skips.

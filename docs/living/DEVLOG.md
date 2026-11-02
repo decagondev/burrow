@@ -14,6 +14,37 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-02 — Wave 8 complete: files and pixels (M8)
+
+**Did:** W8-S01..S07. The Go kernel has a file tree and a screen:
+
+```text
+[initrd] INFO: tarfs: 2 files, 2 directories, 223 bytes
+[ata] INFO: hda: "QEMU HARDDISK", 8192 sectors (4096 KiB)
+[bga] INFO: 1024x768x32 linear framebuffer at 0xfd000000 (pitch 4096)
+[block] INFO: hda sector 1: boot manifest "BRWMNFST" found
+[fat] INFO: hdb: FAT32 volume "BURROWDATA" mounted at /mnt
+burrow> cat /etc/motd
+   Welcome to Burrow.
+```
+
+Nucleus: `nu_bootinfo` and a new `nu_mmio_map` (ABI 0x1005). Go: `bootinfo` parses the module table; the VFS is a mount table over `io/fs` with `/` = tarfs over the initrd (zero copy), `/tmp` = memfs, `/dev` = devfs, `/mnt` = FAT32 on the second IDE disk. The block layer has one conformance test that the RAM disk and the Go ATA driver both pass; the ATA driver reads the same manifest sector the loader read. `bga` sets 1024x768x32 and maps BAR0; `gfx` draws a gradient, a hand-drawn 5x8 font and a scrolling text console that mirrors the serial console. `make go-smoke` now also checks pixels of QEMU `screendump`s.
+
+**Numbers:** every file system (memfs, tarfs, the VFS with nested and shadowing mounts, FAT32 with long Unicode names) passes `testing/fstest.TestFS`; FAT32 images are 34 MiB (one 512-byte sector per cluster needs 65525 clusters); the screen check is 8 pixels.
+
+**Surprises:**
+- Building the VFS on `io/fs` paid off at once: `fstest.TestFS` found nothing to fix, because it tests what we would have forgotten (ReadDir in every chunk size, Stat names of mount roots).
+- `/dev/console` first printed only on serial: it was bound to the serial writer before the screen existed. One console output that the screen joins later fixed it.
+- `bga` starts before `pci` (name order), so PCI enumeration is a cached `pci.Scan` that any driver may call first.
+- Make cannot depend on a file whose name has a space; heredocs in this environment halve backslashes (three times this wave: always write such files with the editor).
+- A Python bytecode cache slipped into a commit when `ppm2png.py` imported `checkscreen`: `__pycache__/` is ignored now.
+
+**Learned:** Standard interfaces are test suites for free (`io/fs` + `fstest`, `io.ReaderAt`). And a screenshot is a fine assertion: pick pixels whose colour the layout guarantees.
+
+**Next:** W9: the first process: address spaces, a user ELF loader, ring 3, the syscall ring, and `/bin/hello` from the initrd.
+
+**Links:** PIT-27, ADR-0005; NUCLEUS_ABI 0x1002, 0x1005
+
 ## 2026-11-02 — Wave 7 complete: Go drives hardware (M7)
 
 **Did:** W7-S01..S07. Interrupts reach Go as thread wake-ups (ADR-0005), and the first drivers are plain Go:

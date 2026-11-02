@@ -23,6 +23,7 @@ flowchart TB
 | Regression | `make regress` | QEMU, mutated images | ~0.5 s | REG-0001 corrupt loader |
 | ktest (W5+) | `make ktest` | QEMU, one image per suite | ~0.5 s per suite | `tests/ktest/trap.txt` |
 | Go boot (W6+) | `make go-smoke` | QEMU, `build/go.img` | ~10 s | `boot_to_go.txt`: hello, `kernel/selftest`, drivers, then the console typed into by `tests/smoke/keys/boot_to_go.keys` (QEMU monitor `sendkey`, `tests/smoke/sendkeys.py`) until `poweroff` |
+| FAT interop (W8+) | `make fat-interop` | host: `fsck.fat`, `mkfs.fat`, mtools | seconds | our FAT32 images vs Linux's tools, both ways; skips if they are missing |
 | hostsim (W7+) | `go test ./hostsim` (part of `make test-go`) | host, simulated 8042/16550/IRQ lines | <1 s | the driver stack and console without QEMU; `make hostsim` runs it interactively |
 | Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall (`tests/regression/census.sh`) |
 | Docs | `make docs-check` | node + mermaid | seconds | all diagrams parse |

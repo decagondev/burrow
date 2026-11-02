@@ -13,7 +13,8 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M5: nucleus (GDT/IDT, traps, PMM, VMM, LAPIC timer, threads, futexes, SSE) | **done, 26 in-kernel tests** |
 | M6: stock Go runtime (1.27.3, `GOOS=linux`) running in ring 0 | **done: goroutines, timers, GC** |
 | M7: Go drivers (IRQs as goroutine wake-ups, PS/2 keyboard, serial, console, PCI) | **done: type at `burrow>`** |
-| M8: files and pixels (initrd, VFS, framebuffer) | next ([Waves 8-12](docs/04-plan/waves/WAVES-07-12.md)) |
+| M8: files and pixels (initrd, VFS, devfs, FAT32, framebuffer, ATA in Go) | **done: `cat /etc/motd`, a text console on screen** |
+| M9: first process (ring 3, user ELF, musl) | next ([Waves 9-12](docs/04-plan/waves/WAVES-07-12.md)) |
 | M11: DOOM | planned (W11) |
 
 ## Quick start
@@ -26,6 +27,7 @@ make test       # host unit tests + QEMU smoke + in-kernel ktests + regression s
 make ktest      # just the in-kernel test suites (tests/ktest/*.txt)
 make run-go     # boot nucleus + Go kernel (build/go.img); type at burrow> (help, lspci, mem)
 make hostsim    # the same console and drivers on simulated hardware, no QEMU
+make run-go GO_DISPLAY=gtk   # the same, with the screen in a window (WSLg works)
 make debug      # QEMU waits for gdb -x scripts/gdbinit
 make sizes      # how full stage1 / stage2 / loader are
 ```
@@ -35,13 +37,15 @@ Expected `make test` tail:
 ```text
 830 checks, 0 failures
 CENSUS PASS (go1.27.3, 24 syscalls, all in the shim)
+FAT INTEROP PASS (2 files read from a mkfs.fat image)   # SKIP without dosfstools + mtools
 SMOKE PASS [boot_to_loader] (54 log lines)
 SMOKE PASS [boot_to_nucleus] (54 log lines)
-SMOKE PASS [boot_to_go] (94 log lines)
+SCREEN PASS (8 checks)
+SMOKE PASS [boot_to_go] (136 log lines)
 SMOKE PASS [irq] (68 log lines)
 SMOKE PASS [mm] (66 log lines)
 SMOKE PASS [sched] (79 log lines)
-SMOKE PASS [syscall] (66 log lines)
+SMOKE PASS [syscall] (67 log lines)
 SMOKE PASS [trap] (63 log lines)
 7 passed, 0 failed
 ```
@@ -57,10 +61,13 @@ loader/        freestanding C loader: serial, kprintf, CRC, manifest, ELF64, ATA
 nucleus/       higher-half C nucleus: GDT/IDT/traps, PMM, VMM, LAPIC, time, threads,
                futexes, SSE, and the ktest in-kernel test runner
 kernel/        Go module: the Go kernel (cmd/kernel), driver registry, drivers (uart, ps2,
-               pci, pit), console, hostsim, selftest, hal + haltest fakes, klog,
+               pci, pit, bga, ata), vfs + fs/{memfs,tarfs,devfs,fat}, block, gfx,
+               console, hostsim, selftest, hal + haltest fakes, klog, mkfat (cmd),
                arch/amd64 (tag burrow: port I/O, IRQ lines, nucleus calls)
 tools/mkimage  Go host tool that builds disk.img (+ tests)
 tools/census   the Go runtime syscall census workload (tests/regression/census.sh)
+initrd/        the initial file tree, packed into build/initrd.tar (mounted at /)
+datadisk/      files for build/data.img, the FAT32 second disk (mounted at /mnt)
 tools/doccheck Mermaid diagram validator (Node)
 tests/         unit/c (host C tests), smoke/ (QEMU markers), ktest/ (in-kernel suites),
                regression/ (broken images)

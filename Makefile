@@ -204,9 +204,11 @@ go-smoke: $(BUILD)/go.img $(BUILD)/data.img
 hostsim:
 	cd kernel && $(GO) run ./cmd/hostsim
 
-# Boot the Go image interactively: the console reads the serial line (Ctrl-A X quits).
+# Boot the Go image interactively: the console reads the serial line (Ctrl-A X
+# quits). GO_DISPLAY=gtk (or sdl) also shows the screen and takes the keyboard.
+GO_DISPLAY ?= none
 run-go: $(BUILD)/go.img $(BUILD)/data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display none
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-7 are done: boot chain, nucleus core (traps, memory, timer, threads, futexes, SSE), the stock Go 1.27.3 runtime running in ring 0 on the nucleus's Linux-syscall shim, and Go drivers (IRQs as wake-ups, PS/2, serial, PCI) with a console. Waves 8-12 (`docs/04-plan/waves/WAVES-07-12.md`: VFS and framebuffer, user space, Doom) are next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
+Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-8 are done: boot chain, nucleus core (traps, memory, timer, threads, futexes, SSE), the stock Go 1.27.3 runtime running in ring 0 on the nucleus's Linux-syscall shim, Go drivers (IRQs as wake-ups, PS/2, serial, PCI, ATA, BGA framebuffer) with a console, and a file tree (VFS over io/fs: initrd, ramfs, devfs, FAT32). Waves 9-12 (`docs/04-plan/waves/WAVES-07-12.md`: processes, user space, Doom) are next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
 
 ## Commands
 
@@ -14,7 +14,7 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + census + smoke + go-smoke + ktest + regress (full suite)
+make test         # test-unit + census + fat-interop + smoke + go-smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
@@ -23,6 +23,7 @@ make go-smoke     # boot build/go.img (nucleus + Go kernel), check tests/smoke/e
 make run-go       # the same image, interactive
 make census       # Go runtime syscalls on the host (strace) vs tests/regression/census-go1.27.txt
 make hostsim      # the Go console + drivers on simulated hardware (kernel/hostsim), no QEMU
+make fat-interop  # kernel/fs/fat vs fsck.fat/mkfs.fat/mtools (skips without dosfstools + mtools)
 make regress      # boot deliberately broken images, assert they fail loudly
 make sizes        # how full stage1 / stage2 / loader are
 make docs-check   # parse every Mermaid block (needs node + npm)
@@ -50,6 +51,7 @@ Expected `make test` tail: `N checks, 0 failures`, `SMOKE PASS [boot_to_loader]`
 - **Trap path:** every vector enters on an IST stack; `trap.asm` copies the `struct trap_frame` onto the current thread's kernel stack (`g_percpu.kstack_*`) so handlers may block or switch threads. Faults that are allowed are listed in the `.fixup` section (`nucleus/probe.asm`: `probe_read64/probe_write64/probe_ud2`); `trap_last` records them. Anything else prints `[trap] #XX at rip=...` plus registers and panics.
 - **Go kernel (W6):** `kernel/cmd/kernel` is built as a static `GOOS=linux` binary linked at `0x7e0000000000` (`build/kernel.elf`) and shipped only on `build/go.img` as the `kernel` payload; `disk.img` and ktest images stay nucleus-only (fast). `nucleus/go_load.c` maps it and starts thread `go-m0` from a trap frame (`thread_create_from_frame` -> `trap_resume`); `clone` children start the same way with the parent's registers. Every runtime syscall enters `nucleus/syscall.asm` (ring-0 callers classified by RIP in Go or nucleus text, IRETQ back, only RAX/RCX/R11 change) and `nucleus/shim.c`'s table; handlers live in `shim_proc.c`, `shim_mm.c`, `shim_thread.c`, `shim_poll.c` with Linux numbers in `shim.h`. Unknown numbers print `[shim] UNIMPLEMENTED syscall N` once. Nucleus-private calls are `0x1000+` (`NUCLEUS_ABI.md`), reached from Go with `syscall.RawSyscall` (`kernel/arch/amd64/nucleus.go`). Implement each syscall's Linux *semantics* that the runtime relies on (BUG-0009: `MADV_DONTNEED` must zero; `MAP_FIXED` zeroes; futex timeout 0 = do not wait). VM operations hold the address space's `kmutex` (BUG-0008).
 - **Go drivers (W7):** interrupts are wake-ups (ADR-0005): ISA lines come through the 8259 in virtual-wire mode (LAPIC LINT0 = ExtINT, so EOI goes to the 8259); `nucleus/irq.c`'s ISR masks the line, EOIs, marks it pending and wakes the one thread in `irq_wait`; `irq_ack` unmasks. Go side: `amd64.IRQ` (`syscall.Syscall`, so the P is handed off) behind `hal.IRQLine`; `driver.Serve` runs wait → handle → ack on a locked OS thread. Drivers live in `kernel/drivers/*`, call `driver.Register` from `init()` and touch hardware only through `driver.Env`; `driver.StartAll` starts them in name order. Keyboard (`drivers/ps2`) and serial (`uart.Input`) bytes go into one channel read by `kernel/console`. Boot order in `kernel/cmd/kernel/main.go`: banner → `testFaults` (kargs) → selftests → drivers → console; `make go-smoke` ends with the console's `poweroff`. A `kargs` boot module's words become the Go kernel's argv (`nucleus/go_load.c`).
+- **Files and pixels (W8):** `kernel/vfs` is a mount table over `io/fs` (longest-prefix mounts; writes through `vfs.Writable`); every file system passes `testing/fstest.TestFS` (devfs excepted: `/dev/zero` never ends). Tree at boot (`kernel/cmd/kernel/initrd.go`, `disks.go`): `/` = `fs/tarfs` over the `initrd` boot module (zero copy; `initrd/` in the repo, packed reproducibly by the Makefile), `/tmp` = writable `fs/memfs`, `/dev` = `fs/devfs` (drivers register via `driver.Env.Dev`), `/mnt` = `fs/fat` (FAT32, read-only) on `hdb` = `build/data.img` built from `datadisk/` by `kernel/cmd/mkfat`. Disks are `block.Device`s (`kernel/block`, conformance in `block/blocktest`), named by `drivers/ata`. Go reads boot data with `nu_bootinfo` + `amd64.PhysBytes` and maps device memory with `nu_mmio_map` (`driver.Env.MapMMIO`). `drivers/bga` sets 1024x768x32 and `kernel/gfx` draws (pitch-aware, PIT-27; hand-drawn 5x8 font in `gfx/font.go`); the console is teed onto the screen (`consoleOut` in `screen.go`). `pci.Scan` enumerates once for every driver. Heredocs halve backslashes in this environment: write files with escape sequences via the Write/Edit tools.
 - **Threads:** `schedule()` must update percpu kstack bounds, TSS.RSP0, FS_BASE and FXSAVE state before `switch_to` (PIT-22). Blocking primitives use `thread_block_unlock` (PIT-23). The nucleus's C is `-mgeneral-regs-only`; xmm is only touched from asm.
 
 ## Test conventions (`docs/05-testing/TEST_STRATEGY.md`)
@@ -60,6 +62,7 @@ Expected `make test` tail: `N checks, 0 failures`, `SMOKE PASS [boot_to_loader]`
 - `kprintf` supports only `%% %c %s %d %i %u %x %X %p`, the `0` flag, width and `l`/`ll`/`z`; there is no `-` flag.
 - **QEMU exit codes:** guest writes `0x10` to port `0xF4` → exit 33 (pass); `0x11` → 35 (fail); 124 = timeout = hang bug. Every failure path must write debug-exit `0x11` so failures are instant.
 - **Regression cases:** add a mutator in `tests/regression/run_all.sh` with `case_run REG-NNNN-name "<expected text>" 35 mutator`; use `lba_of <img> <name>` rather than hard-coding payload LBAs. Go kernel crash cases use `with_kargs <word>` (handled in `kernel/cmd/kernel/kargs.go`). Every bug gets a test named after its BUG/REG id.
+- **Screen checks:** `tests/smoke/expect/<name>.screen` lists `size`/`pixel` checks of PPMs that a keys file's `screendump <file>` steps save; `smoke.sh` runs `tests/smoke/checkscreen.py` on it. `scripts/ppm2png.py` turns a dump into a PNG to look at.
 - **Typing into a boot:** `tests/smoke/smoke.sh <img> <expect> <timeout> <keys-file>` (steps `wait`/`type`/`key`, sent with QEMU `sendkey` by `tests/smoke/sendkeys.py`; the monitor socket lives in `/tmp` because WSL's `/mnt/c` has no Unix sockets).
 - **Go drivers:** host-test with `haltest` (`FakePorts`, `FakeIRQ`, `Fake8042`) and `kernel/hostsim`; the on-target proof is a marker in `boot_to_go.txt`.
 - Smoke logs go to `build/smoke-<name>.log`.

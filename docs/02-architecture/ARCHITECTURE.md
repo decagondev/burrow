@@ -93,7 +93,8 @@ sequenceDiagram
     G->>N: driver goroutine: nu_irq_wait(n) blocks its thread
     N->>G: ISA IRQ n - ISR masks, EOIs, wakes the thread
     G->>N: nu_irq_ack(n) after draining the device
-    G->>G: W8+ - VFS, init process
+    G->>G: W8 - VFS (initrd, ramfs, devfs, FAT32), framebuffer, ATA in Go
+    G->>G: W9+ - processes, init
 ```
 
 ## 4. CPU mode state machine
