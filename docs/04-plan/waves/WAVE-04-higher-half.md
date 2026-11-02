@@ -9,7 +9,7 @@ Files: `nucleus/entry.asm`, `nucleus/main.c`, `nucleus/linker.ld` (from snippets
 Steps: entry sets its own stack (16 KiB in .bss), calls `nucleus_main(bi)`, which writes to COM1 directly (copy `serial.c`).
 Test: `readelf -lW build/nucleus.elf` shows VirtAddr `0xffffffff80100000`, PhysAddr `0x100000`. `mkimage -payload nucleus=` adds it; `-inspect` lists it.
 
-### [ ] W4-S02 Loader physical allocator (E03.F03.S01)
+### [x] W4-S02 Loader physical allocator (E03.F03.S01)
 File: `loader/palloc.c` (pure: takes the E820 array + reserved ranges, hands out 4 KiB frames above 1 MiB, never inside reserved ranges or images).
 Test: host unit tests with synthetic maps (overlaps, holes, exhaustion).
 

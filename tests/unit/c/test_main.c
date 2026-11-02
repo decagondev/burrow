@@ -11,6 +11,9 @@ TEST(manifest_too_small); TEST(manifest_overlap_stage2); TEST(manifest_find);
 TEST(e820_usable_sum); TEST(e820_max_addr); TEST(e820_names);
 TEST(elf_valid); TEST(elf_load_segment); TEST(elf_non_load_is_skipped);
 TEST(elf_rejects); TEST(elf_rejects_segment_past_end);
+TEST(palloc_bumps_from_floor); TEST(palloc_skips_reserved_ranges); TEST(palloc_jumps_holes);
+TEST(palloc_avoids_overlapping_nonusable); TEST(palloc_aligns_unaligned_entries);
+TEST(palloc_exhaustion_and_limit); TEST(palloc_reserved_table_full);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -22,6 +25,10 @@ int main(void) {
     puts("[memmap]");   RUN(e820_usable_sum); RUN(e820_max_addr); RUN(e820_names);
     puts("[elf64]");    RUN(elf_valid); RUN(elf_load_segment); RUN(elf_non_load_is_skipped);
                         RUN(elf_rejects); RUN(elf_rejects_segment_past_end);
+    puts("[palloc]");   RUN(palloc_bumps_from_floor); RUN(palloc_skips_reserved_ranges);
+                        RUN(palloc_jumps_holes); RUN(palloc_avoids_overlapping_nonusable);
+                        RUN(palloc_aligns_unaligned_entries); RUN(palloc_exhaustion_and_limit);
+                        RUN(palloc_reserved_table_full);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }
