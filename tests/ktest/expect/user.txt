@@ -7,4 +7,8 @@
 [ktest] uthread_preempt_kill ok
 [ktest] uthread_noncanonical_return ok
 [ktest] uthread_fs_base ok
+[ktest] uthread_regs ok
+[ktest] uthread_fault_resumes ok
+[ktest] uthread_interrupt ok
+[ktest] uthread_fork_exec ok
 BURROW:KTEST:OK

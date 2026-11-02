@@ -4,7 +4,6 @@
 #include "uspace.h"
 #include "vmm.h"
 #include "sched.h"
-#include "syscall.h"
 #include "trap.h"
 #include "gdt.h"
 #include "cpu.h"
@@ -35,7 +34,7 @@ long uthread_create(uint64_t as, uint64_t rip, uint64_t rsp, uint64_t fs) {
     f.rsp = rsp;
     f.ss = SEL_UDATA;
     uspace_thread_ref(as, +1);
-    struct thread *t = thread_create_user("user", &f, fs, space->pt.root, as);
+    struct thread *t = thread_create_user("user", &f, fs, space->pt.root, as, 0);
     if (!t) {
         uspace_thread_ref(as, -1);
         return -EAGAIN;
@@ -48,6 +47,14 @@ static struct thread *find_user(uint64_t tid) {
     struct thread *t = tid >> 32 ? 0 : thread_find((uint32_t)tid);
     return t && t->uspace ? t : 0;
 }
+
+struct thread *uthread_held(uint64_t tid, uint64_t *flags) {
+    *flags = spin_lock_irqsave(&g_lock);
+    struct thread *t = find_user(tid);
+    return t && t->req_state == REQ_TAKEN && t->uframe ? t : 0;
+}
+
+void uthread_unlock(uint64_t flags) { spin_unlock_irqrestore(&g_lock, flags); }
 
 static void unlink_req(struct thread *t) {
     for (struct thread **p = &g_head, *prev = 0; *p; prev = *p, p = &(*p)->req_next)
@@ -62,14 +69,17 @@ static void unlink_req(struct thread *t) {
 /* Leaves for good: uthread_kill joins the thread and frees its stack. */
 static void __attribute__((noreturn)) die(void) { thread_exit(); }
 
-/* Queues the current thread's request and blocks until Go answers. */
-static long post_and_wait(uint64_t nr, const uint64_t args[6]) {
+/* Queues the current thread's request (its registers are *f) and blocks
+ * until Go answers; returns the answer. A killed thread never returns. */
+static long post_and_wait(struct trap_frame *f, uint64_t nr, const uint64_t args[6]) {
     struct thread *me = thread_current();
     uint64_t fl = spin_lock_irqsave(&g_lock);
     if (me->killed) { spin_unlock_irqrestore(&g_lock, fl); die(); }
     me->req[0] = thread_id(me);
     me->req[1] = nr;
     for (int i = 0; i < 6; i++) me->req[2 + i] = args[i];
+    me->uframe = f;
+    me->interrupt = 0;                       /* Go sees the thread now: it can deliver */
     me->req_state = REQ_QUEUED;
     me->req_next = 0;
     if (g_tail) g_tail->req_next = me; else g_head = me;
@@ -81,30 +91,42 @@ static long post_and_wait(uint64_t nr, const uint64_t args[6]) {
     }
     if (me->killed) { unlink_req(me); spin_unlock_irqrestore(&g_lock, fl); die(); }
     me->req_state = REQ_NONE;
+    me->uframe = 0;
     long r = me->req_result;
     spin_unlock_irqrestore(&g_lock, fl);
     return r;
 }
 
-long nu_user_syscall(struct syscall_frame *f) {
-    const uint64_t args[6] = { SYSARG0(f), SYSARG1(f), SYSARG2(f), SYSARG3(f), SYSARG4(f), SYSARG5(f) };
-    long r = post_and_wait(f->nr, args);
-    if (!user_addr(f->rip)) {           /* PIT-24: SYSRET to a non-canonical RIP #GPs in ring 0 */
-        const uint64_t fault[6] = { 0, f->rip, 0, 0, 0, 0 };
-        post_and_wait(UREQ_FAULT | 13, fault);
-        die();
-    }
-    return r;
+void nu_user_syscall(struct trap_frame *f) {
+    const uint64_t args[6] = { f->rdi, f->rsi, f->rdx, f->r10, f->r8, f->r9 };
+    f->rax = (uint64_t)post_and_wait(f, f->rax, args);
+    uthread_return_to_user(f);
 }
 
-void uthread_fault(const struct trap_frame *f, uint64_t cr2) {
+void uthread_fault(struct trap_frame *f, uint64_t cr2) {
     const uint64_t args[6] = { cr2, f->rip, f->error, 0, 0, 0 };
-    post_and_wait(UREQ_FAULT | f->vector, args);
-    die();                              /* an answered fault still cannot resume */
+    post_and_wait(f, UREQ_FAULT | f->vector, args);   /* only a syscall's answer is RAX */
+    uthread_return_to_user(f);          /* answered: resume (Go fixed the cause or the registers) */
 }
 
-void uthread_check_killed(void) {
-    if (thread_current()->killed) die();
+/* Every way back to ring 3 passes here: a killed thread leaves, a thread
+ * Go wants to stop posts an interrupt request, and the frame must be one
+ * IRETQ can return to (PIT-24: a non-canonical RIP would #GP in ring 0). */
+void uthread_return_to_user(struct trap_frame *f) {
+    struct thread *me = thread_current();
+    for (;;) {
+        if (me->killed) die();
+        if (!user_addr(f->rip) || !user_addr(f->rsp)) {
+            const uint64_t args[6] = { 0, f->rip, 0, 0, 0, 0 };
+            f->rip = 0;                  /* never return there, whatever Go answers */
+            post_and_wait(f, UREQ_FAULT | 13, args);
+            if (!user_addr(f->rip) || f->rip == 0) die();
+            continue;
+        }
+        if (!me->interrupt) return;
+        const uint64_t args[6] = { f->rip, 0, 0, 0, 0, 0 };
+        post_and_wait(f, UREQ_INTERRUPT, args);   /* the answer is not a register: */
+    }                                             /* Go changes them with nu_uthread_regs */
 }
 
 long uthread_wait(uint64_t *buf, uint64_t max) {
@@ -157,6 +179,16 @@ long uthread_kill(uint64_t tid) {
     thread_join(t);                     /* it leaves at its next pass through the kernel */
     uspace_thread_ref(as, -1);
     return 0;
+}
+
+/* The thread stops at its next return to ring 3: a timer tick if it is
+ * computing, or right after Go answers the request it is waiting on. */
+long uthread_interrupt(uint64_t tid) {
+    uint64_t fl = spin_lock_irqsave(&g_lock);
+    struct thread *t = find_user(tid);
+    if (t) t->interrupt = 1;
+    spin_unlock_irqrestore(&g_lock, fl);
+    return t ? 0 : -ESRCH;
 }
 
 long uthread_set_fs(uint64_t tid, uint64_t fs) {

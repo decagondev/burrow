@@ -36,6 +36,8 @@ struct thread {
     uint64_t req[8];            /* tid, nr, args[6] as nu_syscall_wait copies them */
     long     req_result;
     struct thread *req_next;    /* request queue link */
+    struct trap_frame *uframe;  /* its user registers while it waits for Go (W10) */
+    int      interrupt;         /* nu_uthread_interrupt: stop at the next kernel exit */
     uint8_t  fx[512] __attribute__((aligned(16)));   /* FXSAVE area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
@@ -52,7 +54,8 @@ struct thread *thread_create_from_frame(const char *name, const struct trap_fram
 /* Like thread_create_from_frame, for ring 3: the thread runs on cr3 and
  * belongs to address space `uspace` (uthread.c). */
 struct thread *thread_create_user(const char *name, const struct trap_frame *frame,
-                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace);
+                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace,
+                                  const uint8_t *fx);   /* 512-byte FXSAVE image, 0 = fresh */
 /* The thread with this id, or 0 (interrupts off while using the result). */
 struct thread *thread_find(uint32_t id);
 void thread_yield(void);

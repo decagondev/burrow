@@ -17,7 +17,7 @@ Stories: E08.F01 address spaces · E08.F02 user ELF loader · E08.F03 ring 3 · 
 Demo: `/bin/hello` (static musl) prints and exits; user page fault kills only that process.
 First user program is 20 lines of asm doing `write` + `exit`, before musl.
 
-## W10 A Unix (M10)
+## W10 A Unix (M10) — sliced: [WAVE-10](WAVE-10-a-unix.md)
 Stories: E09.F01-F05. Demo: busybox `sh`; `ls | wc -l`; `^C` interrupts a loop.
 
 ## W11 DOOM (M11)

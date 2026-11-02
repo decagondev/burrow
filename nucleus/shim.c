@@ -115,6 +115,14 @@ static long nu_syscall_wait(struct syscall_frame *f)   { return uthread_wait((ui
 static long nu_syscall_reply(struct syscall_frame *f)  { return uthread_reply(SYSARG0(f), (long)SYSARG1(f)); }
 static long nu_uthread_kill(struct syscall_frame *f)   { return uthread_kill(SYSARG0(f)); }
 static long nu_uthread_set_fs(struct syscall_frame *f) { return uthread_set_fs(SYSARG0(f), SYSARG1(f)); }
+static long nu_uthread_regs(struct syscall_frame *f) {
+    return uthread_regs(SYSARG0(f), (struct uregs *)SYSARG1(f), SYSARG2(f) != 0);
+}
+static long nu_uthread_create_from(struct syscall_frame *f) {
+    return uthread_create_from(SYSARG0(f), (const struct uregs *)SYSARG1(f));
+}
+static long nu_uthread_set_space(struct syscall_frame *f) { return uthread_set_space(SYSARG0(f), SYSARG1(f)); }
+static long nu_uthread_interrupt(struct syscall_frame *f) { return uthread_interrupt(SYSARG0(f)); }
 
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
@@ -135,6 +143,10 @@ static const sys_fn g_nu_table[] = {
     [NU_syscall_reply - NU_BASE] = nu_syscall_reply,
     [NU_uthread_kill - NU_BASE] = nu_uthread_kill,
     [NU_uthread_set_fs - NU_BASE] = nu_uthread_set_fs,
+    [NU_uthread_regs - NU_BASE] = nu_uthread_regs,
+    [NU_uthread_create_from - NU_BASE] = nu_uthread_create_from,
+    [NU_uthread_set_space - NU_BASE] = nu_uthread_set_space,
+    [NU_uthread_interrupt - NU_BASE] = nu_uthread_interrupt,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {

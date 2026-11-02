@@ -18,9 +18,13 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1015 | `nu_page_free` | pa, count (1) | 0 | W9 |
 | 0x1016 | `nu_as_destroy` | as | 0, frees its page tables; -EBUSY while a thread still runs in it | W9 |
 | 0x1020 | `nu_uthread_create` | as, rip, rsp, fs | tid of a ring-3 thread, runnable at once | W9 |
-| 0x1021 | `nu_syscall_wait` | buf, max | blocks until a user thread needs Go, then copies up to max 64-byte requests `{tid, nr, args[6]}` into buf and returns how many; nr >= `0xFFFF0000` is a fault (vector in the low byte; args: cr2, rip, error) | W9 |
+| 0x1021 | `nu_syscall_wait` | buf, max | blocks until a user thread needs Go, then copies up to max 64-byte requests `{tid, nr, args[6]}` into buf and returns how many; nr >= `0xFFFF0000` is a fault (vector in the low byte; args: cr2, rip, error), `0xFFFF0100` an interrupt stop; since W10 answering a fault or interrupt resumes the thread (Go may have changed its registers) | W9 |
 | 0x1022 | `nu_syscall_reply` | tid, result | 0, resumes the user thread with RAX = result; -ESRCH if it is not waiting | W9 |
 | 0x1023 | `nu_uthread_kill` | tid | 0 once the thread is gone (it may be waiting, runnable or preempted in ring 3); frees its kernel stack | W9 |
 | 0x1024 | `nu_uthread_set_fs` | tid, fs | 0; the thread's FS base (`arch_prctl(ARCH_SET_FS)` for TLS) | W9 |
+| 0x1025 | `nu_uthread_regs` | tid, buf, write | 0; copies the waiting thread's registers to buf (write 0) or from it (write 1): 672 bytes = r15 r14 r13 r12 r11 r10 r9 r8 rbp rdi rsi rdx rcx rbx rax rip rflags rsp fs_base, one pad word, then the 512-byte FXSAVE area. A write is checked: user RIP/RSP/FS, RFLAGS cut to the user-settable bits with IF on, MXCSR reserved bits cleared. -EBUSY unless Go holds a request from it | W10 |
+| 0x1026 | `nu_uthread_create_from` | as, buf | tid of a new ring-3 thread starting from that register image (fork) | W10 |
+| 0x1027 | `nu_uthread_set_space` | tid, as | 0; the waiting thread continues in another address space (execve) | W10 |
+| 0x1028 | `nu_uthread_interrupt` | tid | 0; a thread running in ring 3 stops at its next pass through the kernel and posts an interrupt request (nr `0xFFFF0100`, args: rip) so Go can deliver a signal | W10 |
 
 Rules: every new call gets a row here **before** code, a Go wrapper in `kernel/arch/amd64/nucleus.go`, and a nucleus self-test. Numbers are never reused.

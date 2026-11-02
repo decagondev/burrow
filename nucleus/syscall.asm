@@ -12,10 +12,11 @@
 ; nucleus text = a ring-0 caller; anything else on the kernel CR3 -> panic.
 ;
 ; User path: switch to the thread's kernel stack top (the user RSP is never
-; touched), build the same struct syscall_frame, let nu_user_syscall hand the
-; request to Go (uthread.c) and return with SYSRETQ. nu_user_syscall makes
-; sure the return RIP is canonical (PIT-24) and never returns for a killed
-; thread.
+; touched), build a struct trap_frame like an interrupt from ring 3 would,
+; let nu_user_syscall hand the request to Go (uthread.c) and return through
+; trap_resume (IRETQ), so Go can change every register (fork, execve,
+; signals: W10). nu_user_syscall makes sure the return RIP is canonical
+; (PIT-24) and never returns for a killed thread.
 ;
 ; Stack: the thread's kernel stack, like trap.asm: just below RSP if the
 ; caller already runs on it (nucleus code), else its top (Go code).
@@ -31,6 +32,9 @@ PERCPU_BOT     equ 8
 PERCPU_SCRATCH equ 24
 KERNEL_CS      equ 0x08
 KERNEL_SS      equ 0x10
+USER_CS        equ 0x2B
+USER_SS        equ 0x23
+SYSCALL_VECTOR equ 0x100            ; outside 0-255: not an interrupt
 
 extern g_percpu
 extern nu_syscall_dispatch          ; long nu_syscall_dispatch(struct syscall_frame *)
@@ -38,6 +42,7 @@ extern nu_user_syscall              ; long nu_user_syscall(struct syscall_frame 
 extern g_kernel_cr3                 ; shim.c: the kernel PML4, as written to CR3
 extern syscall_bad_caller           ; noreturn, panics
 extern __text_start, __text_end     ; nucleus/linker.ld
+extern trap_resume                  ; trap.asm: restore a struct trap_frame, IRETQ
 global syscall_entry, go_text_lo, go_text_hi
 
 section .data
@@ -122,43 +127,33 @@ syscall_entry:
 .user:
     mov [g_percpu + PERCPU_SCRATCH], rsp
     mov rsp, [g_percpu + PERCPU_TOP]         ; empty while the thread runs in ring 3
-    push qword [g_percpu + PERCPU_SCRATCH]   ; user RSP
-    push rcx                         ; user RIP
-    push r11                         ; user RFLAGS
-    push rax                         ; struct syscall_frame starts here (top: nr)
-    push rdi
-    push rsi
+    push USER_SS                     ; a struct trap_frame, as an interrupt from
+    push qword [g_percpu + PERCPU_SCRATCH]   ; ring 3 would leave: SS, RSP,
+    push r11                         ; RFLAGS (SYSCALL put them in R11)
+    push USER_CS                     ; CS
+    push rcx                         ; RIP (SYSCALL put it in RCX)
+    push 0                           ; error code
+    push SYSCALL_VECTOR              ; "vector": marks a syscall frame
+    push rax
+    push rbx
+    push rcx
     push rdx
-    push r10
+    push rsi
+    push rdi
+    push rbp
     push r8
     push r9
-    push rbx
-    push rbp
+    push r10
+    push r11
     push r12
     push r13
     push r14
-    push r15
+    push r15                         ; 22 words: RSP stays 16-aligned
     mov rdi, rsp
     sti
-    call nu_user_syscall             ; RAX = result; frame.rip is canonical
+    call nu_user_syscall             ; frame.rax = result; Go may have changed any register
     cli
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbp
-    pop rbx
-    pop r9
-    pop r8
-    pop r10
-    pop rdx
-    pop rsi
-    pop rdi
-    add rsp, 8                       ; saved nr
-    pop r11                          ; user RFLAGS
-    pop rcx                          ; user RIP
-    pop rsp                          ; user RSP: we leave the kernel stack here
-    o64 sysret                       ; CS 0x2B, SS 0x23 (STAR), IF from R11
+    jmp trap_resume                  ; IRETQ: every register comes from the frame (W10)
 
 .bad:
     pop rax

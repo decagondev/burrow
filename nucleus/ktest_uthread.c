@@ -10,16 +10,10 @@
 #include "boot.h"
 #include "errno.h"
 
-#define CODE_VA    0x400000ull
-#define STACK_VA   0x7FFF0000ull
-#define STACK_TOP  (STACK_VA + 0x1000)
-#define FAULT(v)   (UREQ_FAULT | (v))
 #define MS         (1000ull * 1000)
 
-struct uproc { long as, code, stack; };
-
 /* An address space with `code` at va (read + execute) and a stack page. */
-static int uproc_new(struct uproc *p, const uint8_t *code, uint64_t len, uint64_t va) {
+int uproc_new(struct uproc *p, const uint8_t *code, uint64_t len, uint64_t va) {
     p->as = nu(0x1010, 0, 0, 0, 0, 0);
     p->code = nu(0x1014, 1, 0, 0, 0, 0);
     p->stack = nu(0x1014, 1, 0, 0, 0, 0);
@@ -30,16 +24,16 @@ static int uproc_new(struct uproc *p, const uint8_t *code, uint64_t len, uint64_
     return nu(0x1011, p->as, STACK_VA, p->stack, 4096, UPROT_WRITE) == 0 ? 0 : -1;
 }
 
-static int uproc_free(struct uproc *p) {
+int uproc_free(struct uproc *p) {
     if (nu(0x1016, p->as, 0, 0, 0, 0) != 0) return -1;
     nu(0x1015, p->code, 1, 0, 0, 0);
     nu(0x1015, p->stack, 1, 0, 0, 0);
     return 0;
 }
 
-static uint64_t g_req[4 * UREQ_WORDS];
+uint64_t g_req[4 * UREQ_WORDS];
 
-static long next_req(void) { return nu(0x1021, (long)g_req, 4, 0, 0, 0); }
+long next_req(void) { return nu(0x1021, (long)g_req, 4, 0, 0, 0); }
 
 /* getpid, then exit(getpid + 1): two requests through the queue, SYSRETQ between. */
 int kt_uthread_syscalls(void) {

@@ -68,4 +68,10 @@ int kt_uthread_faults(void);
 int kt_uthread_preempt_kill(void);
 int kt_uthread_noncanonical_return(void);
 int kt_uthread_fs_base(void);
+
+/* ktest_uregs.c */
+int kt_uthread_regs(void);
+int kt_uthread_fault_resumes(void);
+int kt_uthread_interrupt(void);
+int kt_uthread_fork_exec(void);
 #endif

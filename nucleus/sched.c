@@ -9,6 +9,7 @@
 #include "vmm.h"
 #include "frames.h"
 #include "cpu.h"
+#include "lib_string.h"
 #include "kprintf.h"
 #include "lib_string.h"
 #include "panic.h"
@@ -134,6 +135,8 @@ static struct thread *thread_alloc(const char *name) {
     t->killed = 0;
     t->req_state = 0;
     t->req_next = 0;
+    t->uframe = 0;
+    t->interrupt = 0;
     t->timed_out = 0;
     t->wait_next = 0;
     t->name = name;
@@ -170,13 +173,15 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
 
 struct thread *thread_create_from_frame(const char *name, const struct trap_frame *frame,
                                         uint64_t fs_base) {
-    return thread_create_user(name, frame, fs_base, vmm_kernel()->pt.root, 0);
+    return thread_create_user(name, frame, fs_base, vmm_kernel()->pt.root, 0, 0);
 }
 
 struct thread *thread_create_user(const char *name, const struct trap_frame *frame,
-                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace) {
+                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace,
+                                  const uint8_t *fx) {
     struct thread *t = thread_alloc(name);
     if (!t) return 0;
+    if (fx) memcpy(t->fx, fx, sizeof t->fx);   /* a fork child keeps its parent's FPU state */
     t->cr3 = cr3;                       /* before thread_publish: it may run at once */
     t->uspace = uspace;
     /* [top - frame] the trap frame  [below] trap_resume  then 6 zero registers:

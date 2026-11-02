@@ -44,6 +44,10 @@ static const struct ktest g_tests[] = {
     { "uthread_preempt_kill", kt_uthread_preempt_kill },
     { "uthread_noncanonical_return", kt_uthread_noncanonical_return },
     { "uthread_fs_base",    kt_uthread_fs_base },
+    { "uthread_regs",       kt_uthread_regs },
+    { "uthread_fault_resumes", kt_uthread_fault_resumes },
+    { "uthread_interrupt",  kt_uthread_interrupt },
+    { "uthread_fork_exec",  kt_uthread_fork_exec },
 };
 
 static const char *g_current;

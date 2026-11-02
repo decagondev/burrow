@@ -132,7 +132,7 @@ void trap_dispatch(struct trap_frame *f) {
             if (r < 0) panic("out of memory: no frame for the page at %llx (rip %llx)",
                              (unsigned long long)cr2, (unsigned long long)f->rip);
         }
-        if (from_user && f->vector != 2) uthread_fault(f, cr2);   /* Go decides (W9) */
+        if (from_user && f->vector != 2) { uthread_fault(f, cr2); return; }   /* Go decides; may resume (W10) */
         if (f->vector != VEC_DF && f->vector != 2 && try_fixup(f, cr2)) return;
         report(f, cr2);
     }
@@ -140,5 +140,5 @@ void trap_dispatch(struct trap_frame *f) {
     irq_handler h = g_handlers[f->vector];
     if (!h) report(f, 0);
     h(f);
-    if (from_user) uthread_check_killed();          /* killed while preempted in ring 3 */
+    if (from_user) uthread_return_to_user(f);       /* killed or asked to stop while in ring 3 */
 }

@@ -7,3 +7,8 @@ uthread_faults
 uthread_preempt_kill
 uthread_noncanonical_return
 uthread_fs_base
+# W10-S01: registers, resumable faults, stops, fork and exec
+uthread_regs
+uthread_fault_resumes
+uthread_interrupt
+uthread_fork_exec
