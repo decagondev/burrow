@@ -17,7 +17,9 @@
 #include "lib_string.h"
 #include "panic.h"
 
-#define GO_STACK_BYTES (64ull * 1024)
+/* Go's rt0_go assumes 64 KiB of g0 stack BELOW the entry SP (Linux gives
+ * 8 MiB); argv/env/auxv sit above it, so give m0 well over that. */
+#define GO_STACK_BYTES (1024ull * 1024)
 #define PF_X 1u
 #define PF_W 2u
 #define RFLAGS_RESERVED1 (1ull << 1)
@@ -74,7 +76,7 @@ static void map_go_elf(struct addr_space *as, const uint8_t *img, uint64_t len, 
     if (!go_text_hi) panic("go kernel ELF has no executable segment");
 }
 
-/* 64 KiB stack plus an unmapped guard page below it. Returns its top. */
+/* The m0 stack plus an unmapped guard page below it. Returns its top. */
 static uint64_t map_go_stack(struct addr_space *as) {
     uint64_t base;
     if (vm_reserve(as, 0, GO_STACK_BYTES + PAGE_4K, &base) != 0) panic("go: no room for the stack");

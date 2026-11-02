@@ -6,4 +6,8 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
+[go-selftest] language ok
+[go-selftest] goroutine_ping_pong ok
+[go-selftest] sync ok
+[go-selftest] gc_stress ok
 BURROW:GO:SELFTEST:OK

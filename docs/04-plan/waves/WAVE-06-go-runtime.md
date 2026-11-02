@@ -33,7 +33,7 @@ Test: `main()` starts; `BURROW:GO:OK goroutine says 42`.
 ### [x] W6-S10 Netpoller minimum: pipe2 + epoll (E05.F04)
 One wake pipe object; `epoll_pwait` = futex-style wait on (pipe written OR timeout). Test: `time.Sleep(100ms)` x 10 within 10%.
 
-### [ ] W6-S11 Selftest package (E05.F05)
+### [x] W6-S11 Selftest package (E05.F05)
 `kernel/selftest`: goroutine ping-pong 100k; GC stress allocating 10x RAM in a sliding window; map/slice/interface/closure smoke. Markers `[go-selftest] ... ok`.
 
 ### [ ] W6-S12 Census regression (E00.F02.S05)

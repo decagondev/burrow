@@ -18,11 +18,22 @@ type Config struct {
 	SleepRounds int           // time.Sleep calls to time
 	Sleep       time.Duration // each one
 	SleepSlack  float64       // allowed overshoot, as a fraction of Sleep
+	PingPongs   int           // channel round trips between two goroutines
+	GCTotal     int64         // bytes allocated in the GC stress, in total
+	GCWindow    int64         // bytes kept alive at any moment
+	HeapLimit   uint64        // HeapSys must stay below this during the stress
 }
 
-// Kernel is the configuration the Go kernel runs at boot.
+const mib = 1 << 20
+
+// Kernel is the configuration the Go kernel runs at boot: GC stress of 10x
+// the 128 MiB QEMU machine through a 16 MiB window.
 func Kernel() Config {
-	return Config{SleepRounds: 10, Sleep: 100 * time.Millisecond, SleepSlack: 0.10}
+	return Config{
+		SleepRounds: 10, Sleep: 100 * time.Millisecond, SleepSlack: 0.10,
+		PingPongs: 100000,
+		GCTotal:   1280 * mib, GCWindow: 16 * mib, HeapLimit: 64 * mib,
+	}
 }
 
 type check struct {
@@ -32,6 +43,10 @@ type check struct {
 
 var checks = []check{
 	{"sleep", checkSleep},
+	{"language", checkLanguage},
+	{"goroutine_ping_pong", checkPingPong},
+	{"sync", checkSync},
+	{"gc_stress", checkGC},
 }
 
 // Run executes every check in order and stops at the first failure.

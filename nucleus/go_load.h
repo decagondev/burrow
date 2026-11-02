@@ -1,6 +1,6 @@
 /* go_load.h - start the Go kernel like Linux execve would (GO_RUNTIME_HOSTING.md §3):
  * map its PT_LOAD segments (supervisor, W^X), record its text range for the
- * syscall gate, map a 64 KiB stack with a guard page, build argc/argv/envp/
+ * syscall gate, map a 1 MiB stack with a guard page, build argc/argv/envp/
  * auxv, and create thread "go-m0" entering e_entry in ring 0 with IF on. */
 #ifndef NUCLEUS_GO_LOAD_H
 #define NUCLEUS_GO_LOAD_H
