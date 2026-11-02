@@ -14,6 +14,9 @@ TEST(elf_rejects); TEST(elf_rejects_segment_past_end);
 TEST(palloc_bumps_from_floor); TEST(palloc_skips_reserved_ranges); TEST(palloc_jumps_holes);
 TEST(palloc_avoids_overlapping_nonusable); TEST(palloc_aligns_unaligned_entries);
 TEST(palloc_exhaustion_and_limit); TEST(palloc_reserved_table_full);
+TEST(paging_maps_4k_pages); TEST(paging_maps_2m_pages); TEST(paging_mixes_page_sizes);
+TEST(paging_user_bit_reaches_every_level); TEST(paging_rejects_bad_input);
+TEST(paging_refuses_to_overwrite); TEST(paging_out_of_memory);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -29,6 +32,10 @@ int main(void) {
                         RUN(palloc_jumps_holes); RUN(palloc_avoids_overlapping_nonusable);
                         RUN(palloc_aligns_unaligned_entries); RUN(palloc_exhaustion_and_limit);
                         RUN(palloc_reserved_table_full);
+    puts("[paging]");   RUN(paging_maps_4k_pages); RUN(paging_maps_2m_pages);
+                        RUN(paging_mixes_page_sizes); RUN(paging_user_bit_reaches_every_level);
+                        RUN(paging_rejects_bad_input); RUN(paging_refuses_to_overwrite);
+                        RUN(paging_out_of_memory);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

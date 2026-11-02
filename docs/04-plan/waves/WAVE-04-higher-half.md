@@ -21,7 +21,7 @@ Test: marker `[loader] nucleus image crc ok`; regression REG-0004 (corrupt nucle
 Use `elf64_segment_at`; copy `filesz` bytes to `paddr`, zero to `memsz`; reject overlaps with loader/boot data (pure check, unit-tested).
 Test: marker `[loader] nucleus loaded entry=ffffffff80100000`.
 
-### [ ] W4-S05 Page-table builder (pure) (E03.F04.S01)
+### [x] W4-S05 Page-table builder (pure) (E03.F04.S01)
 File: `loader/paging.c`: `pt_map(ctx, va, pa, size, flags)` where `ctx` provides `alloc_frame()` and `phys_to_ptr()` (DIP: on the host they are malloc + identity).
 Test: host tests walk the produced tables and assert translations for 4 KiB/2 MiB pages, flags, and non-canonical rejection.
 
