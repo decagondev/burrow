@@ -18,6 +18,9 @@ const mib = 1 << 20
 // addCommands gives the console the commands that need the kernel's state.
 func addCommands(con *console.Console, k *kernel) {
 	log := k.log.With("console")
+	for _, cmd := range console.FileCommands(k.fs) {
+		con.Add(cmd)
+	}
 	con.Add(console.Command{Name: "modules", Help: "list the loader's boot modules",
 		Run: func(_ []string, out io.Writer) { io.WriteString(out, listModules(k.modules)) }})
 	con.Add(console.Command{Name: "lspci", Help: "list PCI functions found at boot",

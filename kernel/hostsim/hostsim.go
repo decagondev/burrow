@@ -19,9 +19,11 @@ import (
 	"burrow/kernel/driver"
 	"burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
+	"burrow/kernel/fs/memfs"
 	"burrow/kernel/hal"
 	"burrow/kernel/haltest"
 	"burrow/kernel/klog"
+	"burrow/kernel/vfs"
 )
 
 // Machine is one simulated PC with the console running on it.
@@ -31,6 +33,7 @@ type Machine struct {
 	irqs   map[int]*haltest.FakeIRQ
 	input  chan byte
 	Con    *console.Console // add commands before Start
+	FS     *vfs.VFS         // / (a small read-only tree) and /tmp
 	Log    *klog.Logger
 	closed chan struct{}
 }
@@ -51,6 +54,16 @@ func New() *Machine {
 	com1.Init()
 	m.Log = klog.New(com1, klog.Info)
 	m.Con = console.New(m.Log.Writer(), m.input)
+	m.FS = vfs.New()
+	root := memfs.New()
+	root.MkdirAll("etc", 0o755, time.Time{})
+	root.WriteFile("etc/motd", []byte("Welcome to Burrow (hostsim).\n"), 0o644, time.Time{})
+	root.Freeze()
+	m.FS.Mount(".", root, "memfs")
+	m.FS.Mount("tmp", memfs.New(), "ramfs")
+	for _, cmd := range console.FileCommands(m.FS) {
+		m.Con.Add(cmd)
+	}
 	return m
 }
 

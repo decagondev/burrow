@@ -10,8 +10,8 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 ### [x] W8-S02 initrd + tarfs (E07.F01)
 `initrd/` in the repo is packed by the Makefile into `build/initrd.tar` (ustar) and shipped as the `initrd` payload on `go.img`. `kernel/fs/tarfs`: read-only `fs.FS` over the archive bytes (stdlib `archive/tar`), checked with `fstest.TestFS`.
 
-### [ ] W8-S03 VFS + ramfs (E07.F02)
-`kernel/vfs`: a mount table that is itself an `fs.FS` (longest-prefix mounts, path cleaning, `ReadDir` showing mount points), and `vfs.Create/Mkdir/Remove` for file systems that can write. `kernel/fs/ramfs`: writable in-memory tree for `/tmp`. Both pass `fstest.TestFS`. Console: `ls`, `cat`, `write <file> <text>`, `mounts`.
+### [x] W8-S03 VFS + ramfs (E07.F02)
+`kernel/vfs`: a mount table that is itself an `fs.FS` (longest-prefix mounts, path cleaning, `ReadDir` showing mount points), and `vfs.WriteFile/Mkdir/Remove` for file systems that can write (`vfs.Writable`). ramfs for `/tmp` is a writable `fs/memfs` (no package of its own). Both pass `fstest.TestFS`. Console: `ls`, `cat`, `write <file> <text>`, `mkdir`, `rm`, `mounts`.
 
 ### [ ] W8-S04 devfs (E07.F03)
 `kernel/fs/devfs`: `/dev/null`, `/dev/zero`, `/dev/console` (writes reach the console), and later `/dev/fb0`, `/dev/input/event0`. Device files are registered by drivers.

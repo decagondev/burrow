@@ -26,5 +26,13 @@ burrow> echo hello from the keyboar
 hello from the keyboard
 burrow> lspci
 00:01.1 8086:7010 ide controller
+burrow> cat /etc/motd
+Welcome to Burrow.
+burrow> write /tmp/note typed into ramfs
+burrow> cat /tmp/note
+typed into ramfs
+burrow> ls /
+drwxr-xr-x        0 etc/
+drwxr-xr-x        0 tmp/
 burrow> poweroff
 [console] INFO: poweroff

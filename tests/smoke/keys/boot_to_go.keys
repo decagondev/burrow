@@ -7,5 +7,13 @@ type d
 key ret
 type lspci
 key ret
+type cat /etc/motd
+key ret
+type write /tmp/note typed into ramfs
+key ret
+type cat /tmp/note
+key ret
+type ls /
+key ret
 type poweroff
 key ret

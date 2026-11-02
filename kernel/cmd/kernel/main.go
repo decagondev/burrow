@@ -31,6 +31,7 @@ import (
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/selftest"
+	"burrow/kernel/vfs"
 )
 
 // kernel is the state console commands and later subsystems share.
@@ -38,7 +39,7 @@ type kernel struct {
 	boot    time.Time
 	log     *klog.Logger
 	modules []bootinfo.Module
-	initrd  *memfs.FS
+	fs      *vfs.VFS
 }
 
 func main() {
@@ -55,7 +56,9 @@ func main() {
 		amd64.DebugExit(0x11)
 	}
 	k.modules = mods
-	k.initrd = mountInitrd(mods, log.With("initrd"))
+	k.fs = vfs.New()
+	k.fs.Mount(".", mountInitrd(mods, log.With("initrd")), "tarfs")
+	k.fs.Mount("tmp", memfs.New(), "ramfs")
 
 	done := make(chan int)
 	go func() { done <- 42 }()

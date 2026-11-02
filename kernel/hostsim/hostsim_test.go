@@ -63,3 +63,13 @@ func TestBothInputsInterleave(t *testing.T) {
 		t.Errorf("driver log missing:\n%s", m.Output())
 	}
 }
+
+func TestFilesFromTheKeyboard(t *testing.T) {
+	m := boot(t)
+	if err := m.TypeKeys("write /tmp/a one two\ncat /etc/motd /tmp/a\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.WaitFor("Welcome to Burrow (hostsim).\none two\n", wait); err != nil {
+		t.Fatal(err)
+	}
+}
