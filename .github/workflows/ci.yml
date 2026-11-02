@@ -1,0 +1,41 @@
+# ci.yml - the same gate as a local session: `make test` (host unit tests,
+# QEMU smoke, QEMU regression) plus Mermaid diagram parsing. QEMU runs with
+# TCG (no KVM), which is fast enough: the whole suite boots in seconds.
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nasm qemu-system-x86 python3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache: false
+      - name: make test
+        run: make test
+      - name: Upload serial logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: serial-logs
+          path: |
+            build/smoke-*.log
+            build/regression/*.log
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Parse every Mermaid diagram
+        run: make docs-check

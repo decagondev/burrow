@@ -9,7 +9,8 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | Milestone | State |
 |---|---|
 | M0-M3: own boot sector → stage2 → long mode → C loader, all verified | **done, tested in QEMU** |
-| M4: higher-half nucleus | next ([Wave 4](docs/04-plan/waves/WAVE-04-higher-half.md)) |
+| M4: higher-half nucleus (page tables, physmap, boot_info v2) | **done, tested in QEMU** |
+| M5: nucleus (GDT/IDT, PMM, VMM, threads) | next ([Wave 5](docs/04-plan/waves/WAVE-05-nucleus.md)) |
 | M6: stock Go runtime running in ring 0 | planned (W6) |
 | M11: DOOM | planned (W11) |
 
@@ -27,9 +28,10 @@ make sizes      # how full stage1 / stage2 / loader are
 Expected `make test` tail:
 
 ```text
-39 checks, 0 failures
-SMOKE PASS [boot_to_loader] (28 log lines)
-3 passed, 0 failed
+152 checks, 0 failures
+SMOKE PASS [boot_to_loader] (44 log lines)
+SMOKE PASS [boot_to_nucleus] (44 log lines)
+4 passed, 0 failed
 ```
 
 ## Repository map
@@ -37,7 +39,9 @@ SMOKE PASS [boot_to_loader] (28 log lines)
 ```text
 boot/          stage1.asm (MBR), stage2.asm (real→protected→long), shared .inc files
 include/burrow cross-language contracts: boot_info.h, manifest.h
-loader/        freestanding C loader: serial, kprintf, CRC, manifest, ELF64, ATA PIO
+loader/        freestanding C loader: serial, kprintf, CRC, manifest, ELF64, ATA PIO,
+               frame allocator, page tables, nucleus hand-off
+nucleus/       higher-half C nucleus (W4: hello + boot_info v2 check)
 kernel/        Go module: hal interfaces, uart driver, klog, arch/amd64 (tag burrow)
 tools/mkimage  Go host tool that builds disk.img (+ tests)
 tools/doccheck Mermaid diagram validator (Node)

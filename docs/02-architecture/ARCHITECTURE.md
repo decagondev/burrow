@@ -84,8 +84,9 @@ sequenceDiagram
     S2->>S2: identity paging, EFER.LME, long mode
     S2->>L: call 0x10000 with RDI = boot_info
     L->>L: verify boot_info, memory map, manifest, ATA
-    Note over L: Waves 0-3 end here (BURROW:LOADER:OK)
-    L->>N: W4 - load nucleus ELF, page tables, jump
+    L->>L: W4 - read nucleus ELF (CRC), copy segments, page tables, boot_info v2
+    L->>N: W4 - load CR3, jump with RDI = physmap + 0x1000
+    Note over N: Wave 4 ends here (BURROW:NUCLEUS:OK)
     N->>N: W5 - GDT/TSS/IDT, PMM, VMM, threads
     N->>G: W6 - load Go ELF, Linux-style stack, enter _rt0_amd64_linux
     G->>N: runtime syscalls (mmap, clone, futex, ...)

@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0005: A regression case whose mutator failed was silently skipped
+- Found: 2026-11-02, W4-S03, while adding REG-0004 (its `lba_of` helper failed on its first version).
+- Severity: major (test harness): a broken case vanished from the count instead of failing.
+- Symptom: `make regress` printed `3 passed, 0 failed` with no line at all for REG-0004.
+- Root cause: `case_run` ran the mutator as a bare command; its failure aborted the case without touching `pass`/`failn`, and nothing compared the number of cases run with the number declared.
+- Fix: `tests/regression/run_all.sh` treats a failing mutator as `FAIL <name> (mutator ... failed)`; mutators that compute offsets return non-zero on error.
+- Mitigation: rule: a test harness must report every case it was asked to run. Read the per-case lines, not only the totals.
+- Regression: none automated (a deliberately broken mutator would make `make regress` red); the REG-0004 line itself is the visible check.
+- Lesson: test the tester; a total without the per-case lines hides missing cases.
+
 ### BUG-0004: `KEY_ENTER` defined by both `<linux/input.h>` and `doomkeys.h`
 - Found: 2026-11-02, while compile-checking `snippets/userland/doomgeneric_burrow.c` (`-Werror`).
 - Severity: latent (would have shipped as "Enter key does nothing / acts as '='").

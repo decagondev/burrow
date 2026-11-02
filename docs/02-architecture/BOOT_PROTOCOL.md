@@ -83,7 +83,8 @@ Every stage prints a one-letter code on COM1 and the screen (real mode only), th
 | stage2 | `C` | CPU lacks long mode | use `-cpu qemu64` |
 | stage2 | `K` | loader CRC mismatch | corrupted image / chunked read bug (REG-0001) |
 | loader | `PANIC: <text>` | see the message | `build/smoke-*.log` |
+| nucleus | `[nucleus] PANIC: <text>` | see the message | boot_info v2 fields; `make debug` + `add-symbol-file build/nucleus.elf` |
 
 ## 6. Serial markers
 
-Markers are the test interface of the boot chain. Format: `[component] message`, and the final success line `BURROW:<STAGE>:OK`. Markers are append-only: once a smoke expect-file lists a marker, changing its text is a breaking change requiring a DEVLOG entry. Current ordered list: `tests/smoke/expect/boot_to_loader.txt`.
+Markers are the test interface of the boot chain. Format: `[component] message`, and the final success line `BURROW:<STAGE>:OK`. Markers are append-only: once a smoke expect-file lists a marker, changing its text is a breaking change requiring a DEVLOG entry. Current ordered lists: `tests/smoke/expect/boot_to_loader.txt` and `boot_to_nucleus.txt`; `make smoke` checks every expect file against the same boot.

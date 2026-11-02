@@ -19,7 +19,7 @@ flowchart TB
 | Unit (C) | `make test-c` | host gcc, ASan+UBSan | <1 s | `test_elf64.c` |
 | Unit (Go) | `make test-go` | host `go test` | ~1 s | UART init sequence via `FakePorts` |
 | Contract | inside unit tests + `_Static_assert` | both | — | `TestManifestLayoutMatchesC` |
-| Smoke | `make smoke` | QEMU headless | ~0.5 s | `boot_to_loader.txt` |
+| Smoke | `make smoke` | QEMU headless | ~0.5 s | `boot_to_loader.txt`, `boot_to_nucleus.txt` |
 | Regression | `make regress` | QEMU, mutated images | ~0.5 s | REG-0001 corrupt loader |
 | ktest (W5+) | `make ktest` | QEMU | seconds | thread ping-pong |
 | Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall |

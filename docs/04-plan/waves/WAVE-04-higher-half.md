@@ -1,4 +1,4 @@
-# W4 Higher-Half Hand-off  (M4)  — status: next
+# W4 Higher-Half Hand-off  (M4)  — status: done
 
 Goal: the loader loads a C nucleus ELF linked at `0xFFFFFFFF80100000`, builds real page tables (identity + physmap + kernel), passes boot_info v2, and the nucleus prints `BURROW:NUCLEUS:OK`.
 
@@ -34,7 +34,7 @@ Add `modules[]` (name, phys start, size) and `physmap_base` inside `reserved`; b
 ### [x] W4-S08 Jump (E03.F04.S04)
 Load CR3, jump to entry with `RDI = physmap_base + 0x1000`. Nucleus checks magic/version 2 and prints `BURROW:NUCLEUS:OK`; append markers to a new expect file `boot_to_nucleus.txt`; make it the default smoke.
 
-### [ ] W4-S09 CI + diagram validation (E00.F01.S03, E00.F03.S02)
+### [x] W4-S09 CI + diagram validation (E00.F01.S03, E00.F03.S02)
 `.github/workflows/ci.yml` running `make test` on ubuntu-latest (apt: nasm qemu-system-x86 golang), plus Mermaid parse step.
 
 Exit: M4 demo. DEVLOG wave summary.
