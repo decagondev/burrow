@@ -131,11 +131,17 @@ $(BUILD)/disk.img: $(BOOT_PARTS)
 # User programs (W9): static Linux x86-64 executables from user/, no libc,
 # installed in the initrd's /bin.
 USER_ASM  := $(wildcard user/*.asm)
-USER_BINS := $(patsubst user/%.asm,$(BUILD)/user/%,$(USER_ASM))
+USER_C    := $(wildcard user/*.c)
+USER_BINS := $(patsubst user/%.asm,$(BUILD)/user/%,$(USER_ASM)) $(patsubst user/%.c,$(BUILD)/user/%,$(USER_C))
 $(BUILD)/user/%.o: user/%.asm | $(BUILD)/user
 	$(NASM) -f elf64 $< -o $@
 $(BUILD)/user/%: $(BUILD)/user/%.o
 	$(LD_TARGET) -static -nostdlib -o $@ $<
+# C programs: static musl (W9-S06). Debian/Ubuntu: sudo apt install musl-tools.
+MUSL_GCC ?= musl-gcc
+$(BUILD)/user/%: user/%.c | $(BUILD)/user
+	@command -v $(MUSL_GCC) >/dev/null || { echo "$(MUSL_GCC) not found: install musl-tools (sudo apt install musl-tools) or set MUSL_GCC=..."; exit 1; }
+	$(MUSL_GCC) -static -Os -o $@ $<
 
 # The initial file tree (W8): initrd/ plus the user programs in bin/, packed
 # as ustar reproducibly (sorted names, owner 0, mtime 0, modes 644/755

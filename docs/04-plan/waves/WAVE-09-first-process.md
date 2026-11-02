@@ -23,7 +23,7 @@ Table-driven, unknown numbers logged once and `-ENOSYS`: `write writev read open
 ### [x] W9-S05 First programs: asm hello and crash (E08.F03)
 `user/` builds static programs with nasm + ld into the initrd's `/bin`; console `run <path> [args]`. go-smoke runs `/bin/hello` (prints, exit status 0) and `/bin/crash` (killed with a page fault report, the console carries on).
 
-### [ ] W9-S06 musl (E08.F05)
+### [x] W9-S06 musl (E08.F05)
 `user/hello.c` built with `musl-gcc -static` (CI installs musl-tools); go-smoke runs it.
 
 Exit: **M9 demo — first process.** `make clean test` green; DEVLOG wave entry.

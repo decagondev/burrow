@@ -32,6 +32,8 @@ type run /bin/crash
 key ret
 type run /bin/hello
 key ret
+type run /bin/musl-hello one two
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret
