@@ -1,17 +1,16 @@
 /* shim.c - the Linux x86-64 syscall subset the Go runtime needs (census:
  * docs/01-research/GO_RUNTIME_SYSCALL_CENSUS.md, tests/regression/census-go1.27.txt).
  *
- * Table-driven: one small function per syscall; adding one = adding a row
- * (Open/Closed). Unknown numbers are logged ONCE ("census on failure") and
- * return -ENOSYS: after a Go upgrade, boot and read the log. Numbers and
- * errno values are Linux's, so musl user programs (W9) reuse the table. */
-#include "syscall.h"
-#include "sched.h"
+ * Table-driven: one small function per syscall (shim_*.c); adding one =
+ * adding a row (Open/Closed). Unknown numbers are logged ONCE ("census on
+ * failure") and return -ENOSYS: after a Go upgrade, boot and read the log.
+ * Numbers and errno values are Linux's, so musl user programs (W9) reuse
+ * the table. */
+#include "shim.h"
 #include "gdt.h"
 #include "errno.h"
 #include "cpu.h"
 #include "kprintf.h"
-#include "serial.h"
 #include "panic.h"
 
 #define MSR_STAR   0xC0000081u
@@ -20,28 +19,18 @@
 #define EFER_SCE   (1ull << 0)
 #define FMASK_BITS 0x40700ull          /* AC | DF | IF | TF cleared on entry */
 
-enum {
-    SYS_write = 1, SYS_getpid = 39,
-    SYS_MAX = 512,
-};
-
-typedef long (*sys_fn)(struct syscall_frame *f);
-
-static long sys_getpid(struct syscall_frame *f) { (void)f; return 1; }
-
-/* fds 1 and 2 are the console (COM1). */
-static long sys_write(struct syscall_frame *f) {
-    if (SYSARG0(f) != 1 && SYSARG0(f) != 2) return -EBADF;
-    const char *buf = (const char *)SYSARG1(f);
-    uint64_t n = SYSARG2(f), flags = irq_save();
-    for (uint64_t i = 0; i < n; i++) serial_putc(0x3F8, buf[i]);
-    irq_restore(flags);
-    return (long)n;
-}
-
 static const sys_fn g_table[SYS_MAX] = {
-    [SYS_write] = sys_write,
-    [SYS_getpid] = sys_getpid,
+    [SYS_read] = sys_read,               [SYS_write] = sys_write,
+    [SYS_close] = sys_close,             [SYS_getpid] = sys_getpid,
+    [SYS_gettid] = sys_gettid,           [SYS_madvise] = sys_madvise,
+    [SYS_rt_sigaction] = sys_rt_sigaction, [SYS_rt_sigprocmask] = sys_rt_sigprocmask,
+    [SYS_sigaltstack] = sys_sigaltstack, [SYS_fcntl] = sys_fcntl,
+    [SYS_openat] = sys_openat,           [SYS_getrlimit] = sys_getrlimit,
+    [SYS_prlimit64] = sys_prlimit64,     [SYS_sched_getaffinity] = sys_sched_getaffinity,
+    [SYS_arch_prctl] = sys_arch_prctl,   [SYS_clock_gettime] = sys_clock_gettime,
+    [SYS_getrandom] = sys_getrandom,     [SYS_exit_group] = sys_exit_group,
+    /* tgkill would be async preemption (SIGURG); GODEBUG=asyncpreemptoff=1
+     * means it should never come, so leaving it out makes the census shout. */
 };
 
 static uint8_t g_reported[SYS_MAX];

@@ -18,7 +18,7 @@ Copy `syscall_shim.c` with only `write` and the unknown-logger. ktest: unknown n
 ### [x] W6-S05 Map the Go ELF + initial stack (E05.F02)
 Map PT_LOAD supervisor pages; record text range; `build_initial_stack()`; create thread 1; enter. Expected first result: the census logger names the first syscall the runtime needs. That is success for this slice.
 
-### [ ] W6-S06 arch_prctl, signals stubs, fcntl, openat, getrlimit, affinity (E05.F04)
+### [x] W6-S06 arch_prctl, signals stubs, fcntl, openat, getrlimit, affinity (E05.F04)
 Iterate: boot, read the UNIMPLEMENTED line, implement, repeat. Log each in DEVLOG.
 
 ### [ ] W6-S07 mmap/munmap/madvise on reserve/commit (E05.F04)
