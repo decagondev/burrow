@@ -1,5 +1,9 @@
 # Ordered markers for ktest suite "mm" (tests/ktest/mm.txt). Append-only.
 [nucleus] pmm ok
+[nucleus] vmm ok
 [ktest] running suite
 [ktest] pmm_alloc_all_free_all ok
+[ktest] vmm_map_write_unmap ok
+[ktest] vmm_protect_readonly ok
+[ktest] vmm_kernel_wx ok
 BURROW:KTEST:OK

@@ -1,2 +1,5 @@
 # Suite "mm": physical frames and (from W5-S07) page mappings on the real machine.
 pmm_alloc_all_free_all
+vmm_map_write_unmap
+vmm_protect_readonly
+vmm_kernel_wx

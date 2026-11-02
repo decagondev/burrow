@@ -12,6 +12,9 @@ static const struct ktest g_tests[] = {
     { "trap_pf_fixup",      kt_trap_pf_fixup },
     { "trap_unhandled_ud",  kt_trap_unhandled_ud },
     { "pmm_alloc_all_free_all", kt_pmm_alloc_all_free_all },
+    { "vmm_map_write_unmap", kt_vmm_map_write_unmap },
+    { "vmm_protect_readonly", kt_vmm_protect_readonly },
+    { "vmm_kernel_wx",      kt_vmm_kernel_wx },
 };
 
 static const char *g_current;

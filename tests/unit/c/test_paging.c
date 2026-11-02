@@ -91,6 +91,46 @@ TEST(paging_refuses_to_overwrite) {
     CHECK(pt_map(&c, 0x201000, 0x9000, PAGE_4K, 0) == PT_ALREADY_MAPPED);   /* inside a 2 MiB page */
     CHECK(pt_map(&c, 0, 0, PAGE_2M, 0) == PT_ALREADY_MAPPED);               /* PD slot holds a PT */
 }
+static uint64_t unmapped_pa[8], unmapped_page[8];
+static unsigned unmapped;
+static void record_unmap(void *env, uint64_t va, uint64_t pa, uint64_t page) {
+    (void)env; (void)va;
+    unmapped_pa[unmapped] = pa; unmapped_page[unmapped] = page; unmapped++;
+}
+TEST(paging_unmap_reports_each_leaf) {
+    struct pt_ctx c = fresh(POOL_FRAMES);
+    CHECK(pt_map(&c, 0x200000, 0x600000, PAGE_2M + 2 * PAGE_4K, PTE_W) == PT_OK);   /* 2M + two 4K */
+    unmapped = 0;
+    CHECK(pt_unmap(&c, 0x200000, PAGE_2M + 2 * PAGE_4K, record_unmap, 0) == PT_OK);
+    CHECK_EQ_U64(unmapped, 3);
+    CHECK_EQ_U64(unmapped_pa[0], 0x600000); CHECK_EQ_U64(unmapped_page[0], PAGE_2M);
+    CHECK_EQ_U64(unmapped_pa[2], 0x801000); CHECK_EQ_U64(unmapped_page[2], PAGE_4K);
+    uint64_t pa, fl;
+    CHECK(pt_translate(&c, 0x200000, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_translate(&c, 0x401000, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_map(&c, 0x200000, 0x900000, PAGE_4K, 0) == PT_OK);    /* slot reusable */
+}
+TEST(paging_unmap_rejects_holes_and_splits) {
+    struct pt_ctx c = fresh(POOL_FRAMES);
+    CHECK(pt_unmap(&c, 0x1000, PAGE_4K, 0, 0) == PT_NOT_MAPPED);
+    CHECK(pt_map(&c, 0x200000, 0x200000, PAGE_2M, 0) == PT_OK);
+    CHECK(pt_unmap(&c, 0x201000, PAGE_4K, 0, 0) == PT_UNALIGNED);   /* would split a 2 MiB page */
+    CHECK(pt_unmap(&c, 0x200000, PAGE_4K, 0, 0) == PT_UNALIGNED);
+    CHECK(pt_unmap(&c, 0x0000800000000000ull, PAGE_4K, 0, 0) == PT_NON_CANONICAL);
+}
+TEST(paging_protect_changes_flags_only) {
+    struct pt_ctx c = fresh(POOL_FRAMES);
+    CHECK(pt_map(&c, 0x200000, 0x400000, PAGE_2M, PTE_W) == PT_OK);
+    CHECK(pt_map(&c, 0x5000, 0x7000, PAGE_4K, PTE_W) == PT_OK);
+    CHECK(pt_protect(&c, 0x200000, PAGE_2M, PTE_NX) == PT_OK);
+    CHECK(pt_protect(&c, 0x5000, PAGE_4K, PTE_PCD | PTE_PWT | PTE_W) == PT_OK);
+    uint64_t pa, fl;
+    CHECK(pt_translate(&c, 0x200010, &pa, &fl) == PT_OK);
+    CHECK_EQ_U64(pa, 0x400010); CHECK_EQ_U64(fl, PTE_P | PTE_PS | PTE_NX);
+    CHECK(pt_translate(&c, 0x5000, &pa, &fl) == PT_OK);
+    CHECK_EQ_U64(pa, 0x7000); CHECK_EQ_U64(fl, PTE_P | PTE_W | PTE_PWT | PTE_PCD);
+    CHECK(pt_protect(&c, 0x6000, PAGE_4K, 0) == PT_NOT_MAPPED);
+}
 TEST(paging_out_of_memory) {
     struct pt_ctx c = fresh(2);                     /* PML4 + PDPT only */
     CHECK(pt_map(&c, 0x1000, 0x1000, PAGE_4K, 0) == PT_NO_MEMORY);

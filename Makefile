@@ -139,7 +139,7 @@ test-unit: test-c test-go
 # plus the pure modules of the loader and the nucleus.
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
-	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c loader/paging.c \
+	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
 	nucleus/pmm.c
 UNIT_SRC := $(sort $(UNIT_SRC))

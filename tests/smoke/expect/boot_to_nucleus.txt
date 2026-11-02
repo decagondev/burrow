@@ -13,4 +13,5 @@ BURROW:LOADER:OK
 [nucleus] gdt ok
 [nucleus] idt ok
 [nucleus] pmm ok
+[nucleus] vmm ok
 BURROW:NUCLEUS:OK

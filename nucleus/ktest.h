@@ -24,4 +24,7 @@ int kt_trap_unhandled_ud(void);   /* deliberately panics: REG-0005 */
 
 /* ktest_mm.c */
 int kt_pmm_alloc_all_free_all(void);
+int kt_vmm_map_write_unmap(void);
+int kt_vmm_protect_readonly(void);
+int kt_vmm_kernel_wx(void);
 #endif
