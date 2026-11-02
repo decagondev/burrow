@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0012: Eager commit let the Go runtime's sparse mappings exhaust RAM (GC stress OOM)
+- Found: 2026-11-02, W9-S05: `make go-smoke` failed about 1 boot in 3 with `fatal error: runtime: out of memory` in the GC stress, before any user program ran.
+- Severity: major (the Go kernel dies; it had been one heap-size wobble from failing since W6).
+- Symptom: the new diagnostic said `[vm] ENOMEM: no free frame (26 regions, 0 frames free, 31575 pages mapped below the kernel half)`, while the runtime reported only 47-51 MiB obtained from the OS.
+- Root cause: `mmap` backed every committed page at once. The Go runtime maps large read-write areas it touches only sparsely (arena metadata sized for the whole address space) and relies on Linux backing pages on first touch; here those areas cost real frames, ~75 MiB of a 123 MiB machine. And `madvise(MADV_DONTNEED)` zeroed pages but never gave frames back (BUG-0009's fix), so the footprint only grew. W9 did not cause it; a slightly larger kernel and heap moved the boot past the edge. PIT-05 had only covered `PROT_NONE`.
+- How it was found: a once-per-kind ENOMEM log in `vm_region.c` (free frames, regions) proved it was frames, not the region table; counting present lower-half pages showed Go's half held all of RAM; `runtime.MemStats` (now in the gc_stress line) showed Go believed it used a third of that.
+- Fix: demand-zero pages. A software bit on a not-present leaf (`PTE_DISCARDED`, `common/paging.c`) means "zero-fill on demand": committing read-write memory writes that marker (`pt_mark_lazy`) instead of taking a frame, `MADV_DONTNEED` frees the frame and leaves the marker (`pt_discard`), and a ring-0 #PF on a marked page maps a fresh zeroed frame (`vm_fault_in`). `PROT_NONE` and release clear markers so those pages still fault. Running out of frames in a fault now panics with "out of memory" rather than a #PF report.
+- Regression: unit tests `paging_discard_marks_and_remaps`, `paging_mark_lazy`; ktests `vm_reserve_commit` (commit costs tables only, the first touch one frame) and `madvise_returns_frames`; `make go-smoke` 10/10 including a run whose heap peaked at 59 MiB.
+- Lesson: "commit" in Linux means "you may touch this", not "this is backed"; programs (and runtimes) build on that.
+
 ### BUG-0011: mkfat images had no volume-label entry in the root, so fsck.fat rejected them
 - Found: 2026-11-02, the first CI run of Wave 8 (`make fat-interop` on ubuntu-latest).
 - Severity: minor (QEMU and our reader were happy; Linux's checker was not).

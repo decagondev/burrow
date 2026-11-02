@@ -18,6 +18,8 @@
 #define PTE_PCD       (1ull << 4)    /* cache disable (MMIO)             */
 #define PTE_PS        (1ull << 7)    /* 2 MiB page (in a PD entry)       */
 #define PTE_G         (1ull << 8)    /* global                           */
+#define PTE_DISCARDED (1ull << 9)    /* software: on a NOT present 4 KiB leaf,
+                                        "zero-fill on demand" (BUG-0012) */
 #define PTE_NX        (1ull << 63)   /* no-execute: needs EFER.NXE=1     */
 #define PTE_ADDR_MASK 0x000FFFFFFFFFF000ull
 
@@ -57,4 +59,15 @@ enum pt_status pt_unmap(struct pt_ctx *c, uint64_t va, uint64_t size,
 /* Replaces the flags of every leaf in [va, va+size) (same rules as pt_unmap). */
 enum pt_status pt_protect(struct pt_ctx *c, uint64_t va, uint64_t size, uint64_t flags);
 const char *pt_status_str(enum pt_status s);
+
+/* Discarded pages (madvise(MADV_DONTNEED) without keeping the frame): the
+ * leaf loses P and its frame but keeps its flags, marked PTE_DISCARDED; the
+ * page-fault handler maps a fresh zeroed frame there with those flags.
+ * pt_discard returns the old frame for the caller to free. 4 KiB leaves only. */
+enum pt_status pt_discard(struct pt_ctx *c, uint64_t va, uint64_t *old_pa);
+/* The same marker on a page that was never backed (lazy commit): tables are
+ * created as needed, no frame is used until the first touch. */
+enum pt_status pt_mark_lazy(struct pt_ctx *c, uint64_t va, uint64_t flags);
+int  pt_discarded(const struct pt_ctx *c, uint64_t va, uint64_t *flags);   /* 1 = marked */
+void pt_forget_discarded(struct pt_ctx *c, uint64_t va);                  /* back to absent */
 #endif

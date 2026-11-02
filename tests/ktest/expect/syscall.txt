@@ -8,4 +8,5 @@
 [ktest] shim_unknown_once ok
 [ktest] madvise_dontneed_zeroes ok
 [ktest] nu_bootinfo_mmio ok
+[ktest] madvise_returns_frames ok
 BURROW:KTEST:OK

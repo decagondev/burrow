@@ -136,3 +136,44 @@ TEST(paging_out_of_memory) {
     CHECK(pt_map(&c, 0x1000, 0x1000, PAGE_4K, 0) == PT_NO_MEMORY);
     CHECK_STR(pt_status_str(PT_NO_MEMORY), "out of memory");
 }
+
+/* BUG-0012: a discarded page loses P and its frame, keeps its flags, can be
+ * mapped again in place, and can be forgotten (back to absent). */
+TEST(paging_discard_marks_and_remaps) {
+    struct pt_ctx c = fresh(POOL_FRAMES);
+    const uint64_t va = 0x7D0000001000ull;
+    CHECK(pt_map(&c, va, 0x200000, 0x2000, PTE_W | PTE_NX) == PT_OK);
+    uint64_t old = 0, pa, fl;
+    CHECK(pt_discard(&c, va, &old) == PT_OK);
+    CHECK_EQ_U64(old, 0x200000);
+    CHECK(pt_translate(&c, va, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_discarded(&c, va, &fl) == 1);
+    CHECK_EQ_U64(fl, PTE_W | PTE_NX);
+    CHECK(pt_discarded(&c, va + 0x1000, &fl) == 0);               /* its neighbour is mapped */
+    CHECK(pt_discard(&c, va, &old) == PT_NOT_MAPPED);             /* already discarded */
+    CHECK(pt_discard(&c, 0x123000, &old) == PT_NOT_MAPPED);       /* no tables there */
+    CHECK(pt_discard(&c, va + 1, &old) == PT_UNALIGNED);
+    CHECK(pt_map(&c, va, 0x300000, 0x1000, fl) == PT_OK);          /* the fault handler's refill */
+    CHECK(pt_translate(&c, va, &pa, &fl) == PT_OK && pa == 0x300000);
+    CHECK(pt_discard(&c, va, &old) == PT_OK);
+    pt_forget_discarded(&c, va);
+    CHECK(pt_discarded(&c, va, &fl) == 0);
+    CHECK(pt_translate(&c, va, &pa, &fl) == PT_NOT_MAPPED);
+}
+
+/* BUG-0012: lazy commit marks a page that was never backed: tables only. */
+TEST(paging_mark_lazy) {
+    struct pt_ctx c = fresh(POOL_FRAMES);
+    const uint64_t va = 0x7D0000400000ull;
+    uint64_t fl, pa;
+    CHECK(pt_mark_lazy(&c, va, PTE_W | PTE_NX) == PT_OK);
+    CHECK_EQ_U64(used, 4);                                       /* PML4 + PDPT + PD + PT */
+    CHECK(pt_discarded(&c, va, &fl) == 1);
+    CHECK_EQ_U64(fl, PTE_W | PTE_NX);
+    CHECK(pt_translate(&c, va, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_mark_lazy(&c, va, PTE_NX) == PT_OK);                /* re-mark: new flags */
+    CHECK(pt_discarded(&c, va, &fl) == 1 && fl == PTE_NX);
+    CHECK(pt_map(&c, va, 0x5000, 0x1000, PTE_W) == PT_OK);
+    CHECK(pt_mark_lazy(&c, va, PTE_W) == PT_ALREADY_MAPPED);
+    CHECK(pt_mark_lazy(&c, va + 1, PTE_W) == PT_UNALIGNED);
+}

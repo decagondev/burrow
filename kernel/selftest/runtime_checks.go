@@ -143,5 +143,6 @@ func checkGC(cfg Config) (string, error) {
 	if gcs < 10 {
 		return "", fmt.Errorf("only %d GC cycles for %d MiB", gcs, cfg.GCTotal/mib)
 	}
-	return fmt.Sprintf("%d MiB allocated, %d GC cycles, peak heap %d MiB", cfg.GCTotal/mib, gcs, peak/mib), nil
+	return fmt.Sprintf("%d MiB allocated, %d GC cycles, peak heap %d MiB, %d MiB from the OS, %d MiB released",
+		cfg.GCTotal/mib, gcs, peak/mib, ms.Sys/mib, ms.HeapReleased/mib), nil
 }

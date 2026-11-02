@@ -96,6 +96,53 @@ enum pt_status pt_map(struct pt_ctx *c, uint64_t va, uint64_t pa, uint64_t size,
     return PT_OK;
 }
 
+/* The level-0 entry for va if its page table exists (present or not), else 0. */
+static uint64_t *pt_slot(const struct pt_ctx *c, uint64_t va) {
+    uint64_t *t = table_at(c, c->root);
+    for (unsigned level = 3; level > 0; level--) {
+        uint64_t e = t[idx(va, level)];
+        if (!(e & PTE_P) || (e & PTE_PS)) return 0;
+        t = table_at(c, e & PTE_ADDR_MASK);
+    }
+    return &t[idx(va, 0)];
+}
+
+enum pt_status pt_discard(struct pt_ctx *c, uint64_t va, uint64_t *old_pa) {
+    if (!canonical(va) || (va & (PAGE_4K - 1))) return PT_UNALIGNED;
+    uint64_t *e = pt_slot(c, va);
+    if (!e || !(*e & PTE_P)) return PT_NOT_MAPPED;
+    *old_pa = *e & PTE_ADDR_MASK;
+    *e = (*e & LEAF_FLAGS) | PTE_DISCARDED;            /* P clear: the CPU sees nothing */
+    return PT_OK;
+}
+
+enum pt_status pt_mark_lazy(struct pt_ctx *c, uint64_t va, uint64_t flags) {
+    if (!canonical(va) || (va & (PAGE_4K - 1))) return PT_UNALIGNED;
+    enum pt_status st = PT_OK;
+    uint64_t *t = table_at(c, c->root);
+    for (unsigned level = 3; level > 0; level--) {
+        t = descend(c, &t[idx(va, level)], flags & PTE_U, &st);
+        if (!t) return st;
+    }
+    uint64_t *e = &t[idx(va, 0)];
+    if (*e & PTE_P) return PT_ALREADY_MAPPED;
+    *e = (flags & LEAF_FLAGS) | PTE_DISCARDED;
+    return PT_OK;
+}
+
+int pt_discarded(const struct pt_ctx *c, uint64_t va, uint64_t *flags) {
+    if (!canonical(va)) return 0;
+    const uint64_t *e = pt_slot(c, va);
+    if (!e || (*e & PTE_P) || !(*e & PTE_DISCARDED)) return 0;
+    *flags = *e & LEAF_FLAGS;
+    return 1;
+}
+
+void pt_forget_discarded(struct pt_ctx *c, uint64_t va) {
+    uint64_t flags;
+    if (pt_discarded(c, va, &flags)) *pt_slot(c, va) = 0;
+}
+
 enum pt_status pt_translate(const struct pt_ctx *c, uint64_t va, uint64_t *pa, uint64_t *flags) {
     if (!canonical(va)) return PT_NON_CANONICAL;
     uint64_t page;

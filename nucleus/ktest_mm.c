@@ -87,8 +87,9 @@ int kt_vmm_kernel_wx(void) {
     return 0;
 }
 
-/* PIT-05: reserving 2 GiB on a 128 MiB machine must cost no frames;
- * committing one page costs exactly one data frame (+ at most 3 tables). */
+/* PIT-05: reserving 2 GiB on a 128 MiB machine must cost no frames.
+ * BUG-0012: committing costs page tables only (at most 3); a page's frame
+ * comes with its first touch, zeroed. */
 int kt_vm_reserve_commit(void) {
     struct addr_space *as = vmm_kernel();
     uint64_t free0 = frames_free_count(), base;
@@ -99,14 +100,17 @@ int kt_vm_reserve_commit(void) {
     KT_CHECK(probe_read64(base, &v) == -1);                   /* reserved is not backed */
 
     KT_CHECK(vm_commit(as, base, 100, VM_PROT_READ | VM_PROT_WRITE) == 0);   /* rounds to 1 page */
-    uint64_t used = free0 - frames_free_count();
-    KT_CHECK(used >= 1 && used <= 4);
-    KT_CHECK(probe_read64(base, &v) == 0 && v == 0);          /* zeroed */
+    uint64_t tables = free0 - frames_free_count();
+    KT_CHECK(tables <= 3);                                    /* no data frame yet */
+    KT_CHECK(probe_read64(base, &v) == 0 && v == 0);          /* the first touch backs it, zeroed */
+    KT_CHECK(free0 - frames_free_count() == tables + 1);
     KT_CHECK(probe_write64(base + 8, 42) == 0);
 
     uint64_t free1 = frames_free_count();
     KT_CHECK(vm_commit(as, base + PAGE_4K, PAGE_4K, VM_PROT_READ | VM_PROT_WRITE) == 0);
-    KT_CHECK(free1 - frames_free_count() == 1);               /* same tables: exactly one frame */
+    KT_CHECK(frames_free_count() == free1);                   /* same tables, nothing touched */
+    KT_CHECK(probe_write64(base + PAGE_4K, 1) == 0);
+    KT_CHECK(free1 - frames_free_count() == 1);               /* exactly one frame */
 
     KT_CHECK(vm_commit(as, base, PAGE_4K, VM_PROT_READ) == 0);           /* re-protect keeps data */
     KT_CHECK(probe_read64(base + 8, &v) == 0 && v == 42);
@@ -114,7 +118,7 @@ int kt_vm_reserve_commit(void) {
 
     KT_CHECK(vm_commit(as, base - PAGE_4K, PAGE_4K, VM_PROT_READ) == -EINVAL);  /* not reserved */
     KT_CHECK(vm_release(as, base, 2ull << 30) == 0);
-    KT_CHECK(frames_free_count() == free0 - (used - 1));      /* data frames back, tables kept */
+    KT_CHECK(frames_free_count() == free0 - tables);          /* data frames back, tables kept */
     KT_CHECK(vm_commit(as, base, PAGE_4K, VM_PROT_READ) == -EINVAL);
     return 0;
 }

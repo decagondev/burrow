@@ -31,9 +31,9 @@ long vm_release(struct addr_space *as, uint64_t addr, uint64_t len);
 /* mmap(MAP_ANONYMOUS) in one atomic step: reserve (hint or exact) and, unless
  * prot is PROT_NONE, back with zeroed pages. *out = the address. */
 long vm_map_anon(struct addr_space *as, uint64_t addr, uint64_t len, int prot, int flags, uint64_t *out);
-/* madvise(MADV_DONTNEED) on private anonymous memory: the pages stay
- * mapped and read as zeros afterwards. Go 1.27 RELIES on this: it hands out
- * scavenged spans without clearing them (mheap.go initSpan, BUG-0009).
- * Without demand paging the frames stay committed. */
+/* madvise(MADV_DONTNEED) on private anonymous memory: the pages read as
+ * zeros afterwards. Go 1.27 RELIES on this: it hands out scavenged spans
+ * without clearing them (mheap.go initSpan, BUG-0009). The frames go back
+ * to the allocator; the next touch faults a fresh zeroed one in (BUG-0012). */
 long vm_discard(struct addr_space *as, uint64_t addr, uint64_t len);
 #endif

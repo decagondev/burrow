@@ -105,6 +105,65 @@ enum pt_status vm_protect(struct addr_space *as, uint64_t va, uint64_t len, uint
     return st;
 }
 
+static uint64_t count_present(uint64_t table_pa, int level) {
+    const uint64_t *t = phys_to_virt(table_pa);
+    uint64_t n = 0;
+    for (int i = 0; i < 512; i++) {
+        if (!(t[i] & PTE_P)) continue;
+        if (level == 0) n++;
+        else if (t[i] & PTE_PS) n += 512;                 /* a 2 MiB page */
+        else n += count_present(t[i] & PTE_ADDR_MASK, level - 1);
+    }
+    return n;
+}
+
+uint64_t vm_lower_half_pages(const struct addr_space *as) {
+    const uint64_t *pml4 = phys_to_virt(as->pt.root);
+    uint64_t n = 0;
+    for (int i = 0; i < PML4_KERNEL_FIRST; i++)
+        if (pml4[i] & PTE_P) n += count_present(pml4[i] & PTE_ADDR_MASK, 2);
+    return n;
+}
+
+/* Frees a mapped page's frame, leaving a zero-fill-on-demand marker. */
+enum pt_status vm_discard_page(struct addr_space *as, uint64_t va) {
+    uint64_t old, f = irq_save();
+    enum pt_status st = pt_discard(&as->pt, va, &old);
+    if (st == PT_OK) {
+        flush(as, va, PAGE_4K);              /* before the frame can be reused */
+        frame_free(old);
+    }
+    irq_restore(f);
+    return st;
+}
+
+enum pt_status vm_mark_lazy(struct addr_space *as, uint64_t va, uint64_t flags) {
+    uint64_t f = irq_save();
+    enum pt_status st = pt_mark_lazy(&as->pt, va, flags & g_nx_mask);
+    irq_restore(f);
+    return st;         /* nothing was present: nothing to flush */
+}
+
+void vm_forget_discarded(struct addr_space *as, uint64_t va) {
+    uint64_t f = irq_save();
+    pt_forget_discarded(&as->pt, va);
+    irq_restore(f);
+}
+
+int vm_fault_in(struct addr_space *as, uint64_t va) {
+    va &= ~(PAGE_4K - 1);
+    uint64_t flags, f = irq_save();
+    int done = 0;
+    if (pt_discarded(&as->pt, va, &flags)) {
+        uint64_t pa = frame_alloc_zeroed();
+        done = -1;                                 /* marked, but no frame to give it */
+        if (pa && pt_map(&as->pt, va, pa, PAGE_4K, flags & g_nx_mask) == PT_OK) done = 1;
+        else if (pa) frame_free(pa);
+    }
+    irq_restore(f);
+    return done;
+}
+
 enum pt_status vm_translate(const struct addr_space *as, uint64_t va, uint64_t *pa, uint64_t *flags) {
     return pt_translate(&as->pt, va, pa, flags);
 }

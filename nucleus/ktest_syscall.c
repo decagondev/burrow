@@ -6,6 +6,8 @@
 #include "cpu.h"
 #include "boot.h"
 #include "apic.h"
+#include "frames.h"
+#include "trap.h"
 #include <burrow/boot_info.h>
 
 extern uint64_t ktest_syscall_clobbers(void);
@@ -57,6 +59,28 @@ int kt_madvise_dontneed_zeroes(void) {
     KT_CHECK(sys3(28, addr, 3 * 4096, 15 /* MADV_NOHUGEPAGE: a hint */) == 0);
     KT_CHECK(p[0] == 0x1111 && p[512] == 0x4444);
     KT_CHECK(sys3(11, addr, 3 * 4096, 0) == 0);                 /* munmap */
+    return 0;
+}
+
+/* BUG-0012: MADV_DONTNEED hands the frames back; touching a page faults a
+ * zeroed one in; a page turned PROT_NONE after a discard really faults. */
+int kt_madvise_returns_frames(void) {
+    const long pages = 64;
+    long addr = sys6(9, 0, pages * 4096, 3, 0x22, -1, 0);
+    KT_CHECK(addr > 0);
+    volatile uint64_t *p = (volatile uint64_t *)addr;
+    for (long i = 0; i < pages; i++) p[i * 512] = 0xAB00 + (uint64_t)i;
+    uint64_t before = frames_free_count();
+    KT_CHECK(sys3(28, addr, pages * 4096, 4) == 0);
+    KT_CHECK(frames_free_count() == before + (uint64_t)pages);
+    KT_CHECK(p[5 * 512] == 0);                                 /* faults one zeroed page in */
+    KT_CHECK(frames_free_count() == before + (uint64_t)pages - 1);
+    p[5 * 512] = 7;
+    KT_CHECK(p[5 * 512] == 7);
+    KT_CHECK(sys6(9, addr + 4096, 4096, 0 /* PROT_NONE */, 0x32 /* FIXED */, -1, 0) == addr + 4096);
+    uint64_t v;
+    KT_CHECK(probe_read64((uint64_t)addr + 4096, &v) == -1 && trap_last.vector == VEC_PF);
+    KT_CHECK(sys3(11, addr, pages * 4096, 0) == 0);
     return 0;
 }
 

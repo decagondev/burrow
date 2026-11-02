@@ -5,3 +5,5 @@ shim_unknown_once
 madvise_dontneed_zeroes
 # W8-S01: nucleus calls for boot data and device memory
 nu_bootinfo_mmio
+# BUG-0012: discarded memory goes back to the allocator
+madvise_returns_frames

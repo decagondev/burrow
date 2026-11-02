@@ -54,7 +54,7 @@ The nucleus, acting like `execve`:
 | `arch_prctl(ARCH_SET_FS)` | set FS base for this thread (saved on context switch) | `g` pointer lives at `-8(FS)` |
 | `mmap` anon, `PROT_NONE` | **reserve only**, no RAM | runtime reserves >1 GiB at start |
 | `mmap` `MAP_FIXED` RW | commit zeroed pages inside a reservation | heap growth |
-| `munmap`, `madvise` | release; `MADV_DONTNEED` zeroes the range (it stays mapped), other advice is ignored | scavenger. Go 1.27 hands out scavenged spans without clearing them, trusting the zero-fill (BUG-0009) |
+| `munmap`, `madvise` | release; `MADV_DONTNEED` frees the frames and leaves zero-fill-on-demand markers (the next touch faults in a zeroed page), other advice is ignored | scavenger. Go 1.27 hands out scavenged spans without clearing them, trusting the zero-fill (BUG-0009); the frames really go back (BUG-0012) |
 | `clone(CLONE_VM\|CLONE_THREAD\|CLONE_SETTLS..)` | new thread, same AS, child `RAX=0`, `RSP=arg1`, `FS=tls` | runtime spawns sysmon and Ms |
 | `futex WAIT/WAKE` (private) | address-keyed wait queues, optional timeout | all runtime locks/notes |
 | `nanosleep`, `sched_yield` | sleep / yield | `usleep`, `osyield` |
@@ -77,7 +77,7 @@ The nucleus, acting like `execve`:
 | PIT-02 | `SYSRET` always returns to ring 3 | return to Go with `IRETQ` |
 | PIT-03 | Interrupt in ring 0 pushes onto the current (Go) stack | every IDT gate uses an IST stack |
 | PIT-04 | Go uses FS for TLS | nucleus uses only GS (per-CPU); rejects `ARCH_SET_GS` |
-| PIT-05 | Eager backing of `PROT_NONE` exhausts RAM | reserve/commit split in the VM |
+| PIT-05 | Eager backing of `PROT_NONE` exhausts RAM | reserve/commit split in the VM; since BUG-0012 read-write commits are lazy too (demand-zero pages) |
 | PIT-06 | Async preemption sends `SIGURG` via `tgkill` | `GODEBUG=asyncpreemptoff=1`; cooperative preemption still works |
 | PIT-07 | Nil deref in Go becomes a page fault, not a panic | done in W7-S06: a fault with RIP in Go text says so and prints the `go tool addr2line` command (REG-0007); later, synthesize SIGSEGV delivery |
 | PIT-08 | Go allocation failure is fatal | size the Go heap budget from E820; keep a reserve; set `GOMEMLIMIT` via env |

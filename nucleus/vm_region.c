@@ -8,6 +8,7 @@
 #include "errno.h"
 #include "lib_string.h"
 #include "panic.h"
+#include "kprintf.h"
 
 static uint64_t round_up(uint64_t v) { return (v + PAGE_4K - 1) & ~(PAGE_4K - 1); }
 
@@ -25,27 +26,39 @@ void vm_region_init(struct addr_space *as) {
 
 /* ---- callers hold as->lock ------------------------------------------- */
 
-static long reserve_locked(struct addr_space *as, uint64_t hint, uint64_t len, uint64_t *out) {
-    return regions_reserve(&as->regions, hint, len, out) ? -ENOMEM : 0;
+/* Out of memory is fatal for the Go runtime: say which kind, once each. */
+static long nomem(struct addr_space *as, int why) {
+    static int said[2];
+    static const char *const what[2] = { "region table full", "no free frame" };
+    if (!said[why]++)
+        kprintf("[vm] ENOMEM: %s (%llu regions, %llu frames free, %llu pages mapped below the kernel half)\n",
+                what[why], (unsigned long long)as->regions.count, (unsigned long long)frames_free_count(),
+                (unsigned long long)vm_lower_half_pages(as));
+    return -ENOMEM;
 }
 
-/* One page: back it, re-protect it, or un-back it (PROT_NONE). In a fresh
- * reservation nothing may be mapped yet: finding a page there means a
- * mapping leaked outside the region list, and reusing it would hand out
- * stale data as "new zeroed memory". */
+static long reserve_locked(struct addr_space *as, uint64_t hint, uint64_t len, uint64_t *out) {
+    return regions_reserve(&as->regions, hint, len, out) ? nomem(as, 0) : 0;
+}
+
+/* One page: make it accessible, re-protect it, or un-back it (PROT_NONE).
+ * A page that is not backed yet is marked "zero-fill on demand": its frame
+ * comes with the first touch (vm_fault_in), as on Linux. The Go runtime
+ * maps large read-write areas it touches sparsely (arena metadata sized
+ * for the whole address space): backing them up front exhausted RAM
+ * (BUG-0012). In a fresh reservation nothing may be mapped yet: finding a
+ * page there means a mapping leaked outside the region list, and reusing
+ * it would hand out stale data as "new zeroed memory". */
 static long commit_page(struct addr_space *as, uint64_t va, int prot, int fresh) {
     uint64_t pa, fl;
     int mapped = vm_translate(as, va, &pa, &fl) == PT_OK;
     if (mapped && fresh) panic("vm: page %llx already mapped in a fresh reservation", (unsigned long long)va);
-    if (prot == VM_PROT_NONE) return mapped ? (vm_unmap(as, va, PAGE_4K, 1) == PT_OK ? 0 : -EINVAL) : 0;
-    if (mapped) return vm_protect(as, va, PAGE_4K, prot_to_pte(prot)) == PT_OK ? 0 : -EINVAL;
-    uint64_t frame = frame_alloc_zeroed();
-    if (!frame) return -ENOMEM;
-    if (vm_map(as, va, frame, PAGE_4K, prot_to_pte(prot)) != PT_OK) {
-        frame_free(frame);
-        return -ENOMEM;                        /* only failure left: no frame for a table */
+    if (prot == VM_PROT_NONE) {
+        if (!mapped) { vm_forget_discarded(as, va); return 0; }   /* must fault from now on */
+        return vm_unmap(as, va, PAGE_4K, 1) == PT_OK ? 0 : -EINVAL;
     }
-    return 0;
+    if (mapped) return vm_protect(as, va, PAGE_4K, prot_to_pte(prot)) == PT_OK ? 0 : -EINVAL;
+    return vm_mark_lazy(as, va, prot_to_pte(prot)) == PT_OK ? 0 : nomem(as, 1);   /* a table frame */
 }
 
 static long commit_locked(struct addr_space *as, uint64_t addr, uint64_t len, int prot, int fresh) {
@@ -60,7 +73,7 @@ static long commit_locked(struct addr_space *as, uint64_t addr, uint64_t len, in
 static long release_locked(struct addr_space *as, uint64_t addr, uint64_t len) {
     long rc = commit_locked(as, addr, len, VM_PROT_NONE, 0);
     if (rc) return rc;
-    return regions_release(&as->regions, addr, len) ? -ENOMEM : 0;
+    return regions_release(&as->regions, addr, len) ? nomem(as, 0) : 0;
 }
 
 /* ---- public ------------------------------------------------------------ */
@@ -93,11 +106,8 @@ long vm_discard(struct addr_space *as, uint64_t addr, uint64_t len) {
     if (addr & (PAGE_4K - 1)) return -EINVAL;
     len = round_up(len);
     kmutex_lock(&as->lock);
-    for (uint64_t off = 0; off < len; off += PAGE_4K) {
-        uint64_t pa, fl;
-        if (vm_translate(as, addr + off, &pa, &fl) == PT_OK)
-            memset(phys_to_virt(pa & ~(PAGE_4K - 1)), 0, PAGE_4K);
-    }
+    for (uint64_t off = 0; off < len; off += PAGE_4K)
+        vm_discard_page(as, addr + off);   /* unmapped pages: nothing to do */
     kmutex_unlock(&as->lock);
     return 0;
 }

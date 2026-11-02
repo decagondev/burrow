@@ -7,6 +7,9 @@
 #include "cpu.h"
 #include "syscall.h"
 #include "uthread.h"
+#include "vmm.h"
+
+#define PF_PRESENT 1u   /* #PF error code bit 0: the page was present (a protection fault) */
 
 struct idt_gate {
     uint16_t offset_lo, selector;
@@ -122,6 +125,13 @@ void trap_dispatch(struct trap_frame *f) {
     int from_user = (f->cs & 3) == 3;
     if (f->vector < 32) {
         uint64_t cr2 = f->vector == VEC_PF ? read_cr2() : 0;
+        /* A discarded page of kernel-space memory (the Go heap): zero-fill it (BUG-0012). */
+        if (f->vector == VEC_PF && !from_user && !(f->error & PF_PRESENT)) {
+            int r = vm_fault_in(vmm_kernel(), cr2);
+            if (r > 0) return;
+            if (r < 0) panic("out of memory: no frame for the page at %llx (rip %llx)",
+                             (unsigned long long)cr2, (unsigned long long)f->rip);
+        }
         if (from_user && f->vector != 2) uthread_fault(f, cr2);   /* Go decides (W9) */
         if (f->vector != VEC_DF && f->vector != 2 && try_fixup(f, cr2)) return;
         report(f, cr2);
