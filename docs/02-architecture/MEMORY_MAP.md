@@ -10,6 +10,7 @@ Two maps matter: the **physical** layout while booting (fixed addresses, chosen 
 | `0x00500 - 0x005FF` | 256 B | A20 test scratch byte at `0x500` | `stage2.asm a20_check` |
 | `0x00600 - 0x007FF` | 512 B | Manifest copy (disk LBA 1) | `MANIFEST_ADDR` |
 | `0x01000 - 0x0107F` | 128 B | `struct boot_info` | `BOOTINFO_ADDR` |
+| `0x01100 - 0x012FF` | 512 B | `struct boot_module[16]` (boot_info v2, W4) | `BOOT_MODULES_PHYS_ADDR` |
 | `0x02000 - 0x02BFF` | 3 KiB | E820 table, up to 128 x 24 B | `E820_ADDR` |
 | `0x03000 - 0x05FFF` | 12 KiB | Boot page tables: PML4, PDPT, PD (identity 1 GiB) | `PML4_ADDR` etc. |
 | `0x06000 - 0x07BFF` | ~7 KiB | Real/protected-mode stack (grows down from `0x7C00`) | `stage1.asm` |
@@ -19,7 +20,9 @@ Two maps matter: the **physical** layout while booting (fixed addresses, chosen 
 | `0x50000 - 0x7FFFF` | 192 KiB | loader stack (top `0x80000`) | `LOADER_STACK_TOP` |
 | `0x80000 - 0x9FBFF` | ~127 KiB | free (check E820) | — |
 | `0x9FC00 - 0xFFFFF` | — | EBDA, VGA memory, option ROMs, BIOS. **Reserved.** | hardware |
-| `0x100000 -` | — | free RAM per E820; nucleus will load at 1 MiB (W4) | `nucleus/linker.ld` |
+| `0x100000 - 0x3FFFFF` | 3 MiB max | nucleus segments (W4) | `nucleus/linker.ld`, `NUCLEUS_PHYS_BASE/LIMIT` in `loader/layout.h` |
+| `0x400000 - 0x3FFFFFFF` | — | loader frame allocator: nucleus disk image, page tables (W4); usable E820 only | `PALLOC_*`, `LOADER_IDENTITY_LIMIT` |
+| `0x40000000 -` | — | free RAM per E820 (the loader cannot reach it: stage2 maps only 1 GiB) | — |
 
 ```mermaid
 flowchart TB

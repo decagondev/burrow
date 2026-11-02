@@ -31,7 +31,11 @@ BI_E820_ADDR       equ 0x18
 BI_MANIFEST_ADDR   equ 0x20
 BI_LOADER_BASE     equ 0x28
 BI_STRUCT_SIZE     equ 0x80
-BOOTINFO_VERSION   equ 1
+BOOTINFO_VERSION   equ 1          ; = BOOTINFO_VERSION_STAGE2; the loader upgrades to 2
+; v2 fields: written by the loader, never by stage2 (stage2 zeroes them)
+BI_PHYSMAP_BASE    equ 0x48
+BI_MODULES_ADDR    equ 0x50
+BI_MODULE_COUNT    equ 0x58
 ; "BOOTINFO" as two dwords (little-endian): 'BOOT' then 'INFO'
 BOOTINFO_MAGIC_LO  equ 0x544F4F42
 BOOTINFO_MAGIC_HI  equ 0x4F464E49

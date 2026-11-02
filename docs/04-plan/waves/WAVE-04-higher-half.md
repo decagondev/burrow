@@ -28,7 +28,7 @@ Test: host tests walk the produced tables and assert translations for 4 KiB/2 Mi
 ### [x] W4-S06 Build the three mappings (E03.F04.S02)
 Identity first 1 GiB (temporary), physmap of all usable RAM at `0xFFFF800000000000` (2 MiB pages), nucleus segments with W^X flags. Enable NX (EFER.NXE) before using bit 63.
 
-### [ ] W4-S07 boot_info v2 (E03.F04.S03)
+### [x] W4-S07 boot_info v2 (E03.F04.S03)
 Add `modules[]` (name, phys start, size) and `physmap_base` inside `reserved`; bump version to 2; update BOOT_PROTOCOL.md, both asserts. Stage2 keeps writing v1 fields; the loader upgrades to v2.
 
 ### [ ] W4-S08 Jump (E03.F04.S04)

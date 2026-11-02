@@ -49,7 +49,7 @@ static void __attribute__((noreturn)) panic(const char *what) {
 
 static void check_boot_info(const struct boot_info *bi) {
     if (bi->magic != BOOTINFO_MAGIC)     panic("boot_info magic mismatch");
-    if (bi->version != BOOTINFO_VERSION) panic("boot_info version mismatch");
+    if (bi->version != BOOTINFO_VERSION_STAGE2) panic("boot_info version mismatch");
     if (bi->size != sizeof *bi)          panic("boot_info size mismatch");
     kprintf("[loader] boot_info ok (drive=0x%x, e820 entries=%u)\n",
             bi->boot_drive, bi->e820_count);
@@ -171,6 +171,38 @@ static uint64_t build_page_tables(const struct boot_info *bi, const struct elf_l
     return c.root;
 }
 
+static void set_module(struct boot_module *mod, const char *name, uint64_t start, uint64_t size) {
+    size_t len = strlen(name);
+    if (len >= sizeof mod->name) panic("boot module name too long");
+    memcpy(mod->name, name, len);          /* rest stays NUL from the memset */
+    mod->phys_start = start;
+    mod->size_bytes = size;
+}
+
+/* stage2 handed us v1; the nucleus gets v2 (BOOT_PROTOCOL.md §3). Call last:
+ * "loader-frames" must cover every frame palloc handed out, page tables included. */
+static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) {
+    uint64_t nucleus_end = NUCLEUS_PHYS_BASE;
+    for (uint32_t i = 0; i < n->count; i++)
+        if (n->seg[i].paddr + n->seg[i].memsz > nucleus_end) nucleus_end = n->seg[i].paddr + n->seg[i].memsz;
+    nucleus_end = (nucleus_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+
+    struct boot_module *mods = (struct boot_module *)(uintptr_t)BOOT_MODULES_PHYS_ADDR;
+    memset(mods, 0, BOOT_MODULES_MAX * sizeof *mods);
+    set_module(&mods[0], "nucleus", NUCLEUS_PHYS_BASE, nucleus_end - NUCLEUS_PHYS_BASE);
+    set_module(&mods[1], "loader-frames", g_palloc.first, g_palloc.end - g_palloc.first);
+    bi->physmap_base = PHYSMAP_BASE;
+    bi->modules_addr = BOOT_MODULES_PHYS_ADDR;
+    bi->module_count = 2;
+    bi->version      = BOOTINFO_VERSION;
+    for (uint32_t i = 0; i < bi->module_count; i++)
+        kprintf("  module %08llx - %08llx  %s\n",
+                (unsigned long long)mods[i].phys_start,
+                (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
+    kprintf("[loader] boot_info v2 ok (physmap=%llx, modules=%u)\n",
+            (unsigned long long)bi->physmap_base, bi->module_count);
+}
+
 void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -190,6 +222,7 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     load_nucleus(read_nucleus_image(m), &nucleus);
     uint64_t pml4 = build_page_tables(bi, &nucleus);
     (void)pml4;
+    upgrade_boot_info(bi, &nucleus);
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */
