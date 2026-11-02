@@ -2,7 +2,7 @@
 
 Goal: an unmodified `GOOS=linux` Go binary runs in ring 0 on the nucleus. Contract: [GO_RUNTIME_HOSTING.md](../../02-architecture/GO_RUNTIME_HOSTING.md).
 
-### [ ] W6-S01 [spike] Confirm the hosting model with the pinned Go (E05.F01)
+### [x] W6-S01 [spike] Confirm the hosting model with the pinned Go (E05.F01)
 Install Go 1.27.x. Re-run the census (`tools/census`), the `-T 0x7e0000000000` link test, and a test where `mmap` without a hint returns addresses in `0x7D00_0000_0000+` (run under a small `LD_PRELOAD`-free ptrace or seccomp experiment, or just test on the nucleus in S08). Output: updated census doc; ADR-0003 status; ADR-0004 address.
 Timebox: 2 sessions. Failure → plan B review.
 

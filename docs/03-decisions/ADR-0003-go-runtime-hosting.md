@@ -1,6 +1,6 @@
 # ADR-0003: Host the stock Go runtime on a Linux-syscall shim
 
-- **Status:** Accepted (confirmed by spike W6-S01 with the pinned Go version)
+- **Status:** Accepted. Spike W6-S01 (2026-11-02, Go 1.27.3): census re-run (23 syscalls, see the census doc), `-T 0x7e0000000000` links and runs. Confirmed on the nucleus by W6-S09.
 - **Date:** 2026-11-02
 - **Wave:** W6
 

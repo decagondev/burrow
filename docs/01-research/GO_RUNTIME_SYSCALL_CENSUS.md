@@ -2,13 +2,12 @@
 
 **Question:** which Linux system calls does a static Go program make for goroutines, channels, GC and timers? That is the minimum the nucleus shim must implement before `main()` can print.
 
-**Run on:** host Linux, Go 1.22.2 (sandbox toolchain), `CGO_ENABLED=0`, `GODEBUG=asyncpreemptoff=1`. **Re-run with the pinned Go (1.27.x) in slice W6-S01** and update this file: the set changes between releases.
+**Run on:** host Linux, `CGO_ENABLED=0`, `GODEBUG=asyncpreemptoff=1`. First with Go 1.22.2 (sandbox toolchain); **re-run with the pinned Go 1.27.3 in W6-S01** (2026-11-02, Debian WSL2): see "Result (Go 1.27.3)". The pinned set lives in `tests/regression/census-go1.27.txt`.
 
 ## Procedure (repeatable)
 
 ```sh
-cd tools/census            # created in W6-S01: a tiny program using goroutines, GC, time.Sleep
-CGO_ENABLED=0 go build -o census .
+cd tools && CGO_ENABLED=0 go build -o /tmp/census ./census   # tools/census/main.go
 GODEBUG=asyncpreemptoff=1 strace -f -c ./census          # summary
 strace -f -e trace=mmap,clone,arch_prctl,openat,fcntl ./census   # details
 ```
@@ -38,6 +37,23 @@ The test program: one goroutine sends on a channel, ~2000 x 64 KiB allocations w
 | read, close, write, arch_prctl | 1 each | `ARCH_SET_FS` once for m0 |
 
 22 distinct syscalls (plus `execve`, which is the nucleus's job).
+
+## Result (Go 1.27.3) — the pinned toolchain
+
+23 distinct syscalls (plus `execve`): `arch_prctl clone close epoll_create1 epoll_ctl epoll_pwait eventfd2 fcntl futex gettid madvise mmap nanosleep openat pread64 prlimit64 read rt_sigaction rt_sigprocmask sched_getaffinity sched_yield sigaltstack write`.
+
+Differences from 1.22 that change the shim:
+
+| 1.22 | 1.27 | Shim consequence |
+|---|---|---|
+| `pipe2` wake pipe | `eventfd2` | the netpoll break object is an eventfd: 8-byte counter reads/writes |
+| `getrlimit` | `prlimit64` (read `RLIMIT_NOFILE`, then try to raise it) | answer reads, accept sets |
+| `openat` THP size only | also `/proc/self/cgroup`, `/proc/self/mountinfo`, cgroup `cpu.max` (GOMAXPROCS from cgroup limits) | `-ENOENT` for all; `pread64` is only reached when an open succeeds |
+| — | `mmap(NULL, 32 MiB, RW)` + `madvise(MADV_NOHUGEPAGE)` at start-up, then ~1.4 MiB and 1 MiB RW maps | without demand paging these cost real frames immediately (~36 MiB of 126 MiB); acceptable at 128 MiB, revisit with a lazy-commit #PF handler if memory gets tight |
+
+Calls: futex 902, nanosleep 309, sched_yield 270, rt_sigaction 114, madvise 60, mmap 44, epoll_pwait 43, rt_sigprocmask 29, sigaltstack 20, gettid 19, clone 9 (same flags as 1.22, TLS in arg 5 / R8).
+
+`-ldflags=-T 0x7e0000000000` still links and runs: segments at `0x7dfffffff000` (R X, ELF headers + text), `0x7e000009b000` (R), `0x7e0000169000` (RW, bss to `0x7e00001a8768`) for `kernel/cmd/kernel` (1.5 MiB ELF).
 
 ## Three discoveries that shaped the design
 
