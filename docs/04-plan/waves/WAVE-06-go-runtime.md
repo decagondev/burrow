@@ -36,7 +36,7 @@ One wake pipe object; `epoll_pwait` = futex-style wait on (pipe written OR timeo
 ### [x] W6-S11 Selftest package (E05.F05)
 `kernel/selftest`: goroutine ping-pong 100k; GC stress allocating 10x RAM in a sliding window; map/slice/interface/closure smoke. Markers `[go-selftest] ... ok`.
 
-### [ ] W6-S12 Census regression (E00.F02.S05)
+### [x] W6-S12 Census regression (E00.F02.S05)
 `tests/regression/census.sh`: run `tools/census` on the host under strace; diff the syscall set against `tests/regression/census-go1.27.txt`; new syscalls fail the test with a pointer to the shim.
 
 Exit: **M6 demo — Go says hello from ring 0.** Write a long DEVLOG entry; this is the project's biggest milestone before Doom.

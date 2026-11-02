@@ -24,6 +24,7 @@
 static const sys_fn g_table[SYS_MAX] = {
     [SYS_read] = sys_read,               [SYS_write] = sys_write,
     [SYS_close] = sys_close,             [SYS_getpid] = sys_getpid,
+    [SYS_pread64] = sys_pread64,
     [SYS_gettid] = sys_gettid,           [SYS_madvise] = sys_madvise,
     [SYS_rt_sigaction] = sys_rt_sigaction, [SYS_rt_sigprocmask] = sys_rt_sigprocmask,
     [SYS_sigaltstack] = sys_sigaltstack, [SYS_fcntl] = sys_fcntl,

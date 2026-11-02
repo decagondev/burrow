@@ -11,6 +11,7 @@
 #   make smoke      boot headless, assert serial markers, check exit code
 #   make ktest      boot one image per tests/ktest suite, run in-kernel tests
 #   make regress    boot deliberately broken images, assert they fail loudly
+#   make census     Go runtime syscalls on the host (strace) vs the pinned set
 #   make sizes      show how full stage1/stage2/loader are
 #   make docs-check parse every Mermaid diagram (needs node + npm)
 #   make clean
@@ -61,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go debug test test-unit test-c test-go smoke go-smoke ktest regress sizes docs-check clean
+.PHONY: all run run-go debug test test-unit test-c test-go census smoke go-smoke ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -149,7 +150,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit smoke go-smoke ktest regress
+test: test-unit census smoke go-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -193,6 +194,10 @@ ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 
 regress: $(BUILD)/disk.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
+
+# PIT-09: the Go runtime's syscall set (host strace) vs the pinned census.
+census:
+	GO="$(GO)" tests/regression/census.sh $(BUILD)
 
 sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/nucleus.disk.elf
 	@scripts/sizes.sh $(BUILD)

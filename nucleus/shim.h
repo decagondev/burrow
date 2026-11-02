@@ -27,6 +27,7 @@ typedef long (*sys_fn)(struct syscall_frame *f);
 long sys_write(struct syscall_frame *f);
 long sys_read(struct syscall_frame *f);
 long sys_close(struct syscall_frame *f);
+long sys_pread64(struct syscall_frame *f);
 long sys_getpid(struct syscall_frame *f);
 long sys_gettid(struct syscall_frame *f);
 long sys_rt_sigaction(struct syscall_frame *f);

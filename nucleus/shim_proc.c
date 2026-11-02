@@ -36,6 +36,8 @@ long sys_read(struct syscall_frame *f) {
     if (SYSARG0(f) > 2) return poll_read((int)SYSARG0(f), (void *)SYSARG1(f), SYSARG2(f));
     return SYSARG0(f) == 0 ? 0 : -EBADF;                  /* stdin: EOF */
 }
+/* Only reached after an openat succeeds, which it never does yet (no VFS). */
+long sys_pread64(struct syscall_frame *f) { (void)f; return -EBADF; }
 long sys_close(struct syscall_frame *f) { return SYSARG0(f) > 2 ? poll_close((int)SYSARG0(f)) : 0; }
 
 /* Old action: "default, no flags" (32 bytes: handler, flags, restorer, mask). */
