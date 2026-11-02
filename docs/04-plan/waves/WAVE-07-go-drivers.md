@@ -1,4 +1,4 @@
-# W7 Go Drives Hardware  (M7)  — status: in progress
+# W7 Go Drives Hardware  (M7)  — status: done
 
 Goal: drivers written in plain Go, woken by interrupts the nucleus turns into thread wake-ups ([ADR-0005](../../03-decisions/ADR-0005-irq-as-wakeups.md)). Demo: typing at the keyboard echoes through the Go PS/2 driver into a console line editor; PCI devices are listed at boot. Stories: E06.F01-F07 ([BACKLOG.md](../BACKLOG.md)).
 
@@ -26,3 +26,5 @@ A Go panic prints its message and every goroutine (`GOTRACEBACK=all`) on serial,
 The Go kernel's driver stack (registry, PS/2, console) running as a normal host process and in `go test`, with fake ports and a channel-driven IRQ: inject scancodes, read the console's output.
 
 Exit: **M7 demo — Go drives hardware.** `make clean test` green; DEVLOG wave entry.
+
+As built: one commit per slice. S02 added `drivers/pit` (channel 0 one-shots) for the Go IRQ check, and `selftest.RunChecks` for checks that need hardware. S05 moved the end of a QEMU test run from "after the self-tests" to the console's `poweroff`, so `make go-smoke` types its way out (`tests/smoke/sendkeys.py`). S06's `kargs` module also generalised `build_initial_stack` to a full argv. The serial input driver is named `serial` (drivers start in name order, and logs must stay in a stable order).

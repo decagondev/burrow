@@ -89,7 +89,11 @@ sequenceDiagram
     N->>N: W5 - GDT/TSS/IDT, PMM, VMM, LAPIC timer, threads, futexes, SSE
     N->>G: W6 - load Go ELF, Linux-style stack, enter _rt0_amd64_linux
     G->>N: runtime syscalls (mmap, clone, futex, ...)
-    G->>G: main() - drivers, VFS, init process
+    G->>G: W7 - main() - self-tests, driver registry, console
+    G->>N: driver goroutine: nu_irq_wait(n) blocks its thread
+    N->>G: ISA IRQ n - ISR masks, EOIs, wakes the thread
+    G->>N: nu_irq_ack(n) after draining the device
+    G->>G: W8+ - VFS, init process
 ```
 
 ## 4. CPU mode state machine

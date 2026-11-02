@@ -14,6 +14,36 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-02 — Wave 7 complete: Go drives hardware (M7)
+
+**Did:** W7-S01..S07. Interrupts reach Go as thread wake-ups (ADR-0005), and the first drivers are plain Go:
+
+```text
+[go-selftest] irq ok (10 pit one-shots on line 0 in 96.3ms, 48 sleeps elsewhere meanwhile)
+[pci] INFO: 00:01.1 8086:7010 ide controller (class 01.01.80, irq 0)
+[ps2] INFO: keyboard ready on irq 1 (scancode set 1 via translation)
+[driver] INFO: started: [pci ps2 serial]
+burrow> echo hello from the keyboard
+hello from the keyboard
+```
+
+Nucleus: `irq.c` (8259 in virtual-wire mode, one waiter per line, pending flag, spurious IRQ 7/15) behind `nu_irq_wait`/`nu_irq_ack`, with ktests driven by PIT channel 0 one-shots. Go: `amd64.IRQ` + `driver.Serve`, a driver registry (`init()` registration, name order), PCI enumeration, the 8042 + a set 1 decoder, COM1 receive interrupts, and a console line editor with `help echo lspci uptime mem poweroff`. `make go-smoke` now *types*: QEMU's monitor `sendkey` feeds the PS/2 keyboard, including a backspace. `hostsim` runs the same drivers and console on a fake 8042, 16550 and IRQ lines under `go test -race`. The panic path: a `kargs` boot module becomes argv, REG-0006 checks a Go panic prints every goroutine and fails the run, REG-0007 checks that a nil write in Go is reported as such with the `go tool addr2line` command (PIT-07).
+
+**Numbers:** first IRQ wake-up 10.96 ms for a 10 ms one-shot (the extra ~1 ms is the idle thread waiting for the next tick); 10 one-shots in 96 ms with another goroutine still running; PCI scan of 8192 slots unnoticeable in boot time; 3 goroutines at the console (main, keyboard, serial).
+
+**Surprises:**
+- The Go IRQ path worked the first time because `syscall.Syscall` already does the right thing: the runtime treats a thread parked in `nu_irq_wait` like one in `read(2)` and moves its P elsewhere.
+- The 8259 latches edges while a line is masked, so the first wait after boot returns at once for the BIOS's 18.2 Hz PIT ticks. Tests either drain it (C) or tolerate one short round (Go).
+- QEMU cannot create a Unix socket on WSL's `/mnt/c` (DrvFs): the smoke monitor socket lives in `/tmp`.
+- `go vet` rejects a `ReadByte() (byte, bool)` method: names like `ReadByte` promise the `io.ByteReader` signature.
+- hostsim's first piped demo interleaved serial and keyboard bytes: two input devices typing at once really do interleave; the simulator now waits for each line's prompt.
+
+**Learned:** Keep the ISR boring (mask, EOI, wake) and the driver ordinary Go: every test above except the QEMU ones runs on the host, and the QEMU ones only confirm the wiring.
+
+**Next:** W8: initrd + VFS, devfs, the BGA framebuffer (a PCI BAR from `pci.Devices()`), and the ATA driver in Go.
+
+**Links:** ADR-0005, PIT-07, PIT-28, PIT-29, BUG-0010, REG-0006, REG-0007
+
 ## 2026-11-02 — Wave 6 complete: Go says hello from ring 0 (M6)
 
 **Did:** W6-S01..S12. The stock Go 1.27.3 runtime, built as an ordinary static `GOOS=linux` binary with no changes to the toolchain or the runtime, now runs in ring 0 on the C nucleus:

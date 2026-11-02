@@ -22,7 +22,8 @@ flowchart TB
 | Smoke | `make smoke` | QEMU headless | ~0.5 s | `boot_to_loader.txt`, `boot_to_nucleus.txt` |
 | Regression | `make regress` | QEMU, mutated images | ~0.5 s | REG-0001 corrupt loader |
 | ktest (W5+) | `make ktest` | QEMU, one image per suite | ~0.5 s per suite | `tests/ktest/trap.txt` |
-| Go boot (W6+) | `make go-smoke` | QEMU, `build/go.img` | ~7 s | `boot_to_go.txt`: hello + `kernel/selftest` |
+| Go boot (W6+) | `make go-smoke` | QEMU, `build/go.img` | ~10 s | `boot_to_go.txt`: hello, `kernel/selftest`, drivers, then the console typed into by `tests/smoke/keys/boot_to_go.keys` (QEMU monitor `sendkey`, `tests/smoke/sendkeys.py`) until `poweroff` |
+| hostsim (W7+) | `go test ./hostsim` (part of `make test-go`) | host, simulated 8042/16550/IRQ lines | <1 s | the driver stack and console without QEMU; `make hostsim` runs it interactively |
 | Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall (`tests/regression/census.sh`) |
 | Docs | `make docs-check` | node + mermaid | seconds | all diagrams parse |
 
@@ -57,6 +58,12 @@ flowchart TB
 **New boot stage marker:** add the print, append the line to the expect file, run `make smoke`.
 **New regression case:** write a mutator function in `tests/regression/run_all.sh`, add `case_run REG-NNNN-name "<expected text>" 35 mutator`, link it from the BUG entry.
 **New ktest (in-kernel test):** write `int kt_<name>(void)` using `KT_CHECK` in a `nucleus/ktest_*.c`, declare it in `nucleus/ktest.h`, add it to the table in `nucleus/ktest.c`, list it in a suite `tests/ktest/<suite>.txt` and append `[ktest] <name> ok` to `tests/ktest/expect/<suite>.txt`. `make ktest` builds `build/ktest-<suite>.img` (the normal image plus a `ktest` payload) and runs the smoke checker on it. A test that must crash goes in the regression suite instead (`with_ktest <name>` in `run_all.sh`, e.g. REG-0005).
+
+**Go kernel behaviour that must crash** (W7+): the image gets a `kargs` payload whose words become the Go kernel's `argv` (`with_kargs <words>` in `run_all.sh`; the words are handled in `kernel/cmd/kernel/kargs.go`), e.g. REG-0006 `panic=boot`, REG-0007 `fault=nil`.
+
+**Typing into a boot** (W7+): pass a keys file as the 4th argument of `tests/smoke/smoke.sh`. Steps: `wait <text>` (in the serial log), `type <text>`, `key <qemu-key-name>`. The guest's output, not the keys file, is what the expect file checks.
+
+**New Go driver:** a package under `kernel/drivers/` that calls `driver.Register` from `init()` and touches hardware only through `driver.Env`; host-test it with `haltest` fakes (`FakePorts`, `FakeIRQ`, `Fake8042`), add it to `kernel/hostsim` if the console can reach it, and import it for side effects in `kernel/cmd/kernel/main.go`.
 **New Go package:** `_test.go` next to it; use `haltest` fakes; run `make test-go`.
 
 ## 6. Diagram checking
