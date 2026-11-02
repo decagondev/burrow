@@ -1,5 +1,6 @@
 # Ordered markers for booting the Go kernel (build/go.img, make go-smoke). Append-only.
-# Grows slice by slice in Wave 6 until BURROW:GO:OK.
+# Grows slice by slice: Wave 6 up to BURROW:GO:SELFTEST:OK, Wave 7 drivers and the
+# console (typed by tests/smoke/keys/boot_to_go.keys).
 BURROW:NUCLEUS:OK
 [nucleus] go kernel mapped
 [nucleus] starting the Go kernel
@@ -15,4 +16,12 @@ BURROW:GO:SELFTEST:OK
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
 [ps2] INFO: keyboard ready on irq 1
-[driver] INFO: started: [pci ps2]
+[serial] INFO: receive interrupts on irq 4
+[driver] INFO: started: [pci ps2 serial]
+[console] INFO: ready
+burrow> echo hello from the keyboar
+hello from the keyboard
+burrow> lspci
+00:01.1 8086:7010 ide controller
+burrow> poweroff
+[console] INFO: poweroff

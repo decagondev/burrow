@@ -181,11 +181,12 @@ SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to
 smoke: $(BUILD)/disk.img
 	@for e in $(SMOKE_EXPECT); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done
 
-# Boot the Go kernel and check its markers (tests/smoke/expect/boot_to_go.txt).
+# Boot the Go kernel, type into its console (tests/smoke/keys/) and check its
+# markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img
-	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30
+	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30 tests/smoke/keys/boot_to_go.keys
 
-# Boot the Go image interactively (Ctrl-A X quits).
+# Boot the Go image interactively: the console reads the serial line (Ctrl-A X quits).
 run-go: $(BUILD)/go.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) -serial mon:stdio -display none
 

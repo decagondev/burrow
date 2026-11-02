@@ -16,7 +16,14 @@ const (
 	regMCR  = 4
 	regLSR  = 5
 
-	lsrTHREmpty = 0x20
+	lsrDataReady = 0x01
+	lsrTHREmpty  = 0x20
+
+	ierRXAvailable = 0x01
+	mcrDTRRTS      = 0x03
+	mcrOut2        = 0x08 // gates the UART's interrupt onto the ISA bus
+
+	COM1IRQ = 4
 )
 
 // UART is safe to use from one goroutine at a time; wrap it with a mutex
@@ -38,7 +45,21 @@ func (u *UART) Init() {
 	u.io.Out8(u.base+regIER, 0x00)
 	u.io.Out8(u.base+regLCR, 0x03) // 8N1
 	u.io.Out8(u.base+regFCR, 0xC7)
-	u.io.Out8(u.base+regMCR, 0x03)
+	u.io.Out8(u.base+regMCR, mcrDTRRTS)
+}
+
+// EnableRX turns on the "received data available" interrupt.
+func (u *UART) EnableRX() {
+	u.io.Out8(u.base+regMCR, mcrDTRRTS|mcrOut2)
+	u.io.Out8(u.base+regIER, ierRXAvailable)
+}
+
+// TryRead returns the next received byte, if one is waiting (it never blocks).
+func (u *UART) TryRead() (byte, bool) {
+	if u.io.In8(u.base+regLSR)&lsrDataReady == 0 {
+		return 0, false
+	}
+	return u.io.In8(u.base + regData), true
 }
 
 // WriteByte sends one byte, translating '\n' to "\r\n" for terminals.

@@ -55,6 +55,10 @@ func (l *Logger) Warnf(f string, a ...any)  { l.Logf(Warn, f, a...) }
 func (l *Logger) Errorf(f string, a ...any) { l.Logf(Error, f, a...) }
 func (l *Logger) Debugf(f string, a ...any) { l.Logf(Debug, f, a...) }
 
+// Writer writes raw bytes under the logger's lock, so another user of the
+// same sink (the console's echo) never splits a log line.
+func (l *Logger) Writer() io.Writer { return lockedWriter{l} }
+
 type lockedWriter struct{ parent *Logger }
 
 func (w lockedWriter) Write(p []byte) (int, error) {

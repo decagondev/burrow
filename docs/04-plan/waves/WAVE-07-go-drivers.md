@@ -16,7 +16,7 @@ Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscal
 ### [x] W7-S04 PS/2 keyboard (E06.F03)
 `drivers/ps2`: 8042 bring-up (self-test, config byte with IRQ 1 and translation on, enable scanning) and an IRQ 1 goroutine. Scancode set 1 decoder is pure and host-tested: shift, caps lock, ctrl (control codes), `E0` prefixes, releases; arrows become ANSI escapes.
 
-### [ ] W7-S05 Console (E06.F04)
+### [x] W7-S05 Console (E06.F04)
 `kernel/console`: a pure line editor (printable echo, backspace, `^U`, enter) fed by the keyboard and by COM1 receive interrupts (IRQ 4), with a few commands: `help`, `echo`, `lspci`, `uptime`, `mem`, `poweroff`. `make go-smoke` types into the guest through QEMU's monitor (`sendkey`) and checks the echoed line.
 
 ### [ ] W7-S06 Panic path (E06.F05, PIT-07)

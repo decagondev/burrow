@@ -11,8 +11,9 @@
 // Every system call the Go runtime makes lands in the nucleus syscall shim
 // (see ADR-0003, docs/02-architecture/GO_RUNTIME_HOSTING.md).
 //
-// Boot: banner over COM1, the runtime self-tests (selftest), then every
-// registered driver (package driver; drivers register in init()).
+// Boot: banner over COM1, the runtime self-tests (selftest), every
+// registered driver (package driver; drivers register in init()), then the
+// console on the keyboard and COM1 until `poweroff`.
 package main
 
 import (
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"burrow/kernel/arch/amd64"
+	"burrow/kernel/console"
 	"burrow/kernel/driver"
 	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
 	_ "burrow/kernel/drivers/ps2"
@@ -30,6 +32,7 @@ import (
 )
 
 func main() {
+	boot := time.Now()
 	com1 := uart.New(amd64.Ports{}, uart.COM1)
 	com1.Init()
 	log := klog.New(com1, klog.Info)
@@ -49,14 +52,18 @@ func main() {
 	}
 	fmt.Fprintln(com1, "BURROW:GO:SELFTEST:OK")
 
+	input := make(chan byte, 256)
+	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
 	driver.StartAll(&driver.Env{
 		Ports:   amd64.Ports{},
 		Ports32: amd64.Ports{},
 		IRQ:     func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
 		Log:     log,
+		Input:   input,
 	})
-	amd64.DebugExit(0x10) // ends a QEMU test run; returns everywhere else
-	for {
-		time.Sleep(time.Hour) // idle: the nucleus halts the CPU while every thread sleeps
-	}
+
+	con := console.New(log.Writer(), input)
+	addCommands(con, boot, log.With("console"))
+	log.With("console").Infof("ready: type on the keyboard or the serial line (help lists commands)")
+	con.Run()
 }
