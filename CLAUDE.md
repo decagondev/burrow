@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-4 (boot to a higher-half C nucleus) are done; Wave 5 (nucleus: GDT/IDT, PMM, VMM, threads) is next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
+Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-5 (boot chain + nucleus core: traps, memory, timer, threads, futexes, SSE) are done; Wave 6 (syscall gate + running the stock Go runtime in ring 0) is next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
 
 ## Commands
 
@@ -14,10 +14,11 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + smoke + regress (full suite, ~5 s)
+make test         # test-unit + smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
+make ktest        # boot one image per tests/ktest/<suite>.txt, run the in-kernel tests
 make regress      # boot deliberately broken images, assert they fail loudly
 make sizes        # how full stage1 / stage2 / loader are
 make docs-check   # parse every Mermaid block (needs node + npm)
@@ -37,15 +38,20 @@ Expected `make test` tail: `N checks, 0 failures`, `SMOKE PASS [boot_to_loader]`
 - **Cross-language contracts** live in `include/burrow/` (`boot_info.h`, `manifest.h`) and are mirrored by hand in `boot/boot_abi.inc` and in `tools/mkimage/manifest.go`. Changing a struct or fixed address means updating all mirrors plus `docs/02-architecture/MEMORY_MAP.md` / `BOOT_PROTOCOL.md`. C side uses `__attribute__((packed))` + `_Static_assert` on offsets; Go has layout tests (`TestManifestLayoutMatchesC`).
 - **Disk layout:** LBA 0 stage1, LBA 1 manifest, LBA 2..33 stage2, then payloads named in the manifest (`loader`, `nucleus` = stripped `build/nucleus.disk.elf`; built by `tools/mkimage`).
 - **Loader-chosen addresses** live in `loader/layout.h` (nucleus physical window 1-4 MiB, palloc range up to stage2's 1 GiB identity map, `PHYSMAP_BASE`). Addresses inside boot_info stay physical. Stage2 writes boot_info v1 (`BOOTINFO_VERSION_STAGE2`); the loader writes v2 (`BOOTINFO_VERSION`). CRC32 is computed identically in mkimage (Go), stage2 (asm) and loader (C).
-- **Testability via interfaces:** C uses small function-pointer "ops" structs (`common/char_sink.h`, `loader/block_device.h`, `pt_ctx` in `loader/paging.h`); pure modules (kprintf, crc32, manifest, memmap, elf64, elf_load, palloc, paging, vmsetup, image, lib_string) include neither `io.h` nor `cpu.h` and are host-tested. Inline asm lives only in those two headers.
+- **Testability via interfaces:** C uses small function-pointer "ops" structs (`common/char_sink.h`, `loader/block_device.h`, `pt_ctx` in `common/paging.h`); pure modules (common/*, loader manifest/memmap/elf64/elf_load/palloc/vmsetup/image, nucleus pmm/regions) include neither `io.h` nor `cpu.h` and are host-tested; `UNIT_SRC` in the Makefile lists them. Inline asm lives only in those two headers.
 - **`common/`** holds freestanding code used by both the loader and the nucleus (kprintf, lib_string, crc32, serial, char_sink, io.h, cpu.h). The Makefile compiles each `common/*.c` twice (`build/loader/common_*.o`, `build/nucleus/common_*.o`); every `common/*.c` except `serial.c` is also in the host unit-test build. Go: interfaces in `kernel/hal`, fakes in `kernel/haltest`; real hardware only in `kernel/arch/amd64` behind build tag `burrow`, so everything else builds and tests on the host.
 - `snippets/` holds compile-checked reference code for future waves (nucleus syscall gate, Go IRQ goroutine, Doom backend); it is not part of the build.
+
+- **Nucleus structure** (`nucleus/main.c` calls each module's init in order, each prints one `[nucleus] ... ok` marker): `boot.c` (boot_info, physmap, modules) → `gdt.c` → `trap.c`/`trap.asm` → `frames.c` (PMM) → `vmm.c` (drops identity map, CR0.WP) → `apic.c` → `time.c` → `fpu.c` → `sched.c`; then `ktest_run` if a `ktest` boot module exists, else `BURROW:NUCLEUS:OK`. `panic()` in `nucleus/panic.c`; errors are `-errno` with Linux numbers (`nucleus/errno.h`).
+- **Trap path:** every vector enters on an IST stack; `trap.asm` copies the `struct trap_frame` onto the current thread's kernel stack (`g_percpu.kstack_*`) so handlers may block or switch threads. Faults that are allowed are listed in the `.fixup` section (`nucleus/probe.asm`: `probe_read64/probe_write64/probe_ud2`); `trap_last` records them. Anything else prints `[trap] #XX at rip=...` plus registers and panics.
+- **Threads:** `schedule()` must update percpu kstack bounds, TSS.RSP0, FS_BASE and FXSAVE state before `switch_to` (PIT-22). Blocking primitives use `thread_block_unlock` (PIT-23). The nucleus's C is `-mgeneral-regs-only`; xmm is only touched from asm.
 
 ## Test conventions (`docs/05-testing/TEST_STRATEGY.md`)
 
 - **New pure C module:** add `tests/unit/c/test_<mod>.c`, add the module `.c` to `UNIT_SRC` in the Makefile, and declare + `RUN()` every test in `test_main.c` (no auto-registration).
 - **Serial markers:** format `[component] message`, success `BURROW:<NAME>:OK`. Expect files (`tests/smoke/expect/*.txt`) are **append-only**; never weaken one to make a test pass. Smoke fails on any `PANIC`/`FAIL` line or out-of-order marker. `make smoke` checks every file in `SMOKE_EXPECT` against the same boot.
-- The loader's `kprintf` supports only `%% %c %s %d %i %u %x %X %p`, the `0` flag, width and `l`/`ll`/`z`; there is no `-` flag.
+- **ktest:** `int kt_<name>(void)` with `KT_CHECK` in `nucleus/ktest_*.c`, declared in `ktest.h`, registered in the table in `ktest.c`, listed in `tests/ktest/<suite>.txt`, with `[ktest] <name> ok` appended to `tests/ktest/expect/<suite>.txt`. Tests that must crash belong in `run_all.sh` via `with_ktest <name>`. Tests that enable interrupts must leave IF as they found it.
+- `kprintf` supports only `%% %c %s %d %i %u %x %X %p`, the `0` flag, width and `l`/`ll`/`z`; there is no `-` flag.
 - **QEMU exit codes:** guest writes `0x10` to port `0xF4` → exit 33 (pass); `0x11` → 35 (fail); 124 = timeout = hang bug. Every failure path must write debug-exit `0x11` so failures are instant.
 - **Regression cases:** add a mutator in `tests/regression/run_all.sh` with `case_run REG-NNNN-name "<expected text>" 35 mutator`; use `lba_of <img> <name>` rather than hard-coding payload LBAs. Every bug gets a test named after its BUG/REG id.
 - Smoke logs go to `build/smoke-<name>.log`.

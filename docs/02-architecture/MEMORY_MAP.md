@@ -60,6 +60,9 @@ x86-64 has a 48-bit canonical address space: a lower half `0x0000_0000_0000_0000
 | `0x0000_7F00_0000_0000 - 0x0000_7FFF_FFFF_FFFF` | user | user stacks (top-down) | U |
 | `0xFFFF_8000_0000_0000 - +RAM size` | nucleus | **physmap**: all physical RAM mapped linearly | S, NX |
 | `0xFFFF_FFFF_8000_0000 - ...` | nucleus | nucleus image (`-mcmodel=kernel`, loaded at phys 1 MiB) | S |
+| `0xFFFF_FFFF_C000_0000 - +64 × 20 KiB` | nucleus | kernel stacks: slot i = 4 KiB unmapped guard + 16 KiB stack (`KSTACK_REGION`, `nucleus/sched.c`) | S, NX |
+
+Since W5 the nucleus drops the loader's identity map (PML4[0]) in `vmm_init`, so nothing is mapped below `0x0000_8000_0000_0000` until the Go kernel (W6) reserves it. Device registers are mapped uncached at `physmap_base + phys` (`vm_map_mmio`, e.g. the LAPIC at `0xFEE00000`). Hint-less `vm_reserve` calls are placed from `0x7D00_0000_0000` up (`VM_SEARCH_BASE`); a free hint such as Go's `0xc000000000` is honoured.
 
 S = supervisor-only, U = user accessible. The Go kernel and nucleus regions are present in **every** address space but marked supervisor-only, so a user process cannot read them, and its SYSCALL return RIP can never point into Go kernel text (this is what makes the gate's caller check sound, [ADR-0004](../03-decisions/ADR-0004-syscall-gate.md)).
 

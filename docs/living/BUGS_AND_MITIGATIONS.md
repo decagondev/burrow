@@ -35,6 +35,26 @@ flowchart LR
 
 ## Closed
 
+### BUG-0007: A thread woken before it switched out kept running as T_RUNNABLE
+- Found: 2026-11-02, W5-S11, reading `schedule()` while designing `futex_wait` (before any test hit it).
+- Severity: latent (would have let pick_next hand the running thread to itself again and confused join/wake logic).
+- Symptom: none yet. Path: thread marks itself T_BLOCKED, a waker (or the tick) sets it T_RUNNABLE before `schedule()` runs, `pick_next` returns the thread itself, `schedule()` returned early without restoring T_RUNNING.
+- Root cause: the `next == prev` early return assumed prev was still T_RUNNING.
+- Fix: `nucleus/sched.c` sets `prev->state = T_RUNNING` on that path.
+- Mitigation: blocking primitives go through `thread_block_unlock`, which marks the thread blocked before the lock drops, so wake-before-switch is a designed-in case, not an accident (PIT-23).
+- Regression: ktest `futex_ping_pong` (20,000 wake/wait pairs) exercises the path continuously.
+- Lesson: every early return in a state machine must leave the state consistent.
+
+### BUG-0006: CR0.WP was off, so ring 0 ignored read-only pages (W4's W^X was not enforced)
+- Found: 2026-11-02, W5-S07, writing the `vmm_kernel_wx` ktest.
+- Severity: latent major: the loader mapped nucleus text read-only, but with CR0.WP=0 the CPU lets supervisor code write to any present page.
+- Symptom: none yet; would have shown as a stray kernel write silently patching nucleus code.
+- Root cause: neither stage2 nor the loader sets CR0.WP; it is off after reset and only matters for ring 0.
+- Fix: `vmm_init` sets CR0.WP (`nucleus/vmm.c`).
+- Mitigation: ktests that try the forbidden access (`vmm_kernel_wx`, `vmm_protect_readonly`) instead of only reading back the flags; a table walk proved the flags were right all along.
+- Regression: ktest `vmm_kernel_wx` (write to nucleus text must #PF with P=1).
+- Lesson: check that a protection is enforced, not only that it is configured.
+
 ### BUG-0005: A regression case whose mutator failed was silently skipped
 - Found: 2026-11-02, W4-S03, while adding REG-0004 (its `lba_of` helper failed on its first version).
 - Severity: major (test harness): a broken case vanished from the count instead of failing.

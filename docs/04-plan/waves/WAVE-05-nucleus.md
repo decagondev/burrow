@@ -1,4 +1,4 @@
-# W5 Nucleus Core  (M5)  — status: planned
+# W5 Nucleus Core  (M5)  — status: done
 
 Goal: a robust ring-0 base. Everything Go will need in W6 exists and is self-tested.
 
@@ -41,3 +41,5 @@ IRQ-saving spinlocks; futex hash table of wait queues; timeout via sleep queue. 
 CR0/CR4 bits; `fxsave/fxrstor` per thread (512-byte aligned area). ktest: two threads with different xmm0 values keep them across switches.
 
 Exit: M5 demo; all ktests green in smoke.
+
+As built: slices ran in the order S01-S04, S06, S07, S05, S08-S12, because the LAPIC's registers (0xFEE00000) lie outside the physmap and need the VMM's `vm_map_mmio`. IST1 carries every vector as planned, but trap entry then copies the frame onto the current thread's kernel stack (`nucleus/trap.asm`), so a timer IRQ can switch threads; `switch_to` itself stays minimal and `schedule()` does the PIT-22 updates (percpu kstack, TSS.RSP0, FS_BASE, FXSAVE) right before it. Suites: `tests/ktest/{trap,mm,irq,sched}.txt`.
