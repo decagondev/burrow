@@ -12,4 +12,5 @@
 [ktest] spinlock_counter ok
 [ktest] futex_ping_pong ok
 [ktest] futex_timeout_and_eagain ok
+[ktest] sse_state_per_thread ok
 BURROW:KTEST:OK

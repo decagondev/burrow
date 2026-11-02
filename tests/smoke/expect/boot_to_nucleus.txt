@@ -16,5 +16,6 @@ BURROW:LOADER:OK
 [nucleus] vmm ok
 [nucleus] lapic ok
 [nucleus] time ok
+[nucleus] sse ok
 [nucleus] sched ok
 BURROW:NUCLEUS:OK

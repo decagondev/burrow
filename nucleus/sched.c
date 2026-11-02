@@ -1,6 +1,7 @@
 /* sched.c - see sched.h. All scheduler state is touched with interrupts off. */
 #include "sched.h"
 #include "spinlock.h"
+#include "fpu.h"
 #include "percpu.h"
 #include "gdt.h"
 #include "time.h"
@@ -57,6 +58,8 @@ static void schedule(void) {
     g_percpu.kstack_bottom = next->kstack_bottom;
     tss_set_rsp0(next->kstack_top);
     if (next->fs_base != prev->fs_base) wrmsr(MSR_FS_BASE, next->fs_base);
+    fpu_save(prev->fx);
+    fpu_restore(next->fx);
     g_switches++;
     switch_to(prev, next);              /* returns when prev is picked again */
 }
@@ -138,6 +141,7 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
     t->timed_out = 0;
     t->wait_next = 0;
     t->name = name;
+    fpu_init_area(t->fx);
     f = irq_save();
     t->id = g_next_id++;
     t->state = T_RUNNABLE;

@@ -39,6 +39,7 @@ int kt_sched_ping_pong(void);
 int kt_sched_preempts(void);
 int kt_sched_sleep_and_fs_base(void);
 int kt_sched_stack_guard(void);
+int kt_sse_state_per_thread(void);
 
 /* ktest_sync.c */
 int kt_spinlock_counter(void);

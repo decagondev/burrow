@@ -22,6 +22,7 @@
 #include "vmm.h"
 #include "apic.h"
 #include "time.h"
+#include "fpu.h"
 #include "sched.h"
 #include "ktest.h"
 
@@ -60,6 +61,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     pic_disable();
     lapic_init();
     time_init();
+    fpu_init();
     sched_init();
 
     const struct boot_module *kt = boot_module_find("ktest");

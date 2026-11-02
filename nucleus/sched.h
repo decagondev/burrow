@@ -27,7 +27,7 @@ struct thread {
     const char *name;
     struct thread *wait_next;   /* futex wait queue link (futex.c) */
     uint64_t futex_key;         /* address this thread waits on (futex.c) */
-    void    *fx_area;           /* 512-byte FXSAVE area, 16-aligned (W5-S12) */
+    uint8_t  fx[512] __attribute__((aligned(16)));   /* FXSAVE area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
 

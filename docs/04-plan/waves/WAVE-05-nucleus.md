@@ -37,7 +37,7 @@ ktest: two threads print alternately 5 times.
 ### [x] W5-S11 Spinlocks + futex (E04.F06)
 IRQ-saving spinlocks; futex hash table of wait queues; timeout via sleep queue. ktest: ping-pong 10,000 round trips; wait with timeout returns `-ETIMEDOUT`.
 
-### [ ] W5-S12 SSE enable + FPU state save (prep for Go)
+### [x] W5-S12 SSE enable + FPU state save (prep for Go)
 CR0/CR4 bits; `fxsave/fxrstor` per thread (512-byte aligned area). ktest: two threads with different xmm0 values keep them across switches.
 
 Exit: M5 demo; all ktests green in smoke.

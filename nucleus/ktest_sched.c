@@ -109,3 +109,32 @@ int kt_sched_stack_guard(void) {
     KT_CHECK(g_guard_hit);
     return 0;
 }
+
+extern void ktest_set_xmm0(uint64_t v);
+extern uint64_t ktest_get_xmm0(void);
+static volatile int g_xmm_ok[2];
+
+static void xmm_holder(void *arg) {
+    uint64_t want = (uint64_t)(uintptr_t)arg;
+    ktest_set_xmm0(want);
+    for (int i = 0; i < 50; i++) {
+        thread_yield();                       /* the other thread loads its own xmm0 */
+        if (i % 10 == 0) thread_sleep_ns(1000000);
+        if (ktest_get_xmm0() != want) return;
+    }
+    g_xmm_ok[want == 0x1111222233334444ull ? 0 : 1] = 1;
+}
+
+/* Two threads with different xmm0 values keep them across switches. */
+int kt_sse_state_per_thread(void) {
+    g_xmm_ok[0] = g_xmm_ok[1] = 0;
+    ktest_set_xmm0(0xdead);
+    struct thread *a = thread_create("xmm-a", xmm_holder, (void *)0x1111222233334444ull);
+    struct thread *b = thread_create("xmm-b", xmm_holder, (void *)0x5555666677778888ull);
+    KT_CHECK(a && b);
+    thread_join(a);
+    thread_join(b);
+    KT_CHECK(g_xmm_ok[0] && g_xmm_ok[1]);
+    KT_CHECK(ktest_get_xmm0() == 0xdead);     /* main's value survived too */
+    return 0;
+}
