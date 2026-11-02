@@ -14,7 +14,7 @@ Design (refines the provisional ARCHITECTURE §7.3 and ADR-0004):
 ### [x] W9-S02 Ring 3: user threads, the user syscall path, faults (E08.F03, E08.F04)
 `nu_uthread_create/kill/set_fs`, `nu_syscall_wait/reply`; the gate's user path (CR3 test, kernel stack, SYSRETQ), user exceptions to fault requests, PIT-24. ktests run hand-assembled ring-3 code: getpid + exit through the queue, a NULL read and a kernel-address read become faults, a spinning thread is preempted and killed, the non-canonical return.
 
-### [ ] W9-S03 Processes in Go: address space policy, ELF loader, initial stack (E08.F01, E08.F02)
+### [x] W9-S03 Processes in Go: address space policy, ELF loader, initial stack (E08.F01, E08.F02)
 `kernel/proc`: a process's pages (VMAs over frames from `nu_page_alloc`), copyin/copyout through the physmap, `debug/elf` loading of static `ET_EXEC` (static-PIE later), the Linux entry stack (argv, envp, auxv; the Go twin of `nucleus/go_stack.c`). Host-tested against a fake nucleus (memory-backed frames).
 
 ### [ ] W9-S04 Syscall dispatcher and the first syscalls (E08.F04, E08.F05, E08.F06)
