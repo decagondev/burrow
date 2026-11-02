@@ -85,6 +85,25 @@ static uint64_t map_go_stack(struct addr_space *as) {
     return base + PAGE_4K + GO_STACK_BYTES;
 }
 
+/* argv = "kernel" plus the words of an optional "kargs" boot module (a text
+ * file on the image; tests use it to choose what the Go kernel does). */
+#define KARGS_BYTES 256
+static char g_kargs[KARGS_BYTES];
+
+static void kernel_argv(const char **argv) {
+    unsigned n = 0;
+    argv[n++] = "kernel";
+    const struct boot_module *m = boot_module_find("kargs");
+    if (m) {
+        uint64_t len = m->size_bytes < KARGS_BYTES - 1 ? m->size_bytes : KARGS_BYTES - 1;
+        memcpy(g_kargs, phys_to_virt(m->phys_start), len);
+        g_kargs[len] = 0;
+        n += split_words(g_kargs, argv + n, STACK_MAX_ARGS - n);
+        kprintf("[nucleus] go kernel args from kargs: %u word(s)\n", n - 1);
+    }
+    argv[n] = 0;
+}
+
 int go_kernel_start(void) {
     const struct boot_module *mod = boot_module_find("kernel");
     if (!mod) return -1;
@@ -94,7 +113,9 @@ int go_kernel_start(void) {
 
     uint8_t rnd[16];
     for (int i = 0; i < 16; i += 8) { uint64_t t = rdtsc() * 0x9E3779B97F4A7C15ull; memcpy(rnd + i, &t, 8); }
-    uint64_t sp = build_initial_stack(map_go_stack(as), &ex, rnd, "kernel", g_env);
+    const char *argv[STACK_MAX_ARGS + 1];
+    kernel_argv(argv);
+    uint64_t sp = build_initial_stack(map_go_stack(as), &ex, rnd, argv, g_env);
 
     struct trap_frame f;
     memset(&f, 0, sizeof f);                      /* RDX = 0: no atexit function (ELF ABI) */

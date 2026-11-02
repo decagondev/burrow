@@ -30,6 +30,7 @@ TEST(pmm_skips_frame_zero);
 TEST(regions_hint_or_first_fit); TEST(regions_first_fit_uses_gaps); TEST(regions_covers_neighbours);
 TEST(regions_release_splits_and_trims); TEST(regions_full_table);
 TEST(go_stack_layout);
+TEST(go_stack_split_words);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -62,7 +63,7 @@ int main(void) {
     puts("[regions]");  RUN(regions_hint_or_first_fit); RUN(regions_first_fit_uses_gaps);
                         RUN(regions_covers_neighbours); RUN(regions_release_splits_and_trims);
                         RUN(regions_full_table);
-    puts("[go_stack]"); RUN(go_stack_layout);
+    puts("[go_stack]"); RUN(go_stack_layout); RUN(go_stack_split_words);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

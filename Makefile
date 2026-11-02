@@ -193,7 +193,7 @@ run-go: $(BUILD)/go.img
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
 
-regress: $(BUILD)/disk.img
+regress: $(BUILD)/disk.img $(BUILD)/go.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
 
 # PIT-09: the Go runtime's syscall set (host strace) vs the pinned census.

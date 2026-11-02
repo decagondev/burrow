@@ -19,7 +19,7 @@ Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscal
 ### [x] W7-S05 Console (E06.F04)
 `kernel/console`: a pure line editor (printable echo, backspace, `^U`, enter) fed by the keyboard and by COM1 receive interrupts (IRQ 4), with a few commands: `help`, `echo`, `lspci`, `uptime`, `mem`, `poweroff`. `make go-smoke` types into the guest through QEMU's monitor (`sendkey`) and checks the echoed line.
 
-### [ ] W7-S06 Panic path (E06.F05, PIT-07)
+### [x] W7-S06 Panic path (E06.F05, PIT-07)
 A Go panic prints its message and every goroutine (`GOTRACEBACK=all`) on serial, then `exit_group(2)` fails the run instantly (debug-exit `0x11`). A fault whose RIP is in Go text says so and names the tool to symbolize it. A `kargs` boot module becomes extra `argv` words, so a test image can ask the kernel to panic: regression case REG-0006.
 
 ### [ ] W7-S07 `hostsim` (E06.F06)

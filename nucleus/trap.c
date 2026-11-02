@@ -5,6 +5,7 @@
 #include "kprintf.h"
 #include "panic.h"
 #include "cpu.h"
+#include "syscall.h"
 
 struct idt_gate {
     uint16_t offset_lo, selector;
@@ -105,6 +106,12 @@ static void __attribute__((noreturn)) report(const struct trap_frame *f, uint64_
     peek("rdx", f->rdx);
     peek("rsi", f->rsi);
     peek("rsp", f->rsp);
+    if (f->rip >= go_text_lo && f->rip < go_text_hi) {      /* PIT-07: no SIGSEGV to turn into a Go panic */
+        kprintf("[trap] fault in the Go kernel (%s, address %016llx): a nil or bad pointer in Go code\n",
+                trap_name(f->vector), (unsigned long long)cr2);
+        kprintf("[trap] find the line with: go tool addr2line build/kernel.elf <<< %llx\n",
+                (unsigned long long)f->rip);
+    }
     panic("unhandled %s (vector %llu)", trap_name(f->vector), (unsigned long long)f->vector);
 }
 

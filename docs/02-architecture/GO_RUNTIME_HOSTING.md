@@ -79,7 +79,7 @@ The nucleus, acting like `execve`:
 | PIT-04 | Go uses FS for TLS | nucleus uses only GS (per-CPU); rejects `ARCH_SET_GS` |
 | PIT-05 | Eager backing of `PROT_NONE` exhausts RAM | reserve/commit split in the VM |
 | PIT-06 | Async preemption sends `SIGURG` via `tgkill` | `GODEBUG=asyncpreemptoff=1`; cooperative preemption still works |
-| PIT-07 | Nil deref in Go becomes a page fault, not a panic | W7 slice: fault handler prints a Go-friendly dump; later, synthesize SIGSEGV delivery |
+| PIT-07 | Nil deref in Go becomes a page fault, not a panic | done in W7-S06: a fault with RIP in Go text says so and prints the `go tool addr2line` command (REG-0007); later, synthesize SIGSEGV delivery |
 | PIT-08 | Go allocation failure is fatal | size the Go heap budget from E820; keep a reserve; set `GOMEMLIMIT` via env |
 | PIT-09 | Runtime internals change between Go versions | pin the toolchain; re-run the census on every upgrade (regression test) |
 | PIT-10 | Red zone: C code interrupted in ring 0 | `-mno-red-zone` for all nucleus C |

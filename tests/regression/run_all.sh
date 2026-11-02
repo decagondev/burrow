@@ -76,6 +76,19 @@ with_ktest() { # with_ktest <test-name> <img>
 }
 # A ud2 with no fixup must print the trap report and fail, not hang or reboot.
 unhandled_ud()     { with_ktest trap_unhandled_ud "$1"; }
+# Rebuild the image with the Go kernel and a "kargs" payload (kernel/cmd/kernel/kargs.go).
+with_kargs() { # with_kargs <words> <img>
+  local b; b="$(dirname "$IMG")"
+  [ -f "$b/kernel.elf" ] || { echo "  (no $b/kernel.elf: make go-smoke first)"; return 1; }
+  echo "$1" > "$WORK/kargs-${1%%=*}.txt"
+  "$b/mkimage" -o "$2" -stage1 "$b/stage1.bin" -stage2 "$b/stage2.bin" -payload loader="$b/loader.bin" \
+    -payload nucleus="$b/nucleus.disk.elf" -payload kernel="$b/kernel.elf" \
+    -payload kargs="$WORK/kargs-${1%%=*}.txt" >/dev/null
+}
+# A Go panic prints itself and every goroutine, then exit_group fails the run.
+go_panic()         { with_kargs panic=boot "$1"; }
+# PIT-07: a nil write in Go is a #PF in Go text; the report must say so.
+go_nil_fault()     { with_kargs fault=nil "$1"; }
 
 echo "[regression]"
 case_run REG-0001-loader-crc   "[stage2] FAIL K"            35  corrupt_loader
@@ -83,5 +96,7 @@ case_run REG-0002-manifest     "[stage2] FAIL F"            35  corrupt_manifest
 case_run REG-0003-stage2-magic "[stage1] FAIL M"            35  corrupt_stage2
 case_run REG-0004-nucleus-crc  "PANIC: nucleus CRC"         35  corrupt_nucleus
 case_run REG-0005-unhandled-ud "[trap] #UD at"              35  unhandled_ud
+case_run REG-0006-go-panic     "panic: kargs asked for a panic" 35  go_panic
+case_run REG-0007-go-nil-fault "[trap] fault in the Go kernel"  35  go_nil_fault
 echo "$pass passed, $failn failed"
 [ "$failn" -eq 0 ]

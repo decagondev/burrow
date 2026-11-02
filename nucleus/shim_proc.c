@@ -113,6 +113,9 @@ long sys_getrandom(struct syscall_frame *f) {
     return (long)n;
 }
 
+/* The runtime exits after a Go panic or fatal error (status 2), once it has
+ * written the message and every goroutine's stack to fd 2: fail the run now. */
 long sys_exit_group(struct syscall_frame *f) {
-    panic("the Go kernel called exit_group(%lld): the kernel must never exit", (long long)SYSARG0(f));
+    panic("the Go kernel exited with status %lld (a Go panic or fatal error: see above)",
+          (long long)SYSARG0(f));
 }

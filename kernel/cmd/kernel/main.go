@@ -37,6 +37,7 @@ func main() {
 	com1.Init()
 	log := klog.New(com1, klog.Info)
 	log.Infof("hello from Go %s", "(Burrow kernel)")
+	testFaults()
 
 	done := make(chan int)
 	go func() { done <- 42 }()
