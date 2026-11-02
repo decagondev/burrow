@@ -17,7 +17,7 @@ Design (refines the provisional ARCHITECTURE §7.3 and ADR-0004):
 ### [x] W9-S03 Processes in Go: address space policy, ELF loader, initial stack (E08.F01, E08.F02)
 `kernel/proc`: a process's pages (VMAs over frames from `nu_page_alloc`), copyin/copyout through the physmap, `debug/elf` loading of static `ET_EXEC` (static-PIE later), the Linux entry stack (argv, envp, auxv; the Go twin of `nucleus/go_stack.c`). Host-tested against a fake nucleus (memory-backed frames).
 
-### [ ] W9-S04 Syscall dispatcher and the first syscalls (E08.F04, E08.F05, E08.F06)
+### [x] W9-S04 Syscall dispatcher and the first syscalls (E08.F04, E08.F05, E08.F06)
 Table-driven, unknown numbers logged once and `-ENOSYS`: `write writev read open/openat close lseek fstat brk mmap(anon) munmap exit exit_group getpid gettid set_tid_address arch_prctl ioctl(TCGETS/TIOCGWINSZ: -ENOTTY) rt_sigprocmask(stub) clock_gettime nanosleep`. `docs/02-architecture/POSIX_COVERAGE.md`.
 
 ### [ ] W9-S05 First programs: asm hello and crash (E08.F03)
