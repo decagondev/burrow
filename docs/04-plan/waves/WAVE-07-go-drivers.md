@@ -13,7 +13,7 @@ Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscal
 ### [x] W7-S03 Driver registry + PCI (E06.F02, E06.F07)
 `kernel/driver`: `Driver{Name, Probe, Start}`, `Register` from `init()`, `StartAll(env)` in name order; `Env` carries the HAL (ports, IRQ lines), a logger and the console input channel. `hal.PortIO32` (`In32/Out32`) for configuration mechanism #1 (`0xCF8/0xCFC`). `drivers/pci`: pure enumeration over a `ConfigSpace` interface (host-tested with a fake), printing `[pci] bb:dd.f vvvv:dddd class`.
 
-### [ ] W7-S04 PS/2 keyboard (E06.F03)
+### [x] W7-S04 PS/2 keyboard (E06.F03)
 `drivers/ps2`: 8042 bring-up (self-test, config byte with IRQ 1 and translation on, enable scanning) and an IRQ 1 goroutine. Scancode set 1 decoder is pure and host-tested: shift, caps lock, ctrl (control codes), `E0` prefixes, releases; arrows become ANSI escapes.
 
 ### [ ] W7-S05 Console (E06.F04)

@@ -22,6 +22,7 @@ import (
 	"burrow/kernel/arch/amd64"
 	"burrow/kernel/driver"
 	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"

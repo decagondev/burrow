@@ -14,4 +14,5 @@ BURROW:GO:OK goroutine says 42
 BURROW:GO:SELFTEST:OK
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
-[driver] INFO: started: [pci]
+[ps2] INFO: keyboard ready on irq 1
+[driver] INFO: started: [pci ps2]
