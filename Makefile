@@ -128,11 +128,19 @@ MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUIL
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
 
-# The same boot chain plus the Go kernel. Kept separate while Wave 6 brings
-# the runtime up, so the nucleus images stay fast (1.5 MiB over ATA PIO
-# costs ~1.5 s per boot) and green.
-$(BUILD)/go.img: $(BOOT_PARTS) $(BUILD)/kernel.elf
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf >/dev/null
+# The initial file tree (W8): initrd/ packed as ustar, reproducibly (sorted
+# names, owner 0, mtime 0, modes 644/755 whatever the checkout says),
+# mounted at / by the Go kernel (kernel/fs/tarfs).
+INITRD_FILES := $(shell find initrd -type f)
+$(BUILD)/initrd.tar: $(INITRD_FILES) | $(BUILD)
+	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+		--mode=a-rwx,u+rwX,go+rX -C initrd -cf $@ .
+
+# The same boot chain plus the Go kernel and the initrd. Separate from
+# disk.img so the nucleus images stay fast (1.7 MiB over ATA PIO costs
+# ~1.5 s per boot).
+$(BUILD)/go.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar >/dev/null
 
 # One image per ktest suite: the same boot chain plus a "ktest" payload that
 # names the in-kernel tests to run (nucleus/ktest.h).

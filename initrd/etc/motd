@@ -1,0 +1,7 @@
+
+   Welcome to Burrow.
+
+   assembly boot -> C loader -> C nucleus -> Go kernel
+   This file came from the initrd (initrd/etc/motd in the repo), read
+   through tarfs and the VFS. Try: ls /, cat /etc/hostname, help.
+

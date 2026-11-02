@@ -27,6 +27,7 @@ import (
 	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
 	_ "burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
+	"burrow/kernel/fs/memfs"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/selftest"
@@ -37,6 +38,7 @@ type kernel struct {
 	boot    time.Time
 	log     *klog.Logger
 	modules []bootinfo.Module
+	initrd  *memfs.FS
 }
 
 func main() {
@@ -53,6 +55,7 @@ func main() {
 		amd64.DebugExit(0x11)
 	}
 	k.modules = mods
+	k.initrd = mountInitrd(mods, log.With("initrd"))
 
 	done := make(chan int)
 	go func() { done <- 42 }()

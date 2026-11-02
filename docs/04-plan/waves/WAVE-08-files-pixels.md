@@ -7,7 +7,7 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 ### [x] W8-S01 Nucleus calls for the Go kernel's boot data and MMIO (E07.F01, E07.F04)
 `nu_bootinfo` (0x1002, already reserved) copies boot_info v2; `nu_mmio_map` (0x1005, new) maps device memory and returns its virtual address. Go: `arch/amd64` wrappers and `PhysBytes`; `kernel/bootinfo` parses boot_info and the module table (pure, host-tested against bytes laid out like the C structs). Console: `modules`.
 
-### [ ] W8-S02 initrd + tarfs (E07.F01)
+### [x] W8-S02 initrd + tarfs (E07.F01)
 `initrd/` in the repo is packed by the Makefile into `build/initrd.tar` (ustar) and shipped as the `initrd` payload on `go.img`. `kernel/fs/tarfs`: read-only `fs.FS` over the archive bytes (stdlib `archive/tar`), checked with `fstest.TestFS`.
 
 ### [ ] W8-S03 VFS + ramfs (E07.F02)
