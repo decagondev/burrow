@@ -1,0 +1,2 @@
+# Suite "irq": interrupt controllers, delivery with IF=1, timers (W5-S09).
+lapic_self_ipi

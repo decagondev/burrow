@@ -15,6 +15,7 @@ static const struct ktest g_tests[] = {
     { "vmm_map_write_unmap", kt_vmm_map_write_unmap },
     { "vmm_protect_readonly", kt_vmm_protect_readonly },
     { "vmm_kernel_wx",      kt_vmm_kernel_wx },
+    { "lapic_self_ipi",     kt_lapic_self_ipi },
 };
 
 static const char *g_current;

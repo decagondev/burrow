@@ -1,0 +1,5 @@
+# Ordered markers for ktest suite "irq" (tests/ktest/irq.txt). Append-only.
+[nucleus] lapic ok
+[ktest] running suite
+[ktest] lapic_self_ipi ok
+BURROW:KTEST:OK

@@ -15,7 +15,7 @@ Test: `ktest` boot flag triggers `ud2` → expected `[trap] #UD at` marker (regr
 ### [x] W5-S04 `ktest` runner (E00.F02.S04)
 A manifest entry `ktest` (a tiny text file) selects which in-kernel tests run; each prints `[ktest] name ok`. Smoke expect file per suite.
 
-### [ ] W5-S05 PIC remap + mask all, LAPIC enable (E04.F04)
+### [x] W5-S05 PIC remap + mask all, LAPIC enable (E04.F04)
 Remap 8259 to 0x20-0x2F then mask (we use the LAPIC). Spurious vector 0xFF.
 
 ### [x] W5-S06 PMM (E04.F02)
