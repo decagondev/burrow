@@ -145,6 +145,8 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-21 | W4 | Identity map removed while still executing low code | remove only after jumping to higher half |
 | PIT-22 | W5 | Context switch forgets FS base or TSS.RSP0 | `switch_to` checklist + ktest |
 | PIT-23 | W5 | Lost wake-up in futex (check and sleep not atomic) | hold the bucket lock across compare + enqueue |
+| PIT-28 | W7 | Spurious IRQ 7/15 from the 8259 (no ISR bit set) | read the ISR (OCW3) and drop it without EOI (IRQ 15: EOI the master only) |
+| PIT-29 | W7 | Lost interrupt: it fires before the driver waits | `pending` flag per line, set by the ISR, consumed by `irq_wait` |
 | PIT-24 | W9 | SYSRET with non-canonical RCX (#GP in ring 0) | canonical check, IRETQ fallback (in gate snippet) |
 | PIT-25 | W9 | Kernel follows a user pointer into kernel memory | copyin/copyout validate ranges against user VMAs |
 | PIT-26 | W10 | fork copies the Go kernel mappings as user-visible | kernel ranges always supervisor-only; ktest |

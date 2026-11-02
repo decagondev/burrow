@@ -33,6 +33,10 @@ int kt_vm_reserve_hint(void);
 /* ktest_irq.c */
 int kt_lapic_self_ipi(void);
 int kt_time_tick_rate(void);
+int kt_irq_wait_pit(void);
+int kt_irq_pending_before_wait(void);
+int kt_irq_masked_until_ack(void);
+int kt_irq_syscall(void);
 
 /* ktest_sched.c */
 int kt_sched_ping_pong(void);

@@ -17,6 +17,7 @@
 #define SVR_ENABLE        (1u << 8)
 #define ICR_SELF          (1u << 18)   /* destination shorthand 01 = self */
 #define ICR_PENDING       (1u << 12)
+#define LVT_EXTINT        (7u << 8)    /* delivery mode ExtINT: the 8259 supplies the vector */
 
 static volatile uint32_t *g_lapic;
 
@@ -33,6 +34,26 @@ void pic_disable(void) {
     outb(PIC2_DATA, 0xFF);
 }
 
+/* IMR read-modify-write: callers hold IRQs off (irq.c's lock or an ISR). */
+void pic_set_masked(unsigned line, int masked) {
+    uint16_t port = line < 8 ? PIC1_DATA : PIC2_DATA;
+    uint8_t bit = (uint8_t)(1u << (line & 7)), m = inb(port);
+    outb(port, masked ? (uint8_t)(m | bit) : (uint8_t)(m & ~bit));
+}
+
+/* Non-specific EOI; a slave line needs one on both chips. */
+void pic_eoi(unsigned line) {
+    if (line >= 8) outb(PIC2_CMD, 0x20);
+    outb(PIC1_CMD, 0x20);
+}
+
+/* OCW3 "read ISR". A spurious IRQ 7/15 arrives with its ISR bit clear. */
+int pic_in_service(unsigned line) {
+    uint16_t port = line < 8 ? PIC1_CMD : PIC2_CMD;
+    outb(port, 0x0B);
+    return (inb(port) >> (line & 7)) & 1;
+}
+
 uint32_t lapic_read(uint32_t reg)          { return g_lapic[reg / 4]; }
 void     lapic_write(uint32_t reg, uint32_t v) { g_lapic[reg / 4] = v; }
 void     lapic_eoi(void)                   { lapic_write(LAPIC_EOI, 0); }
@@ -46,6 +67,7 @@ void lapic_init(void) {
     g_lapic = vm_map_mmio(base & ~0xFFFull & 0x000FFFFFFFFFF000ull, 0x1000);
     lapic_write(LAPIC_TPR, 0);                              /* accept every priority */
     lapic_write(LAPIC_SVR, SVR_ENABLE | VEC_SPURIOUS);
+    lapic_write(LAPIC_LVT_LINT0, LVT_EXTINT);              /* virtual wire: the 8259 drives LINT0 */
     kprintf("[nucleus] lapic ok (id=%u, version=%x, base=%llx), pic masked\n",
             lapic_read(LAPIC_ID) >> 24, lapic_read(LAPIC_VERSION) & 0xFF,
             (unsigned long long)(base & ~0xFFFull));

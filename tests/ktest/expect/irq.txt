@@ -4,4 +4,8 @@
 [ktest] running suite
 [ktest] lapic_self_ipi ok
 [ktest] time_tick_rate ok
+[ktest] irq_wait_pit ok
+[ktest] irq_pending_before_wait ok
+[ktest] irq_masked_until_ack ok
+[ktest] irq_syscall ok
 BURROW:KTEST:OK

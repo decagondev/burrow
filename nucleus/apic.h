@@ -1,6 +1,9 @@
 /* apic.h - interrupt controllers. The legacy 8259 pair is remapped to
- * 0x20-0x2F (so a stray IRQ cannot look like an exception) and fully masked;
- * all interrupts come from the local APIC. Spurious vector 0xFF (no EOI). */
+ * 0x20-0x2F (so a stray IRQ cannot look like an exception) and starts fully
+ * masked; irq.c unmasks single ISA lines for drivers (W7). It reaches the CPU
+ * through LAPIC LINT0 in ExtINT mode ("virtual wire"), so ISA IRQs take their
+ * EOI at the 8259, never at the LAPIC. Local APIC: timer, self-IPIs,
+ * spurious vector 0xFF (no EOI). */
 #ifndef NUCLEUS_APIC_H
 #define NUCLEUS_APIC_H
 #include <stdint.h>
@@ -13,11 +16,15 @@
 #define LAPIC_ICR_LO    0x300
 #define LAPIC_ICR_HI    0x310
 #define LAPIC_LVT_TIMER 0x320
+#define LAPIC_LVT_LINT0 0x350
 #define LAPIC_TIMER_INIT  0x380
 #define LAPIC_TIMER_COUNT 0x390
 #define LAPIC_TIMER_DIV   0x3E0
 
 void     pic_disable(void);
+void     pic_set_masked(unsigned line, int masked);   /* call with IRQs off */
+void     pic_eoi(unsigned line);
+int      pic_in_service(unsigned line);
 void     lapic_init(void);              /* after vmm_init: maps the MMIO page */
 uint32_t lapic_read(uint32_t reg);
 void     lapic_write(uint32_t reg, uint32_t v);

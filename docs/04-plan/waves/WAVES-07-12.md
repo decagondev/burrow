@@ -2,7 +2,7 @@
 
 Sliced when the previous wave closes. Story IDs refer to [BACKLOG.md](../BACKLOG.md).
 
-## W7 Go Drives Hardware (M7)
+## W7 Go Drives Hardware (M7) — sliced: [WAVE-07](WAVE-07-go-drivers.md)
 Stories: E06.F01 HAL + nucleus wrappers · E06.F02 driver registry · E06.F03 IRQ goroutines + PS/2 · E06.F04 console line editor · E06.F05 panic path · E06.F06 `hostsim` · E06.F07 PCI.
 Demo: typing echoes via the Go keyboard driver; `lspci`-style listing on boot.
 Likely slices: nucleus `nu_irq_wait/ack` + ktest; Go `IRQ` (from snippets); PS/2 init + scancode set 1 decoder (pure, host-tested); console; `hostsim` build with fake ports and a channel-driven IRQ.

@@ -1,3 +1,8 @@
 # Suite "irq": interrupt controllers, delivery with IF=1, timers (W5-S09).
 lapic_self_ipi
 time_tick_rate
+# W7-S01: ISA lines as wake-ups
+irq_wait_pit
+irq_pending_before_wait
+irq_masked_until_ack
+irq_syscall

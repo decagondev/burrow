@@ -4,8 +4,8 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 
 | Nr | Name | Args | Returns | Wave |
 |---|---|---|---|---|
-| 0x1000 | `nu_irq_wait` | irq | 0 when the IRQ fired | W7 |
-| 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line) | W7 |
+| 0x1000 | `nu_irq_wait` | irq (ISA line 0-15, not 2) | 0 when the IRQ fired (at once if it fired while nobody waited); `-EINVAL`, `-EBUSY` if another thread waits | W7 (done: `nucleus/irq.c`) |
+| 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line; the ISR masked it) | W7 (done) |
 | 0x1002 | `nu_bootinfo` | buf, len | bytes copied of boot_info v2 | W6 |
 | 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 (done: `amd64.PhysmapBase`) |
 | 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; returns 0 where there is no debug-exit device | W6 (done: `amd64.DebugExit`) |

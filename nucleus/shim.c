@@ -14,6 +14,7 @@
 #include "cpu.h"
 #include "kprintf.h"
 #include "panic.h"
+#include "irq.h"
 
 #define MSR_STAR   0xC0000081u
 #define MSR_LSTAR  0xC0000082u
@@ -70,7 +71,12 @@ static long nu_debug_exit(struct syscall_frame *f) {
     qemu_exit((uint8_t)SYSARG0(f));    /* ends a QEMU test run; a no-op without the device */
     return 0;
 }
+/* Blocks this thread (and only it) until the ISA line fires: ADR-0005. */
+static long nu_irq_wait(struct syscall_frame *f) { return irq_wait(SYSARG0(f)); }
+static long nu_irq_ack(struct syscall_frame *f)  { return irq_ack(SYSARG0(f)); }
 static const sys_fn g_nu_table[] = {
+    [NU_irq_wait - NU_BASE] = nu_irq_wait,
+    [NU_irq_ack - NU_BASE] = nu_irq_ack,
     [NU_physmap_base - NU_BASE] = nu_physmap_base,
     [NU_debug_exit - NU_BASE] = nu_debug_exit,
 };

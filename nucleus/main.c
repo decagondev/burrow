@@ -4,7 +4,7 @@
  * Runs at 0xFFFFFFFF80100000 on page tables the loader built. Each init step
  * lives in its own module and prints one marker (tests/smoke/expect/). If a
  * "ktest" boot module is present, the in-kernel tests run instead of the
- * normal finish. Wave 6 adds "load and start the Go kernel" as the last step.
+ * normal finish; then the Go kernel starts (W6) if the disk has one.
  *
  * Must never return.
  */
@@ -25,6 +25,7 @@
 #include "fpu.h"
 #include "sched.h"
 #include "syscall.h"
+#include "irq.h"
 #include "go_load.h"
 #include "ktest.h"
 
@@ -66,6 +67,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     fpu_init();
     sched_init();
     syscall_init();
+    irq_init();
 
     const struct boot_module *kt = boot_module_find("ktest");
     if (kt) {
