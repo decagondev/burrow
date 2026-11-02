@@ -59,7 +59,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run debug test test-unit test-c test-go smoke ktest regress sizes docs-check clean
+.PHONY: all run run-go debug test test-unit test-c test-go smoke go-smoke ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -118,13 +118,18 @@ $(BUILD)/mkimage: $(wildcard tools/mkimage/*.go) | $(BUILD)
 
 # ---- disk image -------------------------------------------------------------
 BOOT_PARTS := $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
-	$(BUILD)/nucleus.disk.elf $(BUILD)/kernel.elf $(BUILD)/mkimage
+	$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
 MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
-	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf \
-	-payload kernel=$(BUILD)/kernel.elf
+	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
 
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
+
+# The same boot chain plus the Go kernel. Kept separate while Wave 6 brings
+# the runtime up, so the nucleus images stay fast (1.5 MiB over ATA PIO
+# costs ~1.5 s per boot) and green.
+$(BUILD)/go.img: $(BOOT_PARTS) $(BUILD)/kernel.elf
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf >/dev/null
 
 # One image per ktest suite: the same boot chain plus a "ktest" payload that
 # names the in-kernel tests to run (nucleus/ktest.h).
@@ -150,9 +155,9 @@ test-unit: test-c test-go
 # plus the pure modules of the loader and the nucleus.
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
-	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c \
+	loader/manifest.c loader/memmap.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
-	nucleus/pmm.c nucleus/regions.c
+	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
@@ -172,6 +177,14 @@ SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to
 
 smoke: $(BUILD)/disk.img
 	@for e in $(SMOKE_EXPECT); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done
+
+# Boot the Go kernel and check its markers (tests/smoke/expect/boot_to_go.txt).
+go-smoke: $(BUILD)/go.img
+	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30
+
+# Boot the Go image interactively (Ctrl-A X quits).
+run-go: $(BUILD)/go.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) -serial mon:stdio -display none
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done

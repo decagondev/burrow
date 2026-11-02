@@ -25,6 +25,7 @@
 #include "fpu.h"
 #include "sched.h"
 #include "syscall.h"
+#include "go_load.h"
 #include "ktest.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
@@ -73,6 +74,10 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     }
 
     kprintf("BURROW:NUCLEUS:OK\n");
-    qemu_exit(QEMU_EXIT_SUCCESS);
+    if (go_kernel_start() == 0) {
+        kprintf("[nucleus] starting the Go kernel\n");
+        thread_exit();                 /* "main" is done; Go threads take over */
+    }
+    qemu_exit(QEMU_EXIT_SUCCESS);      /* no Go kernel on this disk: nucleus-only boot */
     cpu_halt_forever();
 }

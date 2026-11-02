@@ -1,5 +1,6 @@
 /* sched.c - see sched.h. All scheduler state is touched with interrupts off. */
 #include "sched.h"
+#include "trap.h"
 #include "spinlock.h"
 #include "fpu.h"
 #include "percpu.h"
@@ -20,6 +21,7 @@
 
 extern void switch_to(struct thread *prev, struct thread *next);   /* switch.asm */
 extern void thread_start(void);
+extern void trap_resume(void);                                      /* trap.asm */
 extern char boot_stack[], boot_stack_top[];                         /* entry.asm */
 
 static struct thread g_threads[THREADS_MAX];
@@ -112,7 +114,8 @@ static int map_kstack(struct thread *t) {
     return 0;
 }
 
-struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
+/* A slot with a fresh kernel stack, claimed but not runnable yet. */
+static struct thread *thread_alloc(const char *name) {
     uint64_t f = irq_save();
     struct thread *t = alloc_slot();
     if (t) {                            /* claim the slot; not runnable yet, and   */
@@ -124,6 +127,27 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
         if (t) t->state = T_FREE;
         return 0;
     }
+    t->fs_base = 0;
+    t->timed_out = 0;
+    t->wait_next = 0;
+    t->name = name;
+    fpu_init_area(t->fx);
+    return t;
+}
+
+/* sp: the stack switch_to will pop from (6 registers, then a return address). */
+static struct thread *thread_publish(struct thread *t, uint64_t *sp) {
+    t->rsp = (uint64_t)(uintptr_t)sp;
+    uint64_t f = irq_save();
+    t->id = g_next_id++;
+    t->state = T_RUNNABLE;
+    irq_restore(f);
+    return t;
+}
+
+struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
+    struct thread *t = thread_alloc(name);
+    if (!t) return 0;
     /* Initial stack, read by switch_to's pops and ret (see switch.asm):
      * [top-8] 0  [top-16] thread_start  then r15 r14 r13=arg r12=fn rbx rbp */
     uint64_t *sp = (uint64_t *)(uintptr_t)t->kstack_top;
@@ -135,18 +159,22 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
     *--sp = (uint64_t)(uintptr_t)arg;   /* r13 */
     *--sp = 0;                          /* r14 */
     *--sp = 0;                          /* r15 */
-    t->rsp = (uint64_t)(uintptr_t)sp;
-    t->fs_base = 0;
-    t->wake_ns = 0;
-    t->timed_out = 0;
-    t->wait_next = 0;
-    t->name = name;
-    fpu_init_area(t->fx);
-    f = irq_save();
-    t->id = g_next_id++;
-    t->state = T_RUNNABLE;
-    irq_restore(f);
-    return t;
+    return thread_publish(t, sp);
+}
+
+struct thread *thread_create_from_frame(const char *name, const struct trap_frame *frame,
+                                        uint64_t fs_base) {
+    struct thread *t = thread_alloc(name);
+    if (!t) return 0;
+    /* [top - frame] the trap frame  [below] trap_resume  then 6 zero registers:
+     * switch_to pops, "returns" into trap_resume with RSP at the frame. */
+    struct trap_frame *tf = (struct trap_frame *)(uintptr_t)(t->kstack_top - sizeof *tf);
+    *tf = *frame;
+    uint64_t *sp = (uint64_t *)tf;
+    *--sp = (uint64_t)(uintptr_t)trap_resume;
+    for (int i = 0; i < 6; i++) *--sp = 0;
+    t->fs_base = fs_base;
+    return thread_publish(t, sp);
 }
 
 void sched_init(void) {

@@ -35,6 +35,11 @@ void sched_init(void);          /* the boot flow becomes thread 0 "main"; enable
 struct thread *thread_current(void);
 uint32_t thread_id(const struct thread *t);
 struct thread *thread_create(const char *name, void (*fn)(void *), void *arg);   /* 0 = no slot/memory */
+struct trap_frame;
+/* A thread whose first run restores *frame with IRETQ: every register, RIP,
+ * RSP and RFLAGS as given (Go threads: go_load.c, clone in shim.c). */
+struct thread *thread_create_from_frame(const char *name, const struct trap_frame *frame,
+                                        uint64_t fs_base);
 void thread_yield(void);
 void thread_sleep_ns(uint64_t ns);
 void thread_exit(void) __attribute__((noreturn));

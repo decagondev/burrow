@@ -15,7 +15,7 @@ Copy `snippets/nucleus/syscall_gate.asm`. MSRs: EFER.SCE, STAR (`kernel CS 0x08 
 ### [x] W6-S04 Shim skeleton + census-on-failure (E05.F03)
 Copy `syscall_shim.c` with only `write` and the unknown-logger. ktest: unknown nr prints `[shim] UNIMPLEMENTED syscall 999` once.
 
-### [ ] W6-S05 Map the Go ELF + initial stack (E05.F02)
+### [x] W6-S05 Map the Go ELF + initial stack (E05.F02)
 Map PT_LOAD supervisor pages; record text range; `build_initial_stack()`; create thread 1; enter. Expected first result: the census logger names the first syscall the runtime needs. That is success for this slice.
 
 ### [ ] W6-S06 arch_prctl, signals stubs, fcntl, openat, getrlimit, affinity (E05.F04)

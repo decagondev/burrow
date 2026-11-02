@@ -1,8 +1,8 @@
 /* elf64.h - minimal, defensive ELF64 reader. Pure logic: give it bytes,
  * it tells you what to load where. It never touches memory it was not given.
  * Used in Wave 4 to load the nucleus (via elf_load.h) and Wave 6 for Go. */
-#ifndef LOADER_ELF64_H
-#define LOADER_ELF64_H
+#ifndef COMMON_ELF64_H
+#define COMMON_ELF64_H
 #include <stdint.h>
 #include <stddef.h>
 

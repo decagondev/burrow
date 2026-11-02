@@ -72,7 +72,7 @@ with_ktest() { # with_ktest <test-name> <img>
   local b; b="$(dirname "$IMG")"
   echo "$1" > "$WORK/ktest-$1.txt"
   "$b/mkimage" -o "$2" -stage1 "$b/stage1.bin" -stage2 "$b/stage2.bin" -payload loader="$b/loader.bin" \
-    -payload nucleus="$b/nucleus.disk.elf" -payload kernel="$b/kernel.elf" -payload ktest="$WORK/ktest-$1.txt" >/dev/null
+    -payload nucleus="$b/nucleus.disk.elf" -payload ktest="$WORK/ktest-$1.txt" >/dev/null
 }
 # A ud2 with no fixup must print the trap report and fail, not hang or reboot.
 unhandled_ud()     { with_ktest trap_unhandled_ud "$1"; }

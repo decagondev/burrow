@@ -19,7 +19,7 @@ PERCPU_BOT   equ 8
 
 extern trap_dispatch
 extern g_percpu
-global trap_stub_table
+global trap_stub_table, trap_resume
 
 %macro SAVE_GPRS 0
     push rax
@@ -80,7 +80,8 @@ trap_common:
     mov rsp, rdx                         ; now on the thread's kernel stack
     mov rdi, rsp
     call trap_dispatch                   ; may switch threads and come back later
-    RESTORE_GPRS
+trap_resume:                             ; RSP -> struct trap_frame: restore it, iretq.
+    RESTORE_GPRS                         ; Also how a new Go thread starts (sched.c).
     add rsp, 16                          ; vector, error code
     iretq
 

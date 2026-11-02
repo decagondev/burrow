@@ -1,0 +1,5 @@
+# Ordered markers for booting the Go kernel (build/go.img, make go-smoke). Append-only.
+# Grows slice by slice in Wave 6 until BURROW:GO:OK.
+BURROW:NUCLEUS:OK
+[nucleus] go kernel mapped
+[nucleus] starting the Go kernel
