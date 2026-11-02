@@ -26,3 +26,10 @@ type IRQLine interface {
 	Wait() error // blocks the calling goroutine (its OS thread), not the kernel
 	Ack()
 }
+
+// PortIO32 is 32-bit port I/O, which PCI configuration mechanism #1 needs
+// (0xCF8/0xCFC). Separate from PortIO so 8-bit drivers do not have to fake it.
+type PortIO32 interface {
+	In32(port uint16) uint32
+	Out32(port uint16, v uint32)
+}

@@ -11,8 +11,8 @@
 // Every system call the Go runtime makes lands in the nucleus syscall shim
 // (see ADR-0003, docs/02-architecture/GO_RUNTIME_HOSTING.md).
 //
-// WAVE 6 target: this prints the banner below over COM1, then goroutines,
-// channels and the GC are exercised by the selftest package.
+// Boot: banner over COM1, the runtime self-tests (selftest), then every
+// registered driver (package driver; drivers register in init()).
 package main
 
 import (
@@ -20,7 +20,10 @@ import (
 	"time"
 
 	"burrow/kernel/arch/amd64"
+	"burrow/kernel/driver"
+	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
 	"burrow/kernel/drivers/uart"
+	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/selftest"
 )
@@ -44,6 +47,13 @@ func main() {
 		amd64.DebugExit(0x11)
 	}
 	fmt.Fprintln(com1, "BURROW:GO:SELFTEST:OK")
+
+	driver.StartAll(&driver.Env{
+		Ports:   amd64.Ports{},
+		Ports32: amd64.Ports{},
+		IRQ:     func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
+		Log:     log,
+	})
 	amd64.DebugExit(0x10) // ends a QEMU test run; returns everywhere else
 	for {
 		time.Sleep(time.Hour) // idle: the nucleus halts the CPU while every thread sleeps

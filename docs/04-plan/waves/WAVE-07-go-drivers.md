@@ -10,7 +10,7 @@ Interrupt routing in this wave: the ISA lines (0-15) come through the 8259 pair 
 ### [x] W7-S02 Go `IRQ` (E06.F01, E06.F03)
 Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscall.Syscall`, so the runtime hands the P to another thread while one waits). `haltest.FakeIRQ`: channel-driven, for host tests. On target: `[go-selftest] irq ok` from a check that programs PIT channel 0 from Go and waits on line 0.
 
-### [ ] W7-S03 Driver registry + PCI (E06.F02, E06.F07)
+### [x] W7-S03 Driver registry + PCI (E06.F02, E06.F07)
 `kernel/driver`: `Driver{Name, Probe, Start}`, `Register` from `init()`, `StartAll(env)` in name order; `Env` carries the HAL (ports, IRQ lines), a logger and the console input channel. `hal.PortIO32` (`In32/Out32`) for configuration mechanism #1 (`0xCF8/0xCFC`). `drivers/pci`: pure enumeration over a `ConfigSpace` interface (host-tested with a fake), printing `[pci] bb:dd.f vvvv:dddd class`.
 
 ### [ ] W7-S04 PS/2 keyboard (E06.F03)

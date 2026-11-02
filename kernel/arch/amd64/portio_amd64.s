@@ -16,3 +16,17 @@ TEXT ·outb(SB), NOSPLIT, $0-3
 	MOVB v+2(FP), AX
 	OUTB
 	RET
+
+// func inl(port uint16) uint32
+TEXT ·inl(SB), NOSPLIT, $0-12
+	MOVW port+0(FP), DX
+	INL
+	MOVL AX, ret+8(FP)
+	RET
+
+// func outl(port uint16, v uint32)
+TEXT ·outl(SB), NOSPLIT, $0-8
+	MOVW port+0(FP), DX
+	MOVL v+4(FP), AX
+	OUTL
+	RET
