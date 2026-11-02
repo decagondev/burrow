@@ -20,7 +20,7 @@ The test program: one goroutine sends on a channel, ~2000 x 64 KiB allocations w
 |---|---|---|
 | rt_sigaction | 114 | installs handlers; we accept and never deliver |
 | nanosleep | 88 | `usleep` in spin/backoff loops |
-| madvise | 80 | scavenger returns memory; no-op is fine |
+| madvise | 80 | scavenger returns memory. **Not** a no-op: `MADV_DONTNEED` must make pages read as zero, Go 1.27 relies on it (BUG-0009) |
 | epoll_pwait | 30 | netpoller = timer sleeping |
 | mmap | 27 | see below |
 | futex | 18 | all runtime locks / notes |

@@ -50,4 +50,5 @@ int kt_futex_timeout_and_eagain(void);
 int kt_syscall_getpid(void);
 int kt_syscall_write(void);
 int kt_shim_unknown_once(void);
+int kt_madvise_dontneed_zeroes(void);
 #endif

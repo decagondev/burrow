@@ -35,6 +35,25 @@ flowchart LR
 
 ## Closed
 
+### BUG-0009: A no-op madvise handed Go stale memory it believed was zeroed
+- Found: 2026-11-02, W6-S11, the new GC-stress selftest: about 1 boot in 8 faulted writing into Go's rodata.
+- Severity: major (silent heap corruption in the Go kernel).
+- Symptom: `[trap] #PF at rip=...memmove err=3 cr2=7e00000af0c2` while formatting a string after the GC stress. A fresh `fmt.pp` already contained `{ptr "adx", 3, &X86.HasADX}`, old bytes from `internal/cpu`, so its buffer pointed into string data. Identical address in every failure.
+- Root cause: Go 1.27 `mheap.initSpan` skips clearing fully scavenged spans because "the kernel guarantees they will be zero-filled on next use" after `MADV_DONTNEED` (default `madvdontneed=1`). The shim treated `madvise` as advice (no-op, as the 1.22 census suggested), so scavenged pages kept their old contents.
+- How it was found: the trap report now prints memory behind RDX/RSI/RSP (`peek` in `trap.c`); the frame allocator got an allocated-bitmap that panics on double free or double hand-out, which ruled out physical aliasing; that left the one place the nucleus deliberately kept contents.
+- Fix: `madvise(MADV_DONTNEED)` zeroes the range and keeps it mapped (`vm_discard`, `nucleus/shim_mm.c`); other advice stays a hint.
+- Mitigation: the census and hosting docs now say which advice has semantics. The frame bitmap and the register peeks stay in.
+- Regression: ktest `madvise_dontneed_zeroes` (fails with the old no-op); the GC stress in `make go-smoke` (0 failures in 50 boots after, 4-6 in 40 before).
+- Lesson: "advice" in Linux man pages can be a guarantee that a runtime builds on; read the consumer (`mheap.go`), not only the syscall's name.
+
+### BUG-0008: VM region operations were check-then-act without a lock
+- Found: 2026-11-02, W6-S11, while hunting BUG-0009 (no failure was traced to it).
+- Severity: latent major: the Go runtime's Ms call mmap/munmap concurrently and each syscall runs with interrupts on.
+- Symptom: none observed. Path: `vm_commit` asked `regions_covers` and then mapped page by page with no lock, while another thread's `vm_reserve` could shift the region array; a wrong "covered" could map pages outside any reservation, which a later reservation would then reuse with old contents.
+- Fix: every `vm_region.c` operation holds a per-address-space sleeping mutex (`nucleus/mutex.h`, futex-based); `mmap` is one atomic `vm_map_anon`; a commit into a fresh reservation panics if it finds a page already mapped.
+- Regression: none possible to trigger reliably; the "already mapped in a fresh reservation" panic is the tripwire.
+- Lesson: on a preemptive kernel every multi-step operation on shared state needs a lock, even on one CPU.
+
 ### BUG-0007: A thread woken before it switched out kept running as T_RUNNABLE
 - Found: 2026-11-02, W5-S11, reading `schedule()` while designing `futex_wait` (before any test hit it).
 - Severity: latent (would have let pick_next hand the running thread to itself again and confused join/wake logic).

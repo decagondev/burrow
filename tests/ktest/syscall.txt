@@ -2,3 +2,4 @@
 syscall_getpid
 syscall_write
 shim_unknown_once
+madvise_dontneed_zeroes

@@ -54,7 +54,7 @@ The nucleus, acting like `execve`:
 | `arch_prctl(ARCH_SET_FS)` | set FS base for this thread (saved on context switch) | `g` pointer lives at `-8(FS)` |
 | `mmap` anon, `PROT_NONE` | **reserve only**, no RAM | runtime reserves >1 GiB at start |
 | `mmap` `MAP_FIXED` RW | commit zeroed pages inside a reservation | heap growth |
-| `munmap`, `madvise` | release / no-op | scavenger |
+| `munmap`, `madvise` | release; `MADV_DONTNEED` zeroes the range (it stays mapped), other advice is ignored | scavenger. Go 1.27 hands out scavenged spans without clearing them, trusting the zero-fill (BUG-0009) |
 | `clone(CLONE_VM\|CLONE_THREAD\|CLONE_SETTLS..)` | new thread, same AS, child `RAX=0`, `RSP=arg1`, `FS=tls` | runtime spawns sysmon and Ms |
 | `futex WAIT/WAKE` (private) | address-keyed wait queues, optional timeout | all runtime locks/notes |
 | `nanosleep`, `sched_yield` | sleep / yield | `usleep`, `osyield` |

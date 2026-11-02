@@ -10,11 +10,25 @@
 
 #define LOW_MEMORY_END 0x100000ull   /* firmware, boot_info, E820, manifest, loader */
 
+#define TRACKED_FRAMES (1u << 20)    /* 4 GiB of RAM; frames above are not checked */
+
 static struct pmm g_pmm;
 static struct pmm_range g_reserved[BOOT_MODULES_MAX + 1];
 static uint32_t g_nreserved;
+/* 1 = the frame is on the free list. Catches a double free or a frame handed
+ * out twice the moment it happens, instead of as silent aliasing later. */
+static uint8_t g_on_free_list[TRACKED_FRAMES / 8];
 
 static void *physmap_ptr(void *env, uint64_t pa) { (void)env; return phys_to_virt(pa); }
+
+/* Flips the frame's bit from `from` to !from, or panics with `what`. */
+static void track(uint64_t pa, int from, const char *what) {
+    uint64_t n = pa / PMM_FRAME;
+    if (n >= TRACKED_FRAMES) return;
+    uint8_t bit = (uint8_t)(1u << (n % 8));
+    if (!!(g_on_free_list[n / 8] & bit) != from) panic("frames: %s %llx", what, (unsigned long long)pa);
+    g_on_free_list[n / 8] ^= bit;
+}
 
 void frames_init(void) {
     g_reserved[g_nreserved++] = (struct pmm_range){ 0, LOW_MEMORY_END };
@@ -30,6 +44,7 @@ void frames_init(void) {
     pmm_init(&g_pmm, physmap_ptr, 0);
     pmm_add_e820(&g_pmm, map, n, g_reserved, g_nreserved);
     if (g_pmm.free_frames == 0) panic("no free physical memory");
+    for (uint64_t pa = g_pmm.free_head; pa; pa = *(uint64_t *)phys_to_virt(pa)) track(pa, 0, "listed twice");
     kprintf("[nucleus] pmm ok (%llu MiB free in %llu frames)\n",
             (unsigned long long)(g_pmm.free_frames * PMM_FRAME >> 20),
             (unsigned long long)g_pmm.free_frames);
@@ -38,6 +53,7 @@ void frames_init(void) {
 uint64_t frame_alloc(void) {
     uint64_t f = irq_save();
     uint64_t pa = pmm_alloc(&g_pmm);
+    if (pa) track(pa, 1, "handed out but not free");
     irq_restore(f);
     return pa;
 }
@@ -52,6 +68,7 @@ void frame_free(uint64_t pa) {
     if (pa & (PMM_FRAME - 1)) panic("frame_free: unaligned %llx", (unsigned long long)pa);
     if (frame_is_reserved(pa)) panic("frame_free: %llx is reserved", (unsigned long long)pa);
     uint64_t f = irq_save();
+    track(pa, 0, "double free of");
     pmm_free(&g_pmm, pa);
     irq_restore(f);
 }

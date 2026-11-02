@@ -30,6 +30,7 @@ static const struct ktest g_tests[] = {
     { "syscall_getpid",     kt_syscall_getpid },
     { "syscall_write",      kt_syscall_write },
     { "shim_unknown_once",  kt_shim_unknown_once },
+    { "madvise_dontneed_zeroes", kt_madvise_dontneed_zeroes },
 };
 
 static const char *g_current;

@@ -21,7 +21,6 @@
 
 long sys_getpid(struct syscall_frame *f) { (void)f; return 1; }
 long sys_gettid(struct syscall_frame *f) { (void)f; return thread_id(thread_current()); }
-long sys_madvise(struct syscall_frame *f) { (void)f; return 0; }   /* advice only: keep the pages */
 
 /* fds 0-2 are the console (Go >= 1.22 checks them at start-up). */
 long sys_write(struct syscall_frame *f) {

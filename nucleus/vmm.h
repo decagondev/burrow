@@ -7,10 +7,12 @@
 #include <stdint.h>
 #include "paging.h"
 #include "regions.h"
+#include "mutex.h"
 
 struct addr_space {
     struct pt_ctx pt;          /* pt.root = PML4 physical address = CR3 value */
     struct regions regions;    /* reserved lower-half ranges (vm_region.h)    */
+    struct kmutex lock;        /* serialises vm_region.c operations           */
 };
 
 /* Adopts the loader's tables as the kernel address space, drops the

@@ -6,4 +6,5 @@
 [ktest] syscall_write ok
 [shim] UNIMPLEMENTED syscall 999
 [ktest] shim_unknown_once ok
+[ktest] madvise_dontneed_zeroes ok
 BURROW:KTEST:OK

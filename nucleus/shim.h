@@ -41,11 +41,11 @@ long sys_arch_prctl(struct syscall_frame *f);
 long sys_clock_gettime(struct syscall_frame *f);
 long sys_getrandom(struct syscall_frame *f);
 long sys_exit_group(struct syscall_frame *f);
-long sys_madvise(struct syscall_frame *f);
 
 /* shim_mm.c: anonymous memory on reserve/commit */
 long sys_mmap(struct syscall_frame *f);
 long sys_munmap(struct syscall_frame *f);
+long sys_madvise(struct syscall_frame *f);
 
 /* shim_thread.c: threads, sleep, futex */
 long sys_clone(struct syscall_frame *f);

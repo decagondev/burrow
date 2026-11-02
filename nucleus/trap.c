@@ -73,6 +73,18 @@ static int try_fixup(struct trap_frame *f, uint64_t cr2) {
     return 0;
 }
 
+/* Four qwords at a register's address, if readable (probe_read64 cannot fault
+ * the report itself). Shows what a pointer register was pointing at. */
+static void peek(const char *reg, uint64_t addr) {
+    uint64_t v[4];
+    addr &= ~7ull;
+    for (int i = 0; i < 4; i++)
+        if (probe_read64(addr + 8 * (uint64_t)i, &v[i]) != 0) return;
+    kprintf("  [%s] %016llx: %016llx %016llx %016llx %016llx\n", reg, (unsigned long long)addr,
+            (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2],
+            (unsigned long long)v[3]);
+}
+
 static void __attribute__((noreturn)) report(const struct trap_frame *f, uint64_t cr2) {
     kprintf("[trap] %s at rip=%016llx err=%llx cr2=%016llx\n", trap_name(f->vector),
             (unsigned long long)f->rip, (unsigned long long)f->error, (unsigned long long)cr2);
@@ -90,6 +102,9 @@ static void __attribute__((noreturn)) report(const struct trap_frame *f, uint64_
             (unsigned long long)f->r14, (unsigned long long)f->r15);
     kprintf("  cs=%llx ss=%llx rflags=%llx\n", (unsigned long long)f->cs,
             (unsigned long long)f->ss, (unsigned long long)f->rflags);
+    peek("rdx", f->rdx);
+    peek("rsi", f->rsi);
+    peek("rsp", f->rsp);
     panic("unhandled %s (vector %llu)", trap_name(f->vector), (unsigned long long)f->vector);
 }
 
