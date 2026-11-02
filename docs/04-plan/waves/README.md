@@ -11,8 +11,8 @@
 | W6 | Go says hello | M6 | done | [WAVE-06](WAVE-06-go-runtime.md) |
 | W7 | Go drives hardware | M7 | done | [WAVE-07](WAVE-07-go-drivers.md) |
 | W8 | Files and pixels | M8 | done | [WAVE-08](WAVE-08-files-pixels.md) |
-| W9 | First process | M9 | **in progress** | [WAVE-09](WAVE-09-first-process.md) |
-| W10-W12 | A Unix → DOOM → ports | M10-M12 | story-level | [WAVES-07-12](WAVES-07-12.md) |
+| W9 | First process | M9 | done | [WAVE-09](WAVE-09-first-process.md) |
+| W10-W12 | A Unix → DOOM → ports | M10-M12 | **next** (story-level) | [WAVES-07-12](WAVES-07-12.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 

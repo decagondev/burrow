@@ -14,6 +14,39 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-02 — Wave 9 complete: the first process (M9)
+
+**Did:** W9-S01..S06 and BUG-0012. Static Linux programs run in ring 3 and the Go kernel serves their system calls:
+
+```text
+burrow> run /bin/hello
+hello from ring 3
+burrow> run /bin/crash
+about to dereference NULL
+[proc] WARN: pid 2 (crash) killed: page fault at 0x0 (rip 0x401018)
+run: /bin/crash: killed (status 139)
+burrow> run /bin/musl-hello one two
+hello from musl in ring 3 (pid 4, 3 args: /bin/musl-hello one two)
+malloc works
+hostname from the initrd: burrow
+```
+
+Nucleus (mechanism): user address spaces (`uspace.c`, a PML4 per process sharing the kernel half), ring-3 threads and a request queue (`uthread.c`), the gate's user path (CR3 classification, kernel stack, SYSRETQ, PIT-24 as a fault), ring-3 exceptions as fault requests, kill that also stops a thread preempted in ring 3. Go (policy): `kernel/proc` with page-level memory over frames it owns, `debug/elf` loading, the Linux entry stack, a dispatcher that handles each request in its own goroutine, 25 Linux syscalls (`POSIX_COVERAGE.md`), faults mapped to the status a shell would show.
+
+**Numbers:** 7 ring-3 ktests on hand-assembled machine code; the `proc` package tested against a fake nucleus under the race detector; GC stress footprint now tracks the runtime's own numbers (47-64 MiB "from the OS") instead of all of RAM.
+
+**Surprises:**
+- ADR-0004's caller test (return RIP in Go text) is not sound once processes have their own page tables: a process could map code there. CR3 is: Go never runs on a process's CR3.
+- The IRETQ fallback for a non-canonical return RIP (PIT-24) faults in ring 0 just like SYSRET would; turning it into a fault request before returning is simpler and safe.
+- BUG-0012 had nothing to do with processes: since W6 the Go kernel's memory was backed eagerly and `MADV_DONTNEED` never freed a frame. Go maps sparse read-write metadata and counts on Linux's demand paging; the GC stress used all 123 MiB while Go counted 47. A software PTE bit for "zero-fill on demand" fixed both, and the same marker serves lazy commit and discard.
+- musl-hello needed nothing new: every call it made was already in the table.
+
+**Learned:** Mechanism in C, policy in Go held up: the nucleus never learned what a file or a process is, and every Go piece runs on the host against a fake. And when the kernel hosts a runtime, implement the platform's *contracts* (demand paging, zero-fill), not just its calls.
+
+**Next:** W10: fork (copy-on-write), execve, wait4, pipes and dup, signals with the TTY (`^C`), busybox `sh`.
+
+**Links:** ADR-0004 (amended), ADR-0006, PIT-05, PIT-24, BUG-0012
+
 ## 2026-11-02 — Wave 8 complete: files and pixels (M8)
 
 **Did:** W8-S01..S07. The Go kernel has a file tree and a screen:

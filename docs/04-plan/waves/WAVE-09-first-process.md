@@ -1,4 +1,4 @@
-# W9 First Process  (M9)  — status: in progress
+# W9 First Process  (M9)  — status: done
 
 Goal: a static Linux x86-64 program runs in ring 3 under the Go kernel. Demo: `run /bin/hello` prints from ring 3 and exits; `run /bin/crash` dereferences NULL and only that process dies. Stories: E08.F01-F06 ([BACKLOG.md](../BACKLOG.md)), [ADR-0006](../../03-decisions/ADR-0006-linux-abi-userland.md).
 
@@ -27,3 +27,5 @@ Table-driven, unknown numbers logged once and `-ENOSYS`: `write writev read open
 `user/hello.c` built with `musl-gcc -static` (CI installs musl-tools); go-smoke runs it.
 
 Exit: **M9 demo — first process.** `make clean test` green; DEVLOG wave entry.
+
+As built: one commit per slice, plus BUG-0012. ADR-0004 is amended (CR3 first). The request queue is a nucleus FIFO copied out by `nu_syscall_wait`, not shared memory. `nu_page_alloc` takes count 1 only. Processes have one thread each (`clone` for user programs: W12). S05 exposed BUG-0012 before any user code ran: the Go kernel's own memory had been eagerly backed since W6, and the GC stress finally ran out of frames; the fix made Go's memory demand-zero. A static musl C program ran correctly the first time it booted, with no unimplemented syscall logged.

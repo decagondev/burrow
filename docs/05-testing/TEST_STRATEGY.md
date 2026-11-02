@@ -62,6 +62,8 @@ flowchart TB
 
 **Go kernel behaviour that must crash** (W7+): the image gets a `kargs` payload whose words become the Go kernel's `argv` (`with_kargs <words>` in `run_all.sh`; the words are handled in `kernel/cmd/kernel/kargs.go`), e.g. REG-0006 `panic=boot`, REG-0007 `fault=nil`.
 
+**User processes** (W9+): nucleus mechanism in the ktest suite `user` (ring-3 code assembled by hand in `nucleus/ktest_uthread.c`); Go policy in `kernel/proc` against `proctest.Fake` (inject a request, read the reply); end to end in `make go-smoke` (`run /bin/hello`, `/bin/crash`, `/bin/musl-hello`). A new syscall: add it to `kernel/proc`'s table, a test in `system_test.go`, a row in `POSIX_COVERAGE.md`; compare with Linux by running the same static binary there under `strace`.
+
 **Typing into a boot** (W7+): pass a keys file as the 4th argument of `tests/smoke/smoke.sh`. Steps: `wait <text>` (in the serial log), `type <text>`, `key <qemu-key-name>`. The guest's output, not the keys file, is what the expect file checks.
 
 **New Go driver:** a package under `kernel/drivers/` that calls `driver.Register` from `init()` and touches hardware only through `driver.Env`; host-test it with `haltest` fakes (`FakePorts`, `FakeIRQ`, `Fake8042`), add it to `kernel/hostsim` if the console can reach it, and import it for side effects in `kernel/cmd/kernel/main.go`.

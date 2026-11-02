@@ -258,23 +258,23 @@ sequenceDiagram
     D->>T: nu_irq_ack(1) - unmask
 ```
 
-### 7.3 A user system call (Wave 9) *(provisional)*
+### 7.3 A user system call (Wave 9)
 
 ```mermaid
 sequenceDiagram
     participant P as user process (ring 3)
     participant GATE as syscall gate
-    participant RING as syscall ring (shared memory)
+    participant RING as request queue (nucleus/uthread.c)
     participant GD as Go dispatcher goroutine
     participant H as handler goroutine
     P->>GATE: SYSCALL read(fd, buf, n)
-    GATE->>GATE: RCX outside Go text, so caller = user, swapgs
-    GATE->>RING: post request (tid, nr, args), park user thread
-    RING-->>GD: futex wake
+    GATE->>GATE: CR3 is not the kernel's, so caller = user, kernel stack
+    GATE->>RING: queue request (tid, nr, args), block the user thread
+    RING-->>GD: nu_syscall_wait returns (copies the requests out)
     GD->>H: go handle(req)
-    H->>H: VFS read, copyout via physmap
+    H->>H: VFS read, copyout through the physmap
     H->>GATE: nu_syscall_reply(tid, result)
-    GATE-->>P: SYSRETQ (canonical RIP) else IRETQ
+    GATE-->>P: SYSRETQ (a non-canonical RIP became a fault before this)
 ```
 
 ### 7.4 One DOOM frame (Wave 11)
