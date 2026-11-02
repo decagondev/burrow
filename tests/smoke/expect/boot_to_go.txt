@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 2 files, 2 directories
+[initrd] INFO: tarfs: 4 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -53,5 +53,13 @@ dr-xr-xr-x        0 docs/
 -r--r--r--       72 A-Long-File-Name.text
 burrow> cat /mnt/hello.txt
 Hello from the FAT32 data disk
+burrow> run /bin/hello
+hello from ring 3
+burrow> run /bin/crash
+about to dereference NULL
+[proc] WARN: pid 2 (crash) killed: page fault at 0x0
+run: /bin/crash: killed (status 139)
+burrow> run /bin/hello
+hello from ring 3
 burrow> poweroff
 [console] INFO: poweroff

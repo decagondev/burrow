@@ -20,7 +20,7 @@ Design (refines the provisional ARCHITECTURE §7.3 and ADR-0004):
 ### [x] W9-S04 Syscall dispatcher and the first syscalls (E08.F04, E08.F05, E08.F06)
 Table-driven, unknown numbers logged once and `-ENOSYS`: `write writev read open/openat close lseek fstat brk mmap(anon) munmap exit exit_group getpid gettid set_tid_address arch_prctl ioctl(TCGETS/TIOCGWINSZ: -ENOTTY) rt_sigprocmask(stub) clock_gettime nanosleep`. `docs/02-architecture/POSIX_COVERAGE.md`.
 
-### [ ] W9-S05 First programs: asm hello and crash (E08.F03)
+### [x] W9-S05 First programs: asm hello and crash (E08.F03)
 `user/` builds static programs with nasm + ld into the initrd's `/bin`; console `run <path> [args]`. go-smoke runs `/bin/hello` (prints, exit status 0) and `/bin/crash` (killed with a page fault report, the console carries on).
 
 ### [ ] W9-S06 musl (E08.F05)

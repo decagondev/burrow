@@ -128,13 +128,25 @@ MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUIL
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
 
-# The initial file tree (W8): initrd/ packed as ustar, reproducibly (sorted
-# names, owner 0, mtime 0, modes 644/755 whatever the checkout says),
-# mounted at / by the Go kernel (kernel/fs/tarfs).
+# User programs (W9): static Linux x86-64 executables from user/, no libc,
+# installed in the initrd's /bin.
+USER_ASM  := $(wildcard user/*.asm)
+USER_BINS := $(patsubst user/%.asm,$(BUILD)/user/%,$(USER_ASM))
+$(BUILD)/user/%.o: user/%.asm | $(BUILD)/user
+	$(NASM) -f elf64 $< -o $@
+$(BUILD)/user/%: $(BUILD)/user/%.o
+	$(LD_TARGET) -static -nostdlib -o $@ $<
+
+# The initial file tree (W8): initrd/ plus the user programs in bin/, packed
+# as ustar reproducibly (sorted names, owner 0, mtime 0, modes 644/755
+# whatever the checkout says), mounted at / by the Go kernel (kernel/fs/tarfs).
 INITRD_FILES := $(shell find initrd -type f)
-$(BUILD)/initrd.tar: $(INITRD_FILES) | $(BUILD)
+$(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) | $(BUILD)
+	rm -rf $(BUILD)/initrd-root && mkdir -p $(BUILD)/initrd-root/bin
+	cp -R initrd/. $(BUILD)/initrd-root/
+	cp $(USER_BINS) $(BUILD)/initrd-root/bin/
 	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C initrd -cf $@ .
+		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-root -cf $@ .
 
 # The data disk (W8): datadisk/ as FAT32, the primary slave, mounted at /mnt.
 DATADISK_FILES := $(shell find datadisk -type f)
@@ -227,7 +239,7 @@ fat-interop: $(BUILD)/data.img
 sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/nucleus.disk.elf
 	@scripts/sizes.sh $(BUILD)
 
-$(BUILD) $(BUILD)/loader $(BUILD)/nucleus:
+$(BUILD) $(BUILD)/loader $(BUILD)/nucleus $(BUILD)/user:
 	mkdir -p $@
 
 docs-check:

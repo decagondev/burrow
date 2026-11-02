@@ -26,6 +26,12 @@ type ls /mnt /mnt/docs
 key ret
 type cat /mnt/hello.txt
 key ret
+type run /bin/hello
+key ret
+type run /bin/crash
+key ret
+type run /bin/hello
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret
