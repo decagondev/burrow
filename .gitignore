@@ -1,0 +1,6 @@
+build/
+*.o
+*.lst
+node_modules/
+tools/doccheck/package-lock.json
+*.wad

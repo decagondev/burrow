@@ -1,0 +1,7 @@
+{
+  "name": "burrow-doccheck",
+  "private": true,
+  "type": "module",
+  "description": "Parse every Mermaid block in the docs with the official parser",
+  "dependencies": { "mermaid": "^11", "jsdom": "^24" }
+}

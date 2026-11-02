@@ -1,0 +1,10 @@
+# gdb -x scripts/gdbinit   (after `make debug` in another terminal)
+# Real mode is 16-bit; gdb copes badly, so we start in i8086 and switch later.
+set confirm off
+set pagination off
+target remote localhost:1234
+set architecture i8086
+break *0x7c00
+echo \n[burrow] breakpoint at stage1 (0x7c00). 'c' to continue.\n
+echo [burrow] For the loader: 'set architecture i386:x86-64' then\n
+echo [burrow]   'add-symbol-file build/loader.elf' and 'break loader_main'\n

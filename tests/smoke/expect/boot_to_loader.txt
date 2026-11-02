@@ -1,0 +1,21 @@
+# Ordered markers for Wave 3 "boot to C loader". One per line, '#' = comment.
+# When a wave adds a stage, ADD lines; never delete old ones (regression!).
+[stage1] Burrow boot sector
+[stage1] ok -> stage2
+[stage2] hello from stage2
+[stage2] a20 ok
+[stage2] e820 ok
+[stage2] manifest ok
+[stage2] loader loaded
+[stage2] entering protected mode
+[stage2] protected mode ok
+[stage2] loader crc ok
+[stage2] long mode ok -> loader
+[loader] hello from C
+[loader] boot_info ok
+[loader] memory ok
+[loader] manifest ok
+[loader] self-crc ok
+[loader] ata ok
+[loader] all checks passed
+BURROW:LOADER:OK

@@ -1,0 +1,111 @@
+/*
+ * main.c - Burrow loader (Wave 3 scope).
+ *
+ * Today it proves the boot chain end-to-end and checks every input it was
+ * given. Each check prints a stable marker line that tests/smoke/ greps for.
+ *
+ * Later waves extend this file by calling NEW modules (Open/Closed):
+ *   W5: load "nucleus" ELF via block_device + elf64, build higher-half tables
+ *   W6: load "kernel" (Go) ELF and "initrd", hand everything to the nucleus
+ *
+ * RULE: keep all mutable globals zero-initialised (.bss). The self-CRC check
+ * below hashes the loaded image, so .data must not change before it runs.
+ */
+#include <stdint.h>
+#include <burrow/boot_info.h>
+#include "io.h"
+#include "serial.h"
+#include "kprintf.h"
+#include "lib_string.h"
+#include "memmap.h"
+#include "manifest.h"
+#include "crc32.h"
+#include "ata_pio.h"
+
+extern char __loader_start[], __loader_image_end[], __bss_end[];
+
+static uint16_t g_com1;                 /* .bss: serial_sink keeps a pointer to it */
+static struct ata_channel g_ata0;
+static struct block_device g_disk;
+static uint8_t g_sector[512];
+
+static void __attribute__((noreturn)) panic(const char *what) {
+    kprintf("[loader] PANIC: %s\n", what);
+    qemu_exit(QEMU_EXIT_FAILURE);
+    cpu_halt_forever();
+}
+
+static void check_boot_info(const struct boot_info *bi) {
+    if (bi->magic != BOOTINFO_MAGIC)     panic("boot_info magic mismatch");
+    if (bi->version != BOOTINFO_VERSION) panic("boot_info version mismatch");
+    if (bi->size != sizeof *bi)          panic("boot_info size mismatch");
+    kprintf("[loader] boot_info ok (drive=0x%x, e820 entries=%u)\n",
+            bi->boot_drive, bi->e820_count);
+}
+
+static void print_memory_map(const struct boot_info *bi) {
+    const struct e820_entry *e = (const struct e820_entry *)(uintptr_t)bi->e820_addr;
+    for (uint32_t i = 0; i < bi->e820_count; i++)
+        kprintf("  %016llx - %016llx  %s\n", (unsigned long long)e[i].base,
+                (unsigned long long)(e[i].base + e[i].length), e820_type_str(e[i].type));
+    uint64_t usable = e820_usable_bytes(e, bi->e820_count);
+    if (usable < 32ull * 1024 * 1024) panic("need at least 32 MiB of RAM");
+    kprintf("[loader] memory ok (%llu MiB usable)\n", (unsigned long long)(usable >> 20));
+}
+
+static const struct manifest *check_manifest(const struct boot_info *bi) {
+    const struct manifest *m = (const struct manifest *)(uintptr_t)bi->manifest_addr;
+    enum manifest_status st = manifest_validate(m);
+    if (st != MANIFEST_OK) panic(manifest_status_str(st));
+    for (unsigned i = 0; i < m->count; i++)
+        kprintf("  %s lba=%u sectors=%u bytes=%llu crc=%08x\n", m->entries[i].name,
+                m->entries[i].lba, m->entries[i].sectors,
+                (unsigned long long)m->entries[i].size_bytes, m->entries[i].crc32);
+    kprintf("[loader] manifest ok (%u entries)\n", m->count);
+    return m;
+}
+
+/* Hash our own bytes in RAM and compare with what mkimage recorded.
+ * Catches: truncated loads, wrong LBA, stage2 chunking bugs. */
+static void check_self_crc(const struct manifest *m) {
+    const struct manifest_entry *me = manifest_find(m, "loader");
+    if (!me) panic("no loader entry");
+    uint64_t in_ram = (uint64_t)(__loader_image_end - __loader_start);
+    if (in_ram != me->size_bytes) panic("loader size differs from manifest");
+    uint32_t crc = crc32_ieee(__loader_start, me->size_bytes);
+    if (crc != me->crc32) panic("loader CRC mismatch");
+    kprintf("[loader] self-crc ok (%08x)\n", crc);
+}
+
+/* Read LBA 1 through our own ATA driver and compare with stage2's BIOS copy.
+ * Two independent paths agreeing = good evidence both work. */
+static void check_disk(const struct boot_info *bi) {
+    g_ata0.io = 0x1F0; g_ata0.ctrl = 0x3F6; g_ata0.slave = 0;
+    if (ata_pio_open(&g_ata0, &g_disk) != 0) panic("no ATA drive on primary master");
+    if (block_read(&g_disk, MANIFEST_LBA, 1, g_sector) != 0) panic("ATA read failed");
+    if (memcmp(g_sector, (const void *)(uintptr_t)bi->manifest_addr, 512) != 0)
+        panic("ATA data differs from BIOS data");
+    kprintf("[loader] ata ok\n");
+}
+
+void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
+    g_com1 = COM1_PORT;
+    serial_init(g_com1);
+    kprintf_set_sink(serial_sink(&g_com1));
+
+    kprintf("[loader] hello from C (image %p..%p, end %p)\n",
+            (void *)__loader_start, (void *)__loader_image_end, (void *)__bss_end);
+
+    check_boot_info(bi);
+    print_memory_map(bi);
+    const struct manifest *m = check_manifest(bi);
+    check_self_crc(m);
+    check_disk(bi);
+
+    /* ---- Wave 5 starts here: load nucleus + kernel, build page tables, jump ---- */
+
+    kprintf("[loader] all checks passed\n");
+    kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */
+    qemu_exit(QEMU_EXIT_SUCCESS);       /* no-op outside the test harness */
+    cpu_halt_forever();
+}
