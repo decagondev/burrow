@@ -22,6 +22,10 @@ const (
 	nrSyscallReply  = 0x1022
 	nrUThreadKill   = 0x1023
 	nrUThreadSetFS  = 0x1024
+	nrUThreadRegs   = 0x1025
+	nrUThreadFrom   = 0x1026
+	nrUThreadSpace  = 0x1027
+	nrUThreadIntr   = 0x1028
 )
 
 // Nucleus is the real proc.Nucleus.
@@ -99,3 +103,24 @@ func (Nucleus) Wait(reqs []proc.Request) (int, error) {
 	r, err := blocking(nrSyscallWait, uintptr(unsafe.Pointer(&reqs[0])), uintptr(len(reqs)))
 	return int(r), err
 }
+
+func (Nucleus) Regs(tid uint64, r *proc.Regs, write bool) error {
+	w := uintptr(0)
+	if write {
+		w = 1
+	}
+	_, err := raw(nrUThreadRegs, uintptr(tid), uintptr(unsafe.Pointer(r)), w)
+	return err
+}
+
+func (Nucleus) StartThreadFrom(as uint64, r *proc.Regs) (uint64, error) {
+	t, err := raw(nrUThreadFrom, uintptr(as), uintptr(unsafe.Pointer(r)))
+	return uint64(t), err
+}
+
+func (Nucleus) SetSpace(tid, as uint64) error {
+	_, err := raw(nrUThreadSpace, uintptr(tid), uintptr(as))
+	return err
+}
+
+func (Nucleus) Interrupt(tid uint64) error { _, err := raw(nrUThreadIntr, uintptr(tid)); return err }

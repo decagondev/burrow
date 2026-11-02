@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 5 files, 3 directories
+[initrd] INFO: tarfs: 6 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -65,5 +65,12 @@ burrow> run /bin/musl-hello one two
 hello from musl in ring 3 (pid 4, 3 args: /bin/musl-hello one two)
 malloc works
 hostname from the initrd: burrow
+burrow> run /bin/forktest
+forktest: child exited with 7
+forktest: parent still sees 1
+hello from ring 3
+forktest: exec child exited with 0
+forktest: crashing child killed by signal 11
+forktest: my parent is 0
 burrow> poweroff
 [console] INFO: poweroff

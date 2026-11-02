@@ -164,6 +164,32 @@ func (m *Mem) Pages() []uint64 {
 	return out
 }
 
+// Clone copies m page by page into a new address space (fork, W10: an
+// eager copy; copy-on-write would share frames until a write fault).
+func (m *Mem) Clone() (*Mem, error) {
+	c, err := NewMem(m.nu)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for va, pg := range m.pages {
+		pa, err := c.nu.PageAlloc()
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		copy(c.nu.Frame(pa), m.nu.Frame(pg.pa))
+		if err := c.nu.Map(c.as, va, pa, PageSize, pg.prot); err != nil {
+			c.nu.PageFree(pa)
+			c.Close()
+			return nil, err
+		}
+		c.pages[va] = page{pa, pg.prot}
+	}
+	return c, nil
+}
+
 // Close frees every frame and the address space. The process's threads
 // must be gone (the nucleus refuses with EBUSY otherwise).
 func (m *Mem) Close() error {

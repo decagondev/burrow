@@ -5,88 +5,159 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"path"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
 func bytesReaderAt(b []byte) io.ReaderAt { return bytes.NewReader(b) }
 
-// file is one open file description: a VFS file or the console.
+// file is an open file description: a VFS file or the console. fork and
+// dup share it (and its offset); the last close closes it.
 type file struct {
 	f       fs.File   // nil for the console
-	console io.Writer // non-nil for fds 0-2
+	console io.Writer // non-nil for the console
+	refs    atomic.Int32
+}
+
+func newFile(f fs.File, console io.Writer) *file {
+	d := &file{f: f, console: console}
+	d.refs.Store(1)
+	return d
+}
+
+func (d *file) ref() *file { d.refs.Add(1); return d }
+
+func (d *file) unref() error {
+	if d.refs.Add(-1) == 0 && d.f != nil {
+		return d.f.Close()
+	}
+	return nil
+}
+
+// fd is one descriptor: a description plus the per-descriptor flag.
+type fd struct {
+	file    *file
+	cloexec bool
 }
 
 // fdTable is a process's file descriptors.
 type fdTable struct {
 	mu  sync.Mutex
-	fds map[int]*file
+	fds map[int]fd
 }
 
 const maxFDs = 256
 
 func newFDTable(console io.Writer) *fdTable {
-	c := &file{console: console}
-	return &fdTable{fds: map[int]*file{0: c, 1: c, 2: c}}
+	c := newFile(nil, console)
+	c.refs.Store(3)
+	return &fdTable{fds: map[int]fd{0: {file: c}, 1: {file: c}, 2: {file: c}}}
 }
 
-func (t *fdTable) get(fd uint64) *file {
+func (t *fdTable) get(n uint64) *file {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.fds[int(int32(fd))]
+	if e, ok := t.fds[int(int32(n))]; ok {
+		return e.file
+	}
+	return nil
 }
 
-// add takes the lowest free descriptor, as POSIX requires.
-func (t *fdTable) add(f *file) (int, error) {
+// add takes the lowest free descriptor >= min, as POSIX requires; the table
+// owns the reference passed in.
+func (t *fdTable) add(f *file, min int, cloexec bool) (int, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for fd := 0; fd < maxFDs; fd++ {
-		if _, used := t.fds[fd]; !used {
-			t.fds[fd] = f
-			return fd, nil
+	for n := min; n < maxFDs; n++ {
+		if _, used := t.fds[n]; !used {
+			t.fds[n] = fd{f, cloexec}
+			return n, nil
 		}
 	}
 	return 0, syscall.EMFILE
 }
 
-func (t *fdTable) close(fd uint64) error {
-	t.mu.Lock()
-	f, ok := t.fds[int(int32(fd))]
-	delete(t.fds, int(int32(fd)))
-	t.mu.Unlock()
-	if !ok {
+// put installs f at n, closing what was there (dup2).
+func (t *fdTable) put(n int, f *file, cloexec bool) error {
+	if n < 0 || n >= maxFDs {
 		return syscall.EBADF
 	}
-	if f.f != nil && !t.shared(f) {
-		return f.f.Close()
+	t.mu.Lock()
+	old, had := t.fds[n]
+	t.fds[n] = fd{f, cloexec}
+	t.mu.Unlock()
+	if had {
+		old.file.unref()
 	}
 	return nil
 }
 
-// shared: another descriptor still uses this description (dup comes in W10).
-func (t *fdTable) shared(f *file) bool {
+func (t *fdTable) close(n uint64) error {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	for _, g := range t.fds {
-		if g == f {
-			return true
-		}
+	e, ok := t.fds[int(int32(n))]
+	delete(t.fds, int(int32(n)))
+	t.mu.Unlock()
+	if !ok {
+		return syscall.EBADF
 	}
-	return false
+	return e.file.unref()
 }
 
 func (t *fdTable) closeAll() {
 	t.mu.Lock()
 	fds := t.fds
-	t.fds = map[int]*file{}
+	t.fds = map[int]fd{}
 	t.mu.Unlock()
-	seen := map[*file]bool{}
-	for _, f := range fds {
-		if f.f != nil && !seen[f] {
-			seen[f] = true
-			f.f.Close()
+	for _, e := range fds {
+		e.file.unref()
+	}
+}
+
+// clone is fork's copy: the same descriptions, one more reference each.
+func (t *fdTable) clone() *fdTable {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	c := &fdTable{fds: make(map[int]fd, len(t.fds))}
+	for n, e := range t.fds {
+		c.fds[n] = fd{e.file.ref(), e.cloexec}
+	}
+	return c
+}
+
+// closeOnExec drops every descriptor marked FD_CLOEXEC (execve).
+func (t *fdTable) closeOnExec() {
+	t.mu.Lock()
+	var drop []*file
+	for n, e := range t.fds {
+		if e.cloexec {
+			drop = append(drop, e.file)
+			delete(t.fds, n)
 		}
 	}
+	t.mu.Unlock()
+	for _, f := range drop {
+		f.unref()
+	}
+}
+
+// resolve turns a user path into an io/fs path: relative ones start at cwd.
+func (p *Process) resolve(name string) string {
+	if !strings.HasPrefix(name, "/") {
+		p.mu.Lock()
+		name = p.cwd + "/" + name
+		p.mu.Unlock()
+	}
+	return cleanPath(name)
+}
+
+func cleanPath(name string) string {
+	if c := strings.TrimPrefix(path.Clean("/"+name), "/"); c != "" {
+		return c
+	}
+	return "."
 }
 
 // errno turns a Go error into the negative Linux errno a syscall returns.

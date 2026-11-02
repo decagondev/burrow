@@ -23,7 +23,13 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 35 | `nanosleep` | partial | W9 | never interrupted (no signals) |
 | 39 | `getpid` | done | W9 | |
+| 56 | `clone` | partial | W10 | only the fork shape (exit signal, `CLONE_VFORK`); `CLONE_VM`/threads: W12 (`-ENOSYS`) |
+| 57 | `fork` | partial | W10 | memory copied eagerly (copy-on-write later); descriptors share their open file descriptions |
+| 58 | `vfork` | partial | W10 | a full fork (the parent is not suspended) |
+| 59 | `execve` | partial | W10 | static ELF only (`-ENOEXEC` otherwise, no `#!` scripts yet); descriptors stay open except `FD_CLOEXEC` |
 | 60 | `exit` | partial | W9 | one thread per process, so the same as `exit_group` |
+| 61 | `wait4` | partial | W10 | pid > 0, -1, 0, < -1; `WNOHANG`; Linux status words; `rusage` is not filled |
+| 110 | `getppid` | done | W10 | orphans report 0 (the kernel) until init adopts them (W10-S07) |
 | 102, 104, 107, 108 | `getuid` `getgid` `geteuid` `getegid` | partial | W9 | everyone is root (0) |
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | partial | W9 | = pid (one thread per process) |

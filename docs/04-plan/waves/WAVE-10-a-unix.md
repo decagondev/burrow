@@ -12,7 +12,7 @@ Design (continues W9: mechanism in the nucleus, policy in Go):
 ### [x] W10-S01 Nucleus: full frames, register access, resumable and asynchronous requests (E09.F01, E09.F03)
 User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread_regs` (get/set), `nu_uthread_create_from` (a thread from a register image: fork), `nu_uthread_set_space` (execve), `nu_uthread_interrupt`. Fault requests resume when answered. ktests for each.
 
-### [ ] W10-S02 fork, execve, wait4, exit status (E09.F01)
+### [x] W10-S02 fork, execve, wait4, exit status (E09.F01)
 `kernel/proc`: a process tree (pid, ppid, pgid, sid), `fork` (eager copy of memory and descriptors), `execve` (new image, close-on-exec), `wait4`/`waitpid` with `WNOHANG` and Linux status encoding, zombies, orphans reparented to init, `getppid`, `exit` of the last thread.
 
 ### [ ] W10-S03 File descriptors and the working directory (E09.F02)

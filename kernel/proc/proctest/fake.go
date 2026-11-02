@@ -33,6 +33,8 @@ type Thread struct {
 	AS, RIP, RSP, FS uint64
 	Killed           bool
 	Replies          chan int64 // one value per nu_syscall_reply
+	Regs             proc.Regs  // what nu_uthread_regs reads and writes
+	Interrupts       int        // nu_uthread_interrupt calls
 }
 
 func New() *Fake {
@@ -140,8 +142,77 @@ func (f *Fake) StartThread(as, rip, rsp, fs uint64) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextTID++
-	f.threads[f.nextTID] = &Thread{AS: as, RIP: rip, RSP: rsp, FS: fs, Replies: make(chan int64, 16)}
+	t := &Thread{AS: as, RIP: rip, RSP: rsp, FS: fs, Replies: make(chan int64, 16), Regs: proc.FreshRegs(rip, rsp)}
+	t.Regs.FSBase = fs
+	f.threads[f.nextTID] = t
 	return f.nextTID, nil
+}
+
+func (f *Fake) StartThreadFrom(as uint64, r *proc.Regs) (uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.spaces[as]; !ok {
+		return 0, syscall.EBADF
+	}
+	f.nextTID++
+	f.threads[f.nextTID] = &Thread{AS: as, RIP: r.RIP, RSP: r.RSP, FS: r.FSBase, Replies: make(chan int64, 16), Regs: *r}
+	return f.nextTID, nil
+}
+
+func (f *Fake) Regs(tid uint64, r *proc.Regs, write bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.threads[tid]
+	if !ok || t.Killed {
+		return syscall.EBUSY
+	}
+	if write {
+		if r.RIP >= proc.UserTop || r.RSP >= proc.UserTop {
+			return syscall.EINVAL
+		}
+		t.Regs, t.RIP, t.RSP, t.FS = *r, r.RIP, r.RSP, r.FSBase
+	} else {
+		*r = t.Regs
+	}
+	return nil
+}
+
+func (f *Fake) SetSpace(tid, as uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.threads[tid]
+	if !ok {
+		return syscall.EBUSY
+	}
+	if _, ok := f.spaces[as]; !ok {
+		return syscall.EBADF
+	}
+	t.AS = as
+	return nil
+}
+
+// Interrupt behaves like a thread computing in ring 3: it stops at once
+// and posts an interrupt request.
+func (f *Fake) Interrupt(tid uint64) error {
+	t := f.Thread(tid)
+	if t == nil {
+		return syscall.ESRCH
+	}
+	f.mu.Lock()
+	t.Interrupts++
+	rip := t.Regs.RIP
+	f.mu.Unlock()
+	f.Inject(proc.Request{TID: tid, Nr: proc.InterruptNr, Args: [6]uint64{rip}})
+	return nil
+}
+
+// SetRegs is the test playing the CPU: the thread's registers as they are
+// when it next enters the kernel.
+func (f *Fake) SetRegs(tid uint64, r proc.Regs) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.threads[tid]
+	t.Regs, t.RIP, t.RSP = r, r.RIP, r.RSP
 }
 
 // Thread returns a started thread (nil if none).
@@ -160,6 +231,19 @@ func (f *Fake) Kill(tid uint64) error {
 	}
 	t.Killed = true
 	return nil
+}
+
+// Live counts threads that are not killed.
+func (f *Fake) Live() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, t := range f.threads {
+		if !t.Killed {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *Fake) SetFS(tid, fs uint64) error {

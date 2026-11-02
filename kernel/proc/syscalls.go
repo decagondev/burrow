@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"io"
 	"io/fs"
-	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -27,7 +26,13 @@ const (
 	sysWritev        = 20
 	sysNanosleep     = 35
 	sysGetpid        = 39
+	sysClone         = 56
+	sysFork          = 57
+	sysVfork         = 58
+	sysExecve        = 59
 	sysExit          = 60
+	sysWait4         = 61
+	sysGetppid       = 110
 	sysGetuid        = 102
 	sysGetgid        = 104
 	sysGeteuid       = 107
@@ -51,6 +56,8 @@ var table = map[uint64]handler{
 	sysBrk: sysBrkFn, sysIoctl: sysIoctlFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
 	sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
 	sysExit: sysExitFn, sysExitGroup: sysExitFn,
+	sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
+	sysWait4: sysWait4Fn, sysGetppid: sysGetppidFn,
 	sysGetpid: pidFn, sysGettid: pidFn, sysSetTidAddress: pidFn, // one thread: tid = pid
 	sysGetuid: zeroFn, sysGetgid: zeroFn, sysGeteuid: zeroFn, sysGetegid: zeroFn, // root
 	sysRtSigaction: zeroFn, sysRtSigprocmask: zeroFn, // accepted; signals come in W10
@@ -69,7 +76,7 @@ func pidFn(p *Process, _ [6]uint64) (int64, bool) { return ok(int64(p.PID)) }
 func zeroFn(*Process, [6]uint64) (int64, bool)    { return ok(0) }
 
 func sysExitFn(p *Process, a [6]uint64) (int64, bool) {
-	p.exit(int(a[0]&0xFF), "")
+	p.exit(int(a[0]&0xFF), 0, "")
 	return 0, true
 }
 
@@ -147,6 +154,7 @@ func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
 
 const (
 	oAccMode = 3
+	oCloexec = 0x80000
 	atFDCWD  = -100
 )
 
@@ -171,23 +179,16 @@ func (p *Process) open(nameVA, flags uint64) int64 {
 	if flags&oAccMode != 0 {
 		return -int64(syscall.EROFS)
 	}
-	f, err := p.sys.files.Open(cleanPath(name))
+	f, err := p.sys.files.Open(p.resolve(name))
 	if err != nil {
 		return errno(err)
 	}
-	fd, err := p.fds.add(&file{f: f})
+	fd, err := p.fds.add(newFile(f, nil), 0, flags&oCloexec != 0)
 	if err != nil {
 		f.Close()
 		return errno(err)
 	}
 	return int64(fd)
-}
-
-func cleanPath(name string) string {
-	if c := strings.TrimPrefix(path.Clean("/"+name), "/"); c != "" {
-		return c
-	}
-	return "."
 }
 
 func sysCloseFn(p *Process, a [6]uint64) (int64, bool) { return ok(errno(p.fds.close(a[0]))) }
@@ -303,4 +304,32 @@ func sysNanosleepFn(p *Process, a [6]uint64) (int64, bool) {
 	}
 	time.Sleep(time.Duration(sec)*time.Second + time.Duration(nsec))
 	return ok(0)
+}
+
+func sysGetppidFn(p *Process, _ [6]uint64) (int64, bool) {
+	p.sys.mu.Lock()
+	defer p.sys.mu.Unlock()
+	return ok(int64(p.PPID))
+}
+
+func sysForkFn(p *Process, _ [6]uint64) (int64, bool) { return ok(p.fork()) }
+
+const (
+	cloneVM    = 0x100
+	cloneVfork = 0x4000
+	exitSignal = 0xFF // low byte of clone's flags: the signal sent at exit
+)
+
+// clone: only the fork shape (no shared memory) until threads come (W12).
+func sysCloneFn(p *Process, a [6]uint64) (int64, bool) {
+	if a[0]&^(exitSignal|cloneVfork) != 0 {
+		return ok(-int64(syscall.ENOSYS))
+	}
+	return ok(p.fork())
+}
+
+func sysExecveFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.execve(a[0], a[1], a[2])) }
+
+func sysWait4Fn(p *Process, a [6]uint64) (int64, bool) {
+	return ok(p.wait4(int64(int32(a[0])), a[1], a[2]))
 }

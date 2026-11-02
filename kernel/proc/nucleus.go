@@ -40,6 +40,30 @@ type Nucleus interface {
 	SetFS(tid, fs uint64) error
 	Reply(tid uint64, result int64) error
 	Wait(reqs []Request) (int, error) // blocks until at least one request
+
+	// W10: the registers of a thread whose request Go holds (fork, execve,
+	// signals), a thread started from such an image, a thread moved to
+	// another address space, and a stop of a thread computing in ring 3.
+	Regs(tid uint64, r *Regs, write bool) error
+	StartThreadFrom(as uint64, r *Regs) (uint64, error)
+	SetSpace(tid, as uint64) error
+	Interrupt(tid uint64) error
+}
+
+// Regs is a user thread's register image (NUCLEUS_ABI nu_uthread_regs).
+type Regs struct {
+	R15, R14, R13, R12, R11, R10, R9, R8, RBP, RDI, RSI, RDX, RCX, RBX, RAX uint64
+	RIP, RFLAGS, RSP, FSBase, pad                                           uint64
+	FX                                                                      [512]byte // FXSAVE area
+}
+
+// FreshRegs is a new program's start: everything zero but the entry, the
+// stack, IF, and the x87/SSE defaults a fresh FXSAVE area holds.
+func FreshRegs(rip, rsp uint64) Regs {
+	r := Regs{RIP: rip, RSP: rsp, RFLAGS: 0x202}
+	r.FX[0], r.FX[1] = 0x7F, 0x03   // FCW 0x037F
+	r.FX[24], r.FX[25] = 0x80, 0x1F // MXCSR 0x1F80
+	return r
 }
 
 // Request is one user thread's system call or fault, as nu_syscall_wait
@@ -53,8 +77,14 @@ type Request struct {
 // FaultBase marks a fault request: Nr = FaultBase | vector; Args = cr2, rip, error.
 const FaultBase = 0xFFFF0000
 
-func (r Request) IsFault() bool  { return r.Nr >= FaultBase }
+func (r Request) IsFault() bool  { return r.Nr >= FaultBase && r.Nr != InterruptNr }
 func (r Request) Vector() uint64 { return r.Nr &^ FaultBase }
 
 // The nucleus copies requests as 8 little-endian words; Request must match.
 var _ [64]byte = [unsafe.Sizeof(Request{})]byte{}
+
+// ...and Regs the nucleus's 672-byte struct uregs.
+var _ [672]byte = [unsafe.Sizeof(Regs{})]byte{}
+
+// InterruptNr is a stop asked for with Nucleus.Interrupt (args: rip).
+const InterruptNr = FaultBase | 0x100

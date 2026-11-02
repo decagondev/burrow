@@ -13,7 +13,7 @@ import (
 
 // System is the set of processes and the one dispatcher that serves their
 // system calls: every request from the nucleus queue is handled in its own
-// goroutine (a slow read never holds up another process).
+// goroutine (a slow read or a wait4 never holds up another process).
 type System struct {
 	nu      Nucleus
 	files   fs.FS
@@ -21,7 +21,8 @@ type System struct {
 	log     *klog.Logger
 
 	mu       sync.Mutex
-	procs    map[uint64]*Process // by tid (one thread per process in W9)
+	byTID    map[uint64]*Process // live processes, by their (one) thread
+	byPID    map[int]*Process    // live processes and zombies
 	nextPID  int
 	reported map[uint64]bool // unknown syscall numbers already logged
 }
@@ -29,94 +30,85 @@ type System struct {
 // NewSystem: programs are read from files; fds 0-2 are the console.
 func NewSystem(nu Nucleus, files fs.FS, console io.Writer, log *klog.Logger) *System {
 	return &System{nu: nu, files: files, console: console, log: log,
-		procs: map[uint64]*Process{}, nextPID: 1, reported: map[uint64]bool{}}
-}
-
-// Process is one running program.
-type Process struct {
-	PID  int
-	Path string
-	sys  *System
-	mem  *Mem
-	tid  uint64
-	fds  *fdTable
-
-	mu            sync.Mutex
-	brkStart, brk uint64
-	mmapNext      uint64
-	fs            uint64
-	done          chan struct{}
-	status        int
-	reason        string
+		byTID: map[uint64]*Process{}, byPID: map[int]*Process{}, nextPID: 1, reported: map[uint64]bool{}}
 }
 
 // The mmap area grows up from here (MEMORY_MAP.md: user mmap space).
 const mmapBase = 0x1000_0000_0000
 
-// Spawn loads the program at path (an io/fs path) and starts it.
+// image is a program loaded into a fresh Mem, ready to start.
+type image struct {
+	mem       *Mem
+	entry, sp uint64
+	end       uint64
+}
+
+// prepare loads the ELF in data with its entry stack into a new Mem.
+func (s *System) prepare(file string, data []byte, argv, envp []string) (*image, error) {
+	mem, err := NewMem(s.nu)
+	if err != nil {
+		return nil, err
+	}
+	img, err := LoadELF(mem, bytesReaderAt(data))
+	if err == nil {
+		err = mem.MapAnon(StackTop-StackSize, StackSize, ProtWrite)
+	}
+	var sp uint64
+	if err == nil {
+		var rnd [16]byte
+		rand.Read(rnd[:])
+		if len(argv) == 0 {
+			argv = []string{file}
+		}
+		sp, err = BuildStack(mem, img, argv, envp, rnd)
+	}
+	if err != nil {
+		mem.Close()
+		return nil, err
+	}
+	return &image{mem: mem, entry: img.Entry, sp: sp, end: img.End}, nil
+}
+
+// Spawn loads the program at file (an io/fs path) and starts it as a
+// child of the kernel (ppid 0): nobody waits for it but Process.Wait.
 func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	data, err := fs.ReadFile(s.files, file)
 	if err != nil {
 		return nil, err
 	}
-	mem, err := NewMem(s.nu)
+	im, err := s.prepare("/"+file, data, argv, envp)
 	if err != nil {
 		return nil, err
 	}
-	p, err := s.load(mem, "/"+file, data, argv, envp)
+	p := s.newProcess("/"+file, im.mem, newFDTable(s.console))
+	p.brkStart, p.brk = im.end, im.end
+	p.PGID, p.SID = p.PID, p.PID
+	s.mu.Lock() // registered before it can make its first call
+	defer s.mu.Unlock()
+	tid, err := s.nu.StartThread(im.mem.Space(), im.entry, im.sp, 0)
 	if err != nil {
-		mem.Close()
+		im.mem.Close()
 		return nil, err
 	}
+	s.register(p, tid)
 	return p, nil
 }
 
-func (s *System) load(mem *Mem, file string, data []byte, argv, envp []string) (*Process, error) {
-	img, err := LoadELF(mem, bytesReaderAt(data))
-	if err != nil {
-		return nil, err
-	}
-	if err := mem.MapAnon(StackTop-StackSize, StackSize, ProtWrite); err != nil {
-		return nil, err
-	}
-	var rnd [16]byte
-	rand.Read(rnd[:])
-	if len(argv) == 0 {
-		argv = []string{file}
-	}
-	sp, err := BuildStack(mem, img, argv, envp, rnd)
-	if err != nil {
-		return nil, err
-	}
+func (s *System) newProcess(file string, mem *Mem, fds *fdTable) *Process {
 	s.mu.Lock()
 	pid := s.nextPID
 	s.nextPID++
 	s.mu.Unlock()
-	p := &Process{PID: pid, Path: file, sys: s, mem: mem, fds: newFDTable(s.console),
-		brkStart: img.End, brk: img.End, mmapNext: mmapBase, done: make(chan struct{})}
-	s.mu.Lock() // registered before it can make its first call
-	defer s.mu.Unlock()
-	tid, err := s.nu.StartThread(mem.Space(), img.Entry, sp, 0)
-	if err != nil {
-		return nil, err
-	}
+	return &Process{PID: pid, Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
+		cwd: "/", children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{})}
+}
+
+// register publishes p with its thread (s.mu held).
+func (s *System) register(p *Process, tid uint64) {
 	p.tid = tid
-	s.procs[tid] = p
-	return p, nil
+	s.byTID[tid] = p
+	s.byPID[p.PID] = p
 }
-
-// Wait blocks until the process is gone and returns its status: the exit
-// code, or 128 + the signal Linux would have sent for a fault.
-func (p *Process) Wait() (status int, reason string) {
-	<-p.done
-	return p.status, p.reason
-}
-
-// Mem is the process's memory (tests use it to stage syscall arguments).
-func (p *Process) Mem() *Mem { return p.mem }
-
-// TID is the nucleus thread.
-func (p *Process) TID() uint64 { return p.tid }
 
 // Serve runs the dispatcher until the nucleus refuses to wait.
 func (s *System) Serve() error {
@@ -134,16 +126,20 @@ func (s *System) Serve() error {
 
 func (s *System) handle(r Request) {
 	s.mu.Lock()
-	p := s.procs[r.TID]
+	p := s.byTID[r.TID]
 	s.mu.Unlock()
 	if p == nil {
 		s.log.Errorf("request from unknown thread %d (nr %#x)", r.TID, r.Nr)
 		s.nu.Kill(r.TID)
 		return
 	}
-	if r.IsFault() {
+	switch {
+	case r.Nr == InterruptNr: // stopped for a signal (W10-S04): nothing to do yet
+		s.nu.Reply(r.TID, 0)
+		return
+	case r.IsFault():
 		sig, what := faultSignal(r.Vector())
-		p.exit(128+sig, fmt.Sprintf("%s at %#x (rip %#x)", what, r.Args[0], r.Args[1]))
+		p.exit(0, sig, fmt.Sprintf("%s at %#x (rip %#x)", what, r.Args[0], r.Args[1]))
 		return
 	}
 	res, exited := p.syscall(r.Nr, r.Args)
@@ -159,35 +155,15 @@ func (s *System) handle(r Request) {
 func faultSignal(vector uint64) (int, string) {
 	switch vector {
 	case 0:
-		return 8, "divide error" // SIGFPE
+		return sigFPE, "divide error"
 	case 6:
-		return 4, "invalid opcode" // SIGILL
+		return sigILL, "invalid opcode"
 	case 14:
-		return 11, "page fault" // SIGSEGV
+		return sigSEGV, "page fault"
 	case 13:
-		return 11, "general protection fault"
+		return sigSEGV, "general protection fault"
 	}
-	return 11, fmt.Sprintf("exception %d", vector)
-}
-
-// exit ends the process: its thread, its memory, its files.
-func (p *Process) exit(status int, reason string) {
-	s := p.sys
-	if err := s.nu.Kill(p.tid); err != nil {
-		s.log.Errorf("pid %d: kill: %v", p.PID, err)
-	}
-	if err := p.mem.Close(); err != nil {
-		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
-	}
-	p.fds.closeAll()
-	s.mu.Lock()
-	delete(s.procs, p.tid)
-	s.mu.Unlock()
-	if reason != "" {
-		s.log.Warnf("pid %d (%s) killed: %s", p.PID, path.Base(p.Path), reason)
-	}
-	p.status, p.reason = status, reason
-	close(p.done)
+	return sigSEGV, fmt.Sprintf("exception %d", vector)
 }
 
 // unknown logs a syscall number once per boot.
