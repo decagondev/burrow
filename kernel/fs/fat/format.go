@@ -81,6 +81,7 @@ type writer struct {
 	img                    []byte
 	total, fatSz, rsvd     uint32
 	dataStart, nextCluster uint32
+	label                  string // 11 characters, space padded
 	clusters               uint32
 }
 
@@ -120,7 +121,8 @@ func (w *writer) writeBPB(label string) {
 	b[bsDrvNum] = 0x80
 	b[bsBootSig] = 0x29
 	le.PutUint32(b[bsVolID:], 0x42555252) // "BURR"
-	copy(b[bsVolLab:bsVolLab+11], fmt.Sprintf("%-11.11s", strings.ToUpper(label)))
+	w.label = fmt.Sprintf("%-11.11s", strings.ToUpper(label))
+	copy(b[bsVolLab:bsVolLab+11], w.label)
 	copy(b[bsFilSysType:], "FAT32   ")
 	b[sigOffset], b[sigOffset+1] = 0x55, 0xAA
 	copy(w.sector(6), b) // backup boot sector
@@ -179,7 +181,7 @@ func (w *writer) assign(n *node, root bool) {
 		}
 		return
 	}
-	entries := 0
+	entries := 1 // the root's volume label
 	if !root {
 		entries = 2 // . and ..
 	}
@@ -203,6 +205,9 @@ func (w *writer) writeTree(n *node, parent uint32) {
 	if parent != 0 || n.first != 2 { // not the root
 		ents = append(ents, shortEntry(".          ", attrDirectory, n.first, 0, n.mtime)...)
 		ents = append(ents, shortEntry("..         ", attrDirectory, parent, 0, n.mtime)...)
+	} else {
+		// fsck.fat insists the root repeats the boot sector's label (BUG-0011).
+		ents = append(ents, shortEntry(w.label, attrVolumeID, 0, 0, n.mtime)...)
 	}
 	for i, c := range n.children {
 		tail := fmt.Sprintf("~%d", i+1) // unique in this directory

@@ -103,6 +103,23 @@ func TestBrokenChainIsAnError(t *testing.T) {
 	}
 }
 
+// BUG-0011: fsck.fat rejects a volume whose root has no label entry
+// matching the boot sector's. The reader skips the entry.
+func TestRootRepeatsTheLabel(t *testing.T) {
+	img := image(t)
+	f, err := Mount(bytes.NewReader(img))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := img[f.dataStart : f.dataStart+dirEntry]
+	if string(root[:11]) != "BURROWDATA " || root[dirAttr] != attrVolumeID {
+		t.Errorf("first root entry %q attr %#x, want the label", root[:11], root[dirAttr])
+	}
+	if ents, _ := fs.ReadDir(f, "."); len(ents) != 6 {
+		t.Errorf("root lists %d entries, want the 6 files and directories only", len(ents))
+	}
+}
+
 func TestFormatRejectsSmallImages(t *testing.T) {
 	if err := Format(make([]byte, 1<<20), source(), "x"); err == nil {
 		t.Error("Format accepted 1 MiB")

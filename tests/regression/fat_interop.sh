@@ -19,7 +19,7 @@ fail() { echo "FAT INTEROP FAIL: $*"; exit 1; }
 mkfat() { (cd kernel && "$GO" run ./cmd/mkfat "$@"); }
 
 # 1. Our image, Linux tools.
-fsck.fat -n "$B/data.img" >/dev/null || fail "fsck.fat rejects $B/data.img"
+out=$(fsck.fat -n "$B/data.img" 2>&1) || { echo "$out"; fail "fsck.fat rejects $B/data.img"; }
 got=$(mtype -i "$B/data.img" "::/docs/A-Long-File-Name.text") || fail "mtools cannot read a long name"
 [ "$got" = "$(cat 'datadisk/docs/A-Long-File-Name.text')" ] || fail "mtools read other bytes"
 

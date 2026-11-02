@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0011: mkfat images had no volume-label entry in the root, so fsck.fat rejected them
+- Found: 2026-11-02, the first CI run of Wave 8 (`make fat-interop` on ubuntu-latest).
+- Severity: minor (QEMU and our reader were happy; Linux's checker was not).
+- Symptom: `FAT INTEROP FAIL: fsck.fat rejects build/data.img`; locally `fsck.fat -n` said "Label in boot sector is 'BURROWDATA', but there is no volume label in root directory" and exited non-zero.
+- Root cause: `fat.Format` wrote the label only in the boot sector. FAT tools expect the root directory's first entry to repeat it (attribute `ATTR_VOLUME_ID`).
+- How it was found: the interop check had only run in CI (no dosfstools locally). Reproduced without root by unpacking the Debian packages (`apt-get download dosfstools mtools`, `dpkg -x`) and putting them on PATH.
+- Fix: the root directory starts with a volume-label entry (`kernel/fs/fat/format.go`); the reader already skipped such entries. The interop script now prints fsck.fat's output when it fails.
+- Regression: `TestRootRepeatsTheLabel` in `kernel/fs/fat`; `make fat-interop`.
+- Lesson: a format writer is only as good as the strictest reader: test against the reference tools early, not first in CI.
+
 ### BUG-0010: The census parsed strace's summary table, whose layout differs between versions
 - Found: 2026-11-02, the first CI run of Wave 6 (`make census` on ubuntu-latest).
 - Severity: minor (CI failed; the shim was fine).
