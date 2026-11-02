@@ -1,0 +1,5 @@
+# Suite "sched": threads, switching, preemption, sleep, FS_BASE, guard pages.
+sched_ping_pong
+sched_preempts
+sched_sleep_and_fs_base
+sched_stack_guard

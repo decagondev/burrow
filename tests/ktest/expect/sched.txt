@@ -1,0 +1,12 @@
+# Ordered markers for ktest suite "sched" (tests/ktest/sched.txt). Append-only.
+[nucleus] sched ok
+[ktest] running suite
+[ktest] ping 0
+[ktest] pong 0
+[ktest] ping 4
+[ktest] pong 4
+[ktest] sched_ping_pong ok
+[ktest] sched_preempts ok
+[ktest] sched_sleep_and_fs_base ok
+[ktest] sched_stack_guard ok
+BURROW:KTEST:OK

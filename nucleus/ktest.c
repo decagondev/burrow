@@ -19,6 +19,10 @@ static const struct ktest g_tests[] = {
     { "vm_reserve_hint",    kt_vm_reserve_hint },
     { "lapic_self_ipi",     kt_lapic_self_ipi },
     { "time_tick_rate",     kt_time_tick_rate },
+    { "sched_ping_pong",    kt_sched_ping_pong },
+    { "sched_preempts",     kt_sched_preempts },
+    { "sched_sleep_and_fs_base", kt_sched_sleep_and_fs_base },
+    { "sched_stack_guard",  kt_sched_stack_guard },
 };
 
 static const char *g_current;

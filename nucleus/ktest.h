@@ -33,4 +33,10 @@ int kt_vm_reserve_hint(void);
 /* ktest_irq.c */
 int kt_lapic_self_ipi(void);
 int kt_time_tick_rate(void);
+
+/* ktest_sched.c */
+int kt_sched_ping_pong(void);
+int kt_sched_preempts(void);
+int kt_sched_sleep_and_fs_base(void);
+int kt_sched_stack_guard(void);
 #endif

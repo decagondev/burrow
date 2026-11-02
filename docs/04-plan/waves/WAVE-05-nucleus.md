@@ -30,7 +30,7 @@ Region list per address space: reserved (no frames) vs committed. ktest: reserve
 ### [x] W5-S09 Time (E04.F04)
 Calibrate TSC with PIT channel 2; LAPIC timer periodic 1 kHz; `time_monotonic_ns()`. ktest: busy-wait 100 ms is within 5%.
 
-### [ ] W5-S10 Threads + context switch (E04.F05)
+### [x] W5-S10 Threads + context switch (E04.F05)
 `struct thread { rsp, kstack, fs_base, state, ... }`; `switch_to` in asm saves callee-saved regs, switches RSP, writes FS_BASE, updates TSS.RSP0 and per-CPU kstack top. Round-robin preemptive on timer tick. Idle thread `sti; hlt`.
 ktest: two threads print alternately 5 times.
 
