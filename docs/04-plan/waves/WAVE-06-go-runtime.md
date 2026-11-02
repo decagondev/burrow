@@ -6,7 +6,7 @@ Goal: an unmodified `GOOS=linux` Go binary runs in ring 0 on the nucleus. Contra
 Install Go 1.27.x. Re-run the census (`tools/census`), the `-T 0x7e0000000000` link test, and a test where `mmap` without a hint returns addresses in `0x7D00_0000_0000+` (run under a small `LD_PRELOAD`-free ptrace or seccomp experiment, or just test on the nucleus in S08). Output: updated census doc; ADR-0003 status; ADR-0004 address.
 Timebox: 2 sessions. Failure → plan B review.
 
-### [ ] W6-S02 Stage the kernel ELF (E05.F02)
+### [x] W6-S02 Stage the kernel ELF (E05.F02)
 Makefile: build `kernel.elf` (command in GO_RUNTIME_HOSTING §2), `-payload kernel=`. Loader loads it as a module (not segments: the nucleus maps it).
 
 ### [ ] W6-S03 Syscall gate (E05.F03)

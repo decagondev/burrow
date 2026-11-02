@@ -102,15 +102,26 @@ $(BUILD)/nucleus.elf: $(NUCLEUS_OBJ) nucleus/linker.ld
 $(BUILD)/nucleus.disk.elf: $(BUILD)/nucleus.elf
 	$(OBJCOPY) --strip-debug $< $@
 
+# ---- Go kernel (stock GOOS=linux binary, GO_RUNTIME_HOSTING.md §2) ---------
+# -T puts its text high in the lower half (MEMORY_MAP.md §2); the nucleus maps
+# its segments itself, the loader only hands the file over as a boot module.
+GO_KERNEL_TEXT := 0x7e0000000000
+GO_KERNEL_SRC  := $(shell find kernel -name '*.go' -o -name '*.s') kernel/go.mod
+
+$(BUILD)/kernel.elf: $(GO_KERNEL_SRC) | $(BUILD)
+	cd kernel && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -tags burrow -trimpath \
+		-ldflags='-T $(GO_KERNEL_TEXT) -s' -o ../$@ ./cmd/kernel
+
 # ---- host tools -------------------------------------------------------------
 $(BUILD)/mkimage: $(wildcard tools/mkimage/*.go) | $(BUILD)
 	cd tools && $(GO) build -o ../$@ ./mkimage
 
 # ---- disk image -------------------------------------------------------------
 BOOT_PARTS := $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
-	$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
+	$(BUILD)/nucleus.disk.elf $(BUILD)/kernel.elf $(BUILD)/mkimage
 MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
-	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
+	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf \
+	-payload kernel=$(BUILD)/kernel.elf
 
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
