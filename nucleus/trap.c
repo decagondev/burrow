@@ -6,6 +6,7 @@
 #include "panic.h"
 #include "cpu.h"
 #include "syscall.h"
+#include "uthread.h"
 
 struct idt_gate {
     uint16_t offset_lo, selector;
@@ -118,8 +119,10 @@ static void __attribute__((noreturn)) report(const struct trap_frame *f, uint64_
 void trap_dispatch(struct trap_frame *f);   /* called from trap.asm only */
 
 void trap_dispatch(struct trap_frame *f) {
+    int from_user = (f->cs & 3) == 3;
     if (f->vector < 32) {
         uint64_t cr2 = f->vector == VEC_PF ? read_cr2() : 0;
+        if (from_user && f->vector != 2) uthread_fault(f, cr2);   /* Go decides (W9) */
         if (f->vector != VEC_DF && f->vector != 2 && try_fixup(f, cr2)) return;
         report(f, cr2);
     }
@@ -127,4 +130,5 @@ void trap_dispatch(struct trap_frame *f) {
     irq_handler h = g_handlers[f->vector];
     if (!h) report(f, 0);
     h(f);
+    if (from_user) uthread_check_killed();          /* killed while preempted in ring 3 */
 }

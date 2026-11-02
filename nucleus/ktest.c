@@ -38,6 +38,11 @@ static const struct ktest g_tests[] = {
     { "nu_bootinfo_mmio",   kt_nu_bootinfo_mmio },
     { "uspace_map_translate", kt_uspace_map_translate },
     { "uspace_kernel_half_shared", kt_uspace_kernel_half_shared },
+    { "uthread_syscalls",   kt_uthread_syscalls },
+    { "uthread_faults",     kt_uthread_faults },
+    { "uthread_preempt_kill", kt_uthread_preempt_kill },
+    { "uthread_noncanonical_return", kt_uthread_noncanonical_return },
+    { "uthread_fs_base",    kt_uthread_fs_base },
 };
 
 static const char *g_current;

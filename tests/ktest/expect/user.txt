@@ -2,4 +2,9 @@
 [ktest] running suite
 [ktest] uspace_map_translate ok
 [ktest] uspace_kernel_half_shared ok
+[ktest] uthread_syscalls ok
+[ktest] uthread_faults ok
+[ktest] uthread_preempt_kill ok
+[ktest] uthread_noncanonical_return ok
+[ktest] uthread_fs_base ok
 BURROW:KTEST:OK

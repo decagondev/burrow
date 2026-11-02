@@ -60,4 +60,11 @@ int kt_nu_bootinfo_mmio(void);
 /* ktest_user.c */
 int kt_uspace_map_translate(void);
 int kt_uspace_kernel_half_shared(void);
+
+/* ktest_uthread.c */
+int kt_uthread_syscalls(void);
+int kt_uthread_faults(void);
+int kt_uthread_preempt_kill(void);
+int kt_uthread_noncanonical_return(void);
+int kt_uthread_fs_base(void);
 #endif

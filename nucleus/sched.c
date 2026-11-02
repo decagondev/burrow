@@ -130,6 +130,10 @@ static struct thread *thread_alloc(const char *name) {
     }
     t->fs_base = 0;
     t->cr3 = vmm_kernel()->pt.root;
+    t->uspace = 0;
+    t->killed = 0;
+    t->req_state = 0;
+    t->req_next = 0;
     t->timed_out = 0;
     t->wait_next = 0;
     t->name = name;
@@ -166,8 +170,15 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
 
 struct thread *thread_create_from_frame(const char *name, const struct trap_frame *frame,
                                         uint64_t fs_base) {
+    return thread_create_user(name, frame, fs_base, vmm_kernel()->pt.root, 0);
+}
+
+struct thread *thread_create_user(const char *name, const struct trap_frame *frame,
+                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace) {
     struct thread *t = thread_alloc(name);
     if (!t) return 0;
+    t->cr3 = cr3;                       /* before thread_publish: it may run at once */
+    t->uspace = uspace;
     /* [top - frame] the trap frame  [below] trap_resume  then 6 zero registers:
      * switch_to pops, "returns" into trap_resume with RSP at the frame. */
     struct trap_frame *tf = (struct trap_frame *)(uintptr_t)(t->kstack_top - sizeof *tf);
@@ -252,6 +263,12 @@ void thread_join(struct thread *t) {
     uint64_t f = irq_save();
     t->state = T_FREE;
     irq_restore(f);
+}
+
+struct thread *thread_find(uint32_t id) {
+    for (uint32_t i = 0; i < THREADS_MAX; i++)
+        if (g_threads[i].state != T_FREE && g_threads[i].id == id) return &g_threads[i];
+    return 0;
 }
 
 void thread_set_fs_base(struct thread *t, uint64_t fs) {

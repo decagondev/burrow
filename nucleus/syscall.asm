@@ -5,9 +5,17 @@
 ;   CS/SS from STAR, CPL 0. RSP is NOT changed: we are on the caller's stack,
 ;   which for Go is a small goroutine or g0 stack (PIT-01).
 ;
-; Caller classification: RCX inside Go kernel text or nucleus text = a ring-0
-; caller (both are supervisor-only, so ring 3 cannot produce such an RCX).
-; Anything else would be a user program: not supported until W9 -> panic.
+; Caller classification, CR3 first (W9): a user thread runs on its process's
+; page tables, Go and the nucleus always on the kernel's, so CR3 != the
+; kernel's = a user program, whatever its RIP (a process may map code at the
+; Go kernel's addresses in its own space). Then RCX inside Go kernel text or
+; nucleus text = a ring-0 caller; anything else on the kernel CR3 -> panic.
+;
+; User path: switch to the thread's kernel stack top (the user RSP is never
+; touched), build the same struct syscall_frame, let nu_user_syscall hand the
+; request to Go (uthread.c) and return with SYSRETQ. nu_user_syscall makes
+; sure the return RIP is canonical (PIT-24) and never returns for a killed
+; thread.
 ;
 ; Stack: the thread's kernel stack, like trap.asm: just below RSP if the
 ; caller already runs on it (nucleus code), else its top (Go code).
@@ -26,6 +34,8 @@ KERNEL_SS      equ 0x10
 
 extern g_percpu
 extern nu_syscall_dispatch          ; long nu_syscall_dispatch(struct syscall_frame *)
+extern nu_user_syscall              ; long nu_user_syscall(struct syscall_frame *), uthread.c
+extern g_kernel_cr3                 ; shim.c: the kernel PML4, as written to CR3
 extern syscall_bad_caller           ; noreturn, panics
 extern __text_start, __text_end     ; nucleus/linker.ld
 global syscall_entry, go_text_lo, go_text_hi
@@ -37,6 +47,11 @@ go_text_hi: dq 0
 
 section .text
 syscall_entry:
+    mov [g_percpu + PERCPU_SCRATCH], rax     ; IF=0 (FMASK): the scratch slot is ours
+    mov rax, cr3
+    cmp rax, [g_kernel_cr3]
+    mov rax, [g_percpu + PERCPU_SCRATCH]     ; mov leaves the flags alone
+    jne .user
     cmp rcx, [go_text_lo]
     jb .not_go
     cmp rcx, [go_text_hi]
@@ -103,6 +118,47 @@ syscall_entry:
     push KERNEL_CS
     push rcx
     iretq                            ; restores IF from the caller's RFLAGS
+
+.user:
+    mov [g_percpu + PERCPU_SCRATCH], rsp
+    mov rsp, [g_percpu + PERCPU_TOP]         ; empty while the thread runs in ring 3
+    push qword [g_percpu + PERCPU_SCRATCH]   ; user RSP
+    push rcx                         ; user RIP
+    push r11                         ; user RFLAGS
+    push rax                         ; struct syscall_frame starts here (top: nr)
+    push rdi
+    push rsi
+    push rdx
+    push r10
+    push r8
+    push r9
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rdi, rsp
+    sti
+    call nu_user_syscall             ; RAX = result; frame.rip is canonical
+    cli
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    pop r9
+    pop r8
+    pop r10
+    pop rdx
+    pop rsi
+    pop rdi
+    add rsp, 8                       ; saved nr
+    pop r11                          ; user RFLAGS
+    pop rcx                          ; user RIP
+    pop rsp                          ; user RSP: we leave the kernel stack here
+    o64 sysret                       ; CS 0x2B, SS 0x23 (STAR), IF from R11
 
 .bad:
     pop rax

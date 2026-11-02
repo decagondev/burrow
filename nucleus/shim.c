@@ -17,6 +17,7 @@
 #include "irq.h"
 #include "vmm.h"
 #include "uspace.h"
+#include "uthread.h"
 #include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
@@ -106,6 +107,15 @@ static long nu_as_destroy(struct syscall_frame *f)   { return uspace_destroy(SYS
 static long nu_page_alloc(struct syscall_frame *f)   { return uspace_page_alloc(SYSARG0(f)); }
 static long nu_page_free(struct syscall_frame *f)    { return uspace_page_free(SYSARG0(f), SYSARG1(f)); }
 
+/* User threads and their requests (uthread.c). */
+static long nu_uthread_create(struct syscall_frame *f) {
+    return uthread_create(SYSARG0(f), SYSARG1(f), SYSARG2(f), SYSARG3(f));
+}
+static long nu_syscall_wait(struct syscall_frame *f)   { return uthread_wait((uint64_t *)SYSARG0(f), SYSARG1(f)); }
+static long nu_syscall_reply(struct syscall_frame *f)  { return uthread_reply(SYSARG0(f), (long)SYSARG1(f)); }
+static long nu_uthread_kill(struct syscall_frame *f)   { return uthread_kill(SYSARG0(f)); }
+static long nu_uthread_set_fs(struct syscall_frame *f) { return uthread_set_fs(SYSARG0(f), SYSARG1(f)); }
+
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
@@ -120,6 +130,11 @@ static const sys_fn g_nu_table[] = {
     [NU_page_alloc - NU_BASE] = nu_page_alloc,
     [NU_page_free - NU_BASE] = nu_page_free,
     [NU_as_destroy - NU_BASE] = nu_as_destroy,
+    [NU_uthread_create - NU_BASE] = nu_uthread_create,
+    [NU_syscall_wait - NU_BASE] = nu_syscall_wait,
+    [NU_syscall_reply - NU_BASE] = nu_syscall_reply,
+    [NU_uthread_kill - NU_BASE] = nu_uthread_kill,
+    [NU_uthread_set_fs - NU_BASE] = nu_uthread_set_fs,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {
@@ -139,13 +154,17 @@ long nu_syscall_dispatch(struct syscall_frame *f) {
 
 void syscall_bad_caller(uint64_t rip);   /* syscall.asm */
 void syscall_bad_caller(uint64_t rip) {
-    panic("SYSCALL from rip=%llx: neither Go kernel nor nucleus text (user mode is W9)",
+    panic("SYSCALL on the kernel CR3 from rip=%llx: neither Go kernel nor nucleus text",
           (unsigned long long)rip);
 }
 
 extern void syscall_entry(void);
 
+/* syscall.asm compares CR3 with this: anything else is a user thread. */
+uint64_t g_kernel_cr3;
+
 void syscall_init(void) {
+    g_kernel_cr3 = vmm_kernel()->pt.root;
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_SCE);
     wrmsr(MSR_STAR, ((uint64_t)SEL_UCODE32 << 48) | ((uint64_t)SEL_KCODE << 32));
     wrmsr(MSR_LSTAR, (uint64_t)(uintptr_t)syscall_entry);

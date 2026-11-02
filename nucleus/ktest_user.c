@@ -6,17 +6,9 @@
 #include "frames.h"
 #include "boot.h"
 #include "errno.h"
+#include "ktest_nu.h"
 
 #define CODE_VA 0x400000ull
-
-static long nu(long nr, long a0, long a1, long a2, long a3, long a4) {
-    long ret;
-    register long r10 __asm__("r10") = a3;
-    register long r8 __asm__("r8") = a4;
-    __asm__ volatile("syscall" : "=a"(ret) : "a"(nr), "D"(a0), "S"(a1), "d"(a2), "r"(r10), "r"(r8)
-                     : "rcx", "r11", "memory");
-    return ret;
-}
 
 /* Map, translate, refuse bad requests, unmap, destroy: every frame comes back. */
 int kt_uspace_map_translate(void) {

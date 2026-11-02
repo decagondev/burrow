@@ -11,7 +11,7 @@ Design (refines the provisional ARCHITECTURE §7.3 and ADR-0004):
 ### [x] W9-S01 Address spaces in the nucleus (E08.F01)
 `nucleus/uspace.c`: `nu_as_create/map/unmap/translate/destroy`, `nu_page_alloc/free`; per-thread CR3, switched by `schedule()`. ktests: map, translate, unmap, destroy frees the tables, the kernel half is shared.
 
-### [ ] W9-S02 Ring 3: user threads, the user syscall path, faults (E08.F03, E08.F04)
+### [x] W9-S02 Ring 3: user threads, the user syscall path, faults (E08.F03, E08.F04)
 `nu_uthread_create/kill/set_fs`, `nu_syscall_wait/reply`; the gate's user path (CR3 test, kernel stack, SYSRETQ), user exceptions to fault requests, PIT-24. ktests run hand-assembled ring-3 code: getpid + exit through the queue, a NULL read and a kernel-address read become faults, a spinning thread is preempted and killed, the non-canonical return.
 
 ### [ ] W9-S03 Processes in Go: address space policy, ELF loader, initial stack (E08.F01, E08.F02)
