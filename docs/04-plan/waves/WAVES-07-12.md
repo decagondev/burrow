@@ -7,7 +7,7 @@ Stories: E06.F01 HAL + nucleus wrappers · E06.F02 driver registry · E06.F03 IR
 Demo: typing echoes via the Go keyboard driver; `lspci`-style listing on boot.
 Likely slices: nucleus `nu_irq_wait/ack` + ktest; Go `IRQ` (from snippets); PS/2 init + scancode set 1 decoder (pure, host-tested); console; `hostsim` build with fake ports and a channel-driven IRQ.
 
-## W8 Files and Pixels (M8)
+## W8 Files and Pixels (M8) — sliced: [WAVE-08](WAVE-08-files-pixels.md)
 Stories: E07.F01 initrd tarfs · E07.F02 VFS · E07.F03 devfs · E07.F04 framebuffer (BGA) · E07.F05 block + ATA in Go · E07.F06 FAT32 read.
 Demo: `cat /etc/motd`; Go draws a gopher-coloured gradient and a text console on the framebuffer.
 Test idea: VFS conformance suite run against tarfs, ramfs and devfs (Liskov).

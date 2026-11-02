@@ -15,6 +15,8 @@
 #include "kprintf.h"
 #include "panic.h"
 #include "irq.h"
+#include "vmm.h"
+#include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
 #define MSR_LSTAR  0xC0000082u
@@ -74,9 +76,29 @@ static long nu_debug_exit(struct syscall_frame *f) {
 /* Blocks this thread (and only it) until the ISA line fires: ADR-0005. */
 static long nu_irq_wait(struct syscall_frame *f) { return irq_wait(SYSARG0(f)); }
 static long nu_irq_ack(struct syscall_frame *f)  { return irq_ack(SYSARG0(f)); }
+/* boot_info v2 into a Go buffer (same address space, trusted caller). */
+static long nu_bootinfo(struct syscall_frame *f) {
+    uint64_t n = SYSARG1(f) < sizeof(struct boot_info) ? SYSARG1(f) : sizeof(struct boot_info);
+    memcpy((void *)SYSARG0(f), boot_info(), n);
+    return (long)n;
+}
+
+/* Device memory for a Go driver (a PCI BAR): uncached, NX, at physmap + pa. */
+#define MMIO_MAX_BYTES (256ull << 20)
+#define PHYS_LIMIT     (1ull << 46)
+static long nu_mmio_map(struct syscall_frame *f) {
+    uint64_t pa = SYSARG0(f), len = SYSARG1(f);
+    if (len == 0 || len > MMIO_MAX_BYTES || pa >= PHYS_LIMIT || len > PHYS_LIMIT - pa) return -EINVAL;
+    uint64_t lo = pa & ~0xFFFull, hi = (pa + len + 0xFFF) & ~0xFFFull;
+    vm_map_mmio(lo, hi - lo);
+    return (long)(boot_info()->physmap_base + pa);
+}
+
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
+    [NU_bootinfo - NU_BASE] = nu_bootinfo,
+    [NU_mmio_map - NU_BASE] = nu_mmio_map,
     [NU_physmap_base - NU_BASE] = nu_physmap_base,
     [NU_debug_exit - NU_BASE] = nu_debug_exit,
 };

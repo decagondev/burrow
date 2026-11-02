@@ -55,4 +55,5 @@ int kt_syscall_getpid(void);
 int kt_syscall_write(void);
 int kt_shim_unknown_once(void);
 int kt_madvise_dontneed_zeroes(void);
+int kt_nu_bootinfo_mmio(void);
 #endif

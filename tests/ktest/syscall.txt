@@ -3,3 +3,5 @@ syscall_getpid
 syscall_write
 shim_unknown_once
 madvise_dontneed_zeroes
+# W8-S01: nucleus calls for boot data and device memory
+nu_bootinfo_mmio

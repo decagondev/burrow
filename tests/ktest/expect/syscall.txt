@@ -7,4 +7,5 @@
 [shim] UNIMPLEMENTED syscall 999
 [ktest] shim_unknown_once ok
 [ktest] madvise_dontneed_zeroes ok
+[ktest] nu_bootinfo_mmio ok
 BURROW:KTEST:OK

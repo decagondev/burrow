@@ -11,13 +11,15 @@ import (
 	"burrow/kernel/arch/amd64"
 	"burrow/kernel/console"
 	"burrow/kernel/drivers/pci"
-	"burrow/kernel/klog"
 )
 
 const mib = 1 << 20
 
 // addCommands gives the console the commands that need the kernel's state.
-func addCommands(con *console.Console, boot time.Time, log *klog.Logger) {
+func addCommands(con *console.Console, k *kernel) {
+	log := k.log.With("console")
+	con.Add(console.Command{Name: "modules", Help: "list the loader's boot modules",
+		Run: func(_ []string, out io.Writer) { io.WriteString(out, listModules(k.modules)) }})
 	con.Add(console.Command{Name: "lspci", Help: "list PCI functions found at boot",
 		Run: func(_ []string, out io.Writer) {
 			for _, d := range pci.Devices() {
@@ -26,7 +28,7 @@ func addCommands(con *console.Console, boot time.Time, log *klog.Logger) {
 		}})
 	con.Add(console.Command{Name: "uptime", Help: "time since the Go kernel started",
 		Run: func(_ []string, out io.Writer) {
-			fmt.Fprintf(out, "up %v\n", time.Since(boot).Round(time.Millisecond))
+			fmt.Fprintf(out, "up %v\n", time.Since(k.boot).Round(time.Millisecond))
 		}})
 	con.Add(console.Command{Name: "mem", Help: "Go heap and GC numbers",
 		Run: func(_ []string, out io.Writer) {

@@ -4,6 +4,9 @@
 #include "syscall.h"
 #include "errno.h"
 #include "cpu.h"
+#include "boot.h"
+#include "apic.h"
+#include <burrow/boot_info.h>
 
 extern uint64_t ktest_syscall_clobbers(void);
 extern uint64_t shim_unknown_reports(void);
@@ -63,5 +66,25 @@ int kt_shim_unknown_once(void) {
     KT_CHECK(sys3(999, 1, 2, 3) == -ENOSYS);
     KT_CHECK(sys3(999, 1, 2, 3) == -ENOSYS);
     KT_CHECK(shim_unknown_reports() == before + 1);
+    return 0;
+}
+
+/* W8-S01: nu_bootinfo copies boot_info v2; nu_mmio_map maps device memory
+ * at physmap + pa (the LAPIC page: its ID register reads back) and rejects
+ * bad ranges instead of panicking. */
+int kt_nu_bootinfo_mmio(void) {
+    uint8_t buf[256];
+    KT_CHECK(sys3(0x1002, (long)buf, sizeof buf, 0) == (long)sizeof(struct boot_info));
+    const struct boot_info *bi = (const struct boot_info *)buf;
+    KT_CHECK(bi->magic == BOOTINFO_MAGIC && bi->version == BOOTINFO_VERSION);
+    KT_CHECK(sys3(0x1002, (long)buf, 8, 0) == 8);
+
+    const uint64_t lapic = 0xFEE00000ull;
+    long va = sys3(0x1005, (long)(lapic + 0x20), 4, 0);
+    KT_CHECK(va == (long)(boot_info()->physmap_base + lapic + 0x20));
+    KT_CHECK(*(volatile uint32_t *)va == lapic_read(LAPIC_ID));
+    KT_CHECK(sys3(0x1005, (long)lapic, 0, 0) == -EINVAL);
+    KT_CHECK(sys3(0x1005, 1ll << 46, 4096, 0) == -EINVAL);
+    KT_CHECK(sys3(0x1005, 0, (512ll << 20), 0) == -EINVAL);
     return 0;
 }

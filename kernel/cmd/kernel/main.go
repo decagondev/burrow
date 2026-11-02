@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"burrow/kernel/arch/amd64"
+	"burrow/kernel/bootinfo"
 	"burrow/kernel/console"
 	"burrow/kernel/driver"
 	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
@@ -31,19 +32,33 @@ import (
 	"burrow/kernel/selftest"
 )
 
+// kernel is the state console commands and later subsystems share.
+type kernel struct {
+	boot    time.Time
+	log     *klog.Logger
+	modules []bootinfo.Module
+}
+
 func main() {
-	boot := time.Now()
+	k := &kernel{boot: time.Now()}
 	com1 := uart.New(amd64.Ports{}, uart.COM1)
 	com1.Init()
 	log := klog.New(com1, klog.Info)
+	k.log = log
 	log.Infof("hello from Go %s", "(Burrow kernel)")
 	testFaults()
+	mods, err := bootModules(log.With("boot"))
+	if err != nil {
+		log.Errorf("boot data: %v", err)
+		amd64.DebugExit(0x11)
+	}
+	k.modules = mods
 
 	done := make(chan int)
 	go func() { done <- 42 }()
 	fmt.Fprintf(com1, "BURROW:GO:OK goroutine says %d\n", <-done)
 
-	err := selftest.Run(com1, selftest.Kernel())
+	err = selftest.Run(com1, selftest.Kernel())
 	if err == nil {
 		err = selftest.RunChecks(com1, irqCheck())
 	}
@@ -64,7 +79,7 @@ func main() {
 	})
 
 	con := console.New(log.Writer(), input)
-	addCommands(con, boot, log.With("console"))
+	addCommands(con, k)
 	log.With("console").Infof("ready: type on the keyboard or the serial line (help lists commands)")
 	con.Run()
 }

@@ -5,6 +5,8 @@ BURROW:NUCLEUS:OK
 [nucleus] go kernel mapped
 [nucleus] starting the Go kernel
 [kernel] INFO: hello from Go
+[boot] INFO: module kernel:
+[boot] INFO: module nucleus:
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok

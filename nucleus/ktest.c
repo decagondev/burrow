@@ -35,6 +35,7 @@ static const struct ktest g_tests[] = {
     { "syscall_write",      kt_syscall_write },
     { "shim_unknown_once",  kt_shim_unknown_once },
     { "madvise_dontneed_zeroes", kt_madvise_dontneed_zeroes },
+    { "nu_bootinfo_mmio",   kt_nu_bootinfo_mmio },
 };
 
 static const char *g_current;
