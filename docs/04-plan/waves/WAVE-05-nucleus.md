@@ -24,7 +24,7 @@ Free-list of 4 KiB frames built from boot_info modules + E820. Pure core unit-te
 ### [x] W5-S07 VMM mechanism (E04.F03)
 `vm_map/unmap/protect/translate` on any PML4 via physmap; `invlpg`. ktest: map a page, write, translate, unmap, access → #PF caught by a test hook.
 
-### [ ] W5-S08 Reserve/commit regions (E04.F03, PIT-05)
+### [x] W5-S08 Reserve/commit regions (E04.F03, PIT-05)
 Region list per address space: reserved (no frames) vs committed. ktest: reserve 2 GiB on a 128 MiB VM succeeds; committing 4 KiB uses exactly 1 frame (+ table frames).
 
 ### [ ] W5-S09 Time (E04.F04)

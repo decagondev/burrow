@@ -6,4 +6,6 @@
 [ktest] vmm_map_write_unmap ok
 [ktest] vmm_protect_readonly ok
 [ktest] vmm_kernel_wx ok
+[ktest] vm_reserve_commit ok
+[ktest] vm_reserve_hint ok
 BURROW:KTEST:OK

@@ -4,6 +4,8 @@
 #include "boot.h"
 #include "vmm.h"
 #include "trap.h"
+#include "vm_region.h"
+#include "errno.h"
 
 #define TEST_VA 0x0000400000200000ull   /* lower half, unused until W6 */
 
@@ -82,5 +84,51 @@ int kt_vmm_kernel_wx(void) {
     uint64_t v;
     KT_CHECK(probe_read64(0x1000, &v) == -1);                 /* boot_info's old identity address */
     KT_CHECK(trap_last.vector == VEC_PF && trap_last.cr2 == 0x1000);
+    return 0;
+}
+
+/* PIT-05: reserving 2 GiB on a 128 MiB machine must cost no frames;
+ * committing one page costs exactly one data frame (+ at most 3 tables). */
+int kt_vm_reserve_commit(void) {
+    struct addr_space *as = vmm_kernel();
+    uint64_t free0 = frames_free_count(), base;
+    KT_CHECK(vm_reserve(as, 0, 2ull << 30, &base) == 0);
+    KT_CHECK(base == VM_SEARCH_BASE);
+    KT_CHECK(frames_free_count() == free0);
+    uint64_t v;
+    KT_CHECK(probe_read64(base, &v) == -1);                   /* reserved is not backed */
+
+    KT_CHECK(vm_commit(as, base, 100, VM_PROT_READ | VM_PROT_WRITE) == 0);   /* rounds to 1 page */
+    uint64_t used = free0 - frames_free_count();
+    KT_CHECK(used >= 1 && used <= 4);
+    KT_CHECK(probe_read64(base, &v) == 0 && v == 0);          /* zeroed */
+    KT_CHECK(probe_write64(base + 8, 42) == 0);
+
+    uint64_t free1 = frames_free_count();
+    KT_CHECK(vm_commit(as, base + PAGE_4K, PAGE_4K, VM_PROT_READ | VM_PROT_WRITE) == 0);
+    KT_CHECK(free1 - frames_free_count() == 1);               /* same tables: exactly one frame */
+
+    KT_CHECK(vm_commit(as, base, PAGE_4K, VM_PROT_READ) == 0);           /* re-protect keeps data */
+    KT_CHECK(probe_read64(base + 8, &v) == 0 && v == 42);
+    KT_CHECK(probe_write64(base + 8, 1) == -1);
+
+    KT_CHECK(vm_commit(as, base - PAGE_4K, PAGE_4K, VM_PROT_READ) == -EINVAL);  /* not reserved */
+    KT_CHECK(vm_release(as, base, 2ull << 30) == 0);
+    KT_CHECK(frames_free_count() == free0 - (used - 1));      /* data frames back, tables kept */
+    KT_CHECK(vm_commit(as, base, PAGE_4K, VM_PROT_READ) == -EINVAL);
+    return 0;
+}
+
+/* The Go runtime asks for its heap at 0xc000000000: a free hint is honoured. */
+int kt_vm_reserve_hint(void) {
+    struct addr_space *as = vmm_kernel();
+    uint64_t got;
+    KT_CHECK(vm_reserve(as, 0xc000000000ull, 64ull << 20, &got) == 0);
+    KT_CHECK(got == 0xc000000000ull);
+    uint64_t again;
+    KT_CHECK(vm_reserve(as, 0xc000000000ull, PAGE_4K, &again) == 0);
+    KT_CHECK(again != got);                                   /* taken: placed elsewhere */
+    KT_CHECK(vm_release(as, got, 64ull << 20) == 0);
+    KT_CHECK(vm_release(as, again, PAGE_4K) == 0);
     return 0;
 }

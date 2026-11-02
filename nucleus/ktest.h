@@ -27,6 +27,8 @@ int kt_pmm_alloc_all_free_all(void);
 int kt_vmm_map_write_unmap(void);
 int kt_vmm_protect_readonly(void);
 int kt_vmm_kernel_wx(void);
+int kt_vm_reserve_commit(void);
+int kt_vm_reserve_hint(void);
 
 /* ktest_irq.c */
 int kt_lapic_self_ipi(void);

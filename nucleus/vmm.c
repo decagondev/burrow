@@ -1,6 +1,7 @@
 /* vmm.c - see vmm.h. TLB: entries are flushed with invlpg when the address
  * space is the one in CR3; a later switch to another CR3 flushes anyway. */
 #include "vmm.h"
+#include "vm_region.h"
 #include "frames.h"
 #include "boot.h"
 #include "cpu.h"
@@ -10,6 +11,7 @@
 #define CR0_WP (1ull << 16)
 
 static struct addr_space g_kernel;
+static uint64_t g_nx_mask = ~0ull;          /* clears PTE_NX when the CPU lacks NX */
 
 static uint64_t pt_alloc(void *env) { (void)env; return frame_alloc(); }
 static void *pt_ptr(void *env, uint64_t pa) { (void)env; return phys_to_virt(pa); }
@@ -31,13 +33,15 @@ void vmm_init(void) {
     pml4[0] = 0;                              /* loader's identity map: nothing below uses it */
     write_cr3(g_kernel.pt.root);              /* flush every non-global entry */
     write_cr0(read_cr0() | CR0_WP);
-    kprintf("[nucleus] vmm ok (cr3=%llx, identity map dropped, wp=on)\n",
-            (unsigned long long)g_kernel.pt.root);
+    if (!(rdmsr(MSR_EFER) & EFER_NXE)) g_nx_mask = ~PTE_NX;   /* bit 63 would be reserved */
+    vm_region_init(&g_kernel);
+    kprintf("[nucleus] vmm ok (cr3=%llx, identity map dropped, wp=on, nx=%s)\n",
+            (unsigned long long)g_kernel.pt.root, g_nx_mask == ~0ull ? "on" : "off");
 }
 
 enum pt_status vm_map(struct addr_space *as, uint64_t va, uint64_t pa, uint64_t len, uint64_t flags) {
     uint64_t f = irq_save();
-    enum pt_status st = pt_map(&as->pt, va, pa, len, flags);
+    enum pt_status st = pt_map(&as->pt, va, pa, len, flags & g_nx_mask);
     irq_restore(f);
     return st;        /* new entries need no flush: nothing was cached for them */
 }
@@ -63,7 +67,7 @@ enum pt_status vm_unmap(struct addr_space *as, uint64_t va, uint64_t len, int fr
 
 enum pt_status vm_protect(struct addr_space *as, uint64_t va, uint64_t len, uint64_t flags) {
     uint64_t f = irq_save();
-    enum pt_status st = pt_protect(&as->pt, va, len, flags);
+    enum pt_status st = pt_protect(&as->pt, va, len, flags & g_nx_mask);
     flush(as, va, len);
     irq_restore(f);
     return st;

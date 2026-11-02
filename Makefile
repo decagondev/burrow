@@ -141,7 +141,7 @@ UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
-	nucleus/pmm.c
+	nucleus/pmm.c nucleus/regions.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)

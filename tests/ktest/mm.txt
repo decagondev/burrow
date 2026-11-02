@@ -3,3 +3,5 @@ pmm_alloc_all_free_all
 vmm_map_write_unmap
 vmm_protect_readonly
 vmm_kernel_wx
+vm_reserve_commit
+vm_reserve_hint
