@@ -9,6 +9,8 @@
 #define EAGAIN    11
 #define ENOMEM    12
 #define EFAULT    14
+#define EEXIST    17
+#define ENODEV    19
 #define EINVAL    22
 #define ENOSYS    38
 #define ETIMEDOUT 110

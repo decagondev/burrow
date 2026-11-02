@@ -21,7 +21,7 @@ Map PT_LOAD supervisor pages; record text range; `build_initial_stack()`; create
 ### [x] W6-S06 arch_prctl, signals stubs, fcntl, openat, getrlimit, affinity (E05.F04)
 Iterate: boot, read the UNIMPLEMENTED line, implement, repeat. Log each in DEVLOG.
 
-### [ ] W6-S07 mmap/munmap/madvise on reserve/commit (E05.F04)
+### [x] W6-S07 mmap/munmap/madvise on reserve/commit (E05.F04)
 Honour free hints; otherwise allocate from `0x7D00_0000_0000`. Test: runtime reaches `schedinit` (gdb breakpoint `runtime.schedinit`).
 
 ### [ ] W6-S08 clone (E05.F04)

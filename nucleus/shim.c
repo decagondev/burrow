@@ -29,6 +29,8 @@ static const sys_fn g_table[SYS_MAX] = {
     [SYS_prlimit64] = sys_prlimit64,     [SYS_sched_getaffinity] = sys_sched_getaffinity,
     [SYS_arch_prctl] = sys_arch_prctl,   [SYS_clock_gettime] = sys_clock_gettime,
     [SYS_getrandom] = sys_getrandom,     [SYS_exit_group] = sys_exit_group,
+    [SYS_mmap] = sys_mmap,               [SYS_munmap] = sys_munmap,
+    [SYS_sched_yield] = sys_sched_yield, [SYS_nanosleep] = sys_nanosleep,
     /* tgkill would be async preemption (SIGURG); GODEBUG=asyncpreemptoff=1
      * means it should never come, so leaving it out makes the census shout. */
 };
