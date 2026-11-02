@@ -36,6 +36,8 @@ type run /bin/musl-hello one two
 key ret
 type run /bin/forktest
 key ret
+type run /bin/fdtest
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

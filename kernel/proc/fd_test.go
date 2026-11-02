@@ -1,0 +1,211 @@
+package proc_test
+
+import (
+	"bytes"
+	"io/fs"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+
+	"burrow/kernel/fs/memfs"
+	"burrow/kernel/klog"
+	"burrow/kernel/proc"
+	"burrow/kernel/proc/proctest"
+	"burrow/kernel/vfs"
+)
+
+// vfsRig is newRig over the real VFS: a frozen root and a writable /tmp.
+func vfsRig(t *testing.T) (*rig, *vfs.VFS) {
+	root := memfs.New()
+	root.MkdirAll("bin", 0o755, time.Time{})
+	root.MkdirAll("etc", 0o755, time.Time{})
+	root.WriteFile("bin/prog", program(), 0o755, time.Time{})
+	root.WriteFile("etc/motd", []byte("hello file\n"), 0o644, time.Time{})
+	root.Freeze()
+	v := vfs.New()
+	v.Mount(".", root, "memfs")
+	v.Mount("tmp", memfs.New(), "ramfs")
+	nu := proctest.New()
+	r := &rig{t: t, nu: nu, console: &syncBuf{}, log: &syncBuf{}}
+	r.sys = proc.NewSystem(nu, v, r.console, klog.New(r.log, klog.Info))
+	go r.sys.Serve()
+	return r, v
+}
+
+// str stages a NUL-terminated string at va.
+func (r *rig) str(p *proc.Process, va uint64, s string) uint64 {
+	r.put(p, va, append([]byte(s), 0))
+	return va
+}
+
+func TestPipeBetweenProcesses(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	if r.call(p, 293, scratch, 0) != 0 { // pipe2
+		t.Fatal("pipe2")
+	}
+	b := make([]byte, 8)
+	p.Mem().CopyIn(scratch, b)
+	rd, wr := uint64(le.Uint32(b)), uint64(le.Uint32(b[4:]))
+	if rd != 3 || wr != 4 {
+		t.Fatalf("pipe fds %d %d", rd, wr)
+	}
+	r.call(p, 57) // fork: the child writes, the parent reads
+	kid := r.newestThread(p.TID())
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 0, Args: [6]uint64{rd, scratch + 64, 100}})
+	time.Sleep(10 * time.Millisecond) // the read blocks: nothing written yet
+	if r.callAs(kid, 3, rd) != 0 {    // the child closes its read end
+		t.Fatal("child close")
+	}
+	// the child's copy of scratch holds the two fds: write those 5 bytes
+	if n := r.callAs(kid, 1, wr, scratch, 5); n != 5 {
+		t.Fatalf("child write = %d", n)
+	}
+	if n := r.await(p.TID()); n != 5 {
+		t.Fatalf("parent read = %d", n)
+	}
+	got := make([]byte, 5)
+	p.Mem().CopyIn(scratch+64, got)
+	if !bytes.Equal(got, b[:5]) {
+		t.Errorf("read % x, want % x", got, b[:5])
+	}
+}
+
+func TestPipeEOFAndEPIPE(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	r.call(p, 22, scratch)
+	if r.call(p, 1, 4, scratch, 3) != 3 || r.call(p, 3, 4) != 0 {
+		t.Fatal("write, close")
+	}
+	if n := r.call(p, 0, 3, scratch+64, 10); n != 3 {
+		t.Errorf("read buffered = %d", n)
+	}
+	if n := r.call(p, 0, 3, scratch+64, 10); n != 0 {
+		t.Errorf("read after the last writer closed = %d, want 0 (EOF)", n)
+	}
+	r.call(p, 22, scratch)
+	r.call(p, 3, 4) // the new pipe is 4 (read) and 5 (write): close the read end
+	if e := r.call(p, 1, 5, scratch, 1); e != -int64(syscall.EPIPE) {
+		t.Errorf("write with no reader = %d", e)
+	}
+}
+
+func TestDupAndFcntl(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	if fd := r.call(p, 32, 1); fd != 3 {
+		t.Errorf("dup(1) = %d", fd)
+	}
+	if fd := r.call(p, 33, 1, 9); fd != 9 {
+		t.Errorf("dup2(1, 9) = %d", fd)
+	}
+	r.str(p, scratch, "via fd 9")
+	r.call(p, 1, 9, scratch, 8)
+	if r.console.String() != "via fd 9" {
+		t.Errorf("console %q", r.console.String())
+	}
+	if fd := r.call(p, 72, 1, 0, 20); fd != 20 {
+		t.Errorf("F_DUPFD from 20 = %d", fd)
+	}
+	r.call(p, 72, 20, 2, 1)
+	if r.call(p, 72, 20, 1) != 1 || r.call(p, 72, 9, 1) != 0 {
+		t.Error("FD_CLOEXEC")
+	}
+	if e := r.call(p, 33, 77, 5); e != -int64(syscall.EBADF) {
+		t.Errorf("dup2 of a closed fd = %d", e)
+	}
+	r.call(p, 59, r.str(p, scratch, "/bin/prog"), 0, 0) // execve: fd 20 goes, 9 stays
+	if r.call(p, 5, 20, scratch) != -int64(syscall.EBADF) || r.call(p, 5, 9, scratch) != 0 {
+		t.Error("close-on-exec")
+	}
+}
+
+func TestCwdFilesAndDirectories(t *testing.T) {
+	r, v := vfsRig(t)
+	p := r.spawn()
+	cwd := func() string {
+		n := r.call(p, 79, scratch+512, 256)
+		s, _ := p.Mem().CString(scratch+512, int(n))
+		return s
+	}
+	if cwd() != "/" {
+		t.Errorf("cwd %q", cwd())
+	}
+	if r.call(p, 83, r.str(p, scratch, "/tmp/d"), 0o755) != 0 || r.call(p, 80, r.str(p, scratch, "tmp/d")) != 0 {
+		t.Fatal("mkdir, chdir")
+	}
+	if cwd() != "/tmp/d" {
+		t.Errorf("cwd %q", cwd())
+	}
+	fd := r.call(p, 2, r.str(p, scratch, "f"), 0x241, 0o644) // O_WRONLY|O_CREAT|O_TRUNC
+	r.str(p, scratch+64, "one ")
+	r.call(p, 1, uint64(fd), scratch+64, 4)
+	r.call(p, 3, uint64(fd))
+	fd = r.call(p, 2, r.str(p, scratch, "f"), 0x441) // O_WRONLY|O_CREAT|O_APPEND
+	r.str(p, scratch+64, "two")
+	r.call(p, 1, uint64(fd), scratch+64, 3)
+	if b, err := fs.ReadFile(v, "tmp/d/f"); err != nil || string(b) != "one two" {
+		t.Errorf("tmp/d/f = %q, %v", b, err)
+	}
+	if e := r.call(p, 80, r.str(p, scratch, "f")); e != -int64(syscall.ENOTDIR) {
+		t.Errorf("chdir to a file = %d", e)
+	}
+	for _, c := range []struct {
+		got, want int64
+	}{
+		{r.call(p, 84, r.str(p, scratch, "/tmp/d")), -int64(syscall.ENOTEMPTY)},
+		{r.call(p, 87, r.str(p, scratch, "/tmp/d")), -int64(syscall.EISDIR)},
+		{r.call(p, 87, r.str(p, scratch, "f")), 0},
+		{r.call(p, 21, r.str(p, scratch, "f"), 0), -int64(syscall.ENOENT)},
+		{r.call(p, 84, r.str(p, scratch, "/tmp/d")), 0},
+		{r.call(p, 2, r.str(p, scratch, "/etc/new"), 0x41), -int64(syscall.EACCES)}, // the frozen root
+		{r.call(p, 2, r.str(p, scratch, "/etc/motd"), 0x10000), -int64(syscall.ENOTDIR)},
+	} {
+		if c.got != c.want {
+			t.Errorf("got %d, want %d", c.got, c.want)
+		}
+	}
+}
+
+func TestStatAndGetdents(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	if r.call(p, 262, uint64(0xFFFFFF9C), r.str(p, scratch, "etc/motd"), scratch+256, 0) != 0 {
+		t.Fatal("newfstatat")
+	}
+	st := make([]byte, 144)
+	p.Mem().CopyIn(scratch+256, st)
+	if le.Uint64(st[48:]) != 11 || le.Uint32(st[24:])&syscall.S_IFMT != syscall.S_IFREG {
+		t.Errorf("stat size %d mode %o", le.Uint64(st[48:]), le.Uint32(st[24:]))
+	}
+	dir := r.call(p, 257, uint64(0xFFFFFF9C), r.str(p, scratch, "/"), 0x10000)
+	var names []string
+	for {
+		n := r.call(p, 217, uint64(dir), scratch+1024, 48) // small buffer: several calls
+		if n <= 0 {
+			if n < 0 {
+				t.Fatalf("getdents64 = %d", n)
+			}
+			break
+		}
+		buf := make([]byte, n)
+		p.Mem().CopyIn(scratch+1024, buf)
+		for off := 0; off < len(buf); {
+			rec := int(le.Uint16(buf[off+16:]))
+			name := string(bytes.TrimRight(buf[off+19:off+rec], "\x00"))
+			names = append(names, name+"/"+string('0'+buf[off+18]))
+			off += rec
+		}
+	}
+	if got := strings.Join(names, " "); got != "./4 ../4 bin/4 etc/4 tmp/4" {
+		t.Errorf("entries %q", got)
+	}
+	if r.call(p, 63, scratch) != 0 {
+		t.Error("uname")
+	}
+	if s, _ := p.Mem().CString(scratch, 65); s != "Burrow" {
+		t.Errorf("uname sysname %q", s)
+	}
+}

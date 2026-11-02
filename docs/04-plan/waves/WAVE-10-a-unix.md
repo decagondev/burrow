@@ -15,7 +15,7 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S02 fork, execve, wait4, exit status (E09.F01)
 `kernel/proc`: a process tree (pid, ppid, pgid, sid), `fork` (eager copy of memory and descriptors), `execve` (new image, close-on-exec), `wait4`/`waitpid` with `WNOHANG` and Linux status encoding, zombies, orphans reparented to init, `getppid`, `exit` of the last thread.
 
-### [ ] W10-S03 File descriptors and the working directory (E09.F02)
+### [x] W10-S03 File descriptors and the working directory (E09.F02)
 `dup dup2 dup3 pipe pipe2 fcntl(F_DUPFD, F_GETFD/SETFD, F_GETFL/SETFL)`, `O_CLOEXEC`, `getcwd chdir fchdir`, the `*at` family relative to the cwd, `stat lstat newfstatat getdents64 access`, writable files under `/tmp` (`O_CREAT O_TRUNC O_APPEND`, `unlink`, `mkdir`), `uname`.
 
 ### [ ] W10-S04 Signals (E09.F03)

@@ -3,8 +3,6 @@ package proc
 import (
 	"encoding/binary"
 	"io"
-	"io/fs"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -93,20 +91,26 @@ func sysWriteFn(p *Process, a [6]uint64) (int64, bool) {
 func (p *Process) write(fd uint64, b []byte) int64 {
 	f := p.fds.get(fd)
 	switch {
-	case f == nil:
+	case f == nil || f.flags&oAccMode == oRDONLY:
 		return -int64(syscall.EBADF)
 	case f.console != nil:
 		f.console.Write(b)
 		return int64(len(b))
 	}
-	if w, isW := f.f.(io.Writer); isW { // device files (devfs)
-		n, err := w.Write(b)
-		if err != nil {
-			return errno(err)
-		}
-		return int64(n)
+	var n int
+	var err error
+	switch w := f.f.(type) {
+	case Canceller: // a pipe: may block until a reader makes room
+		n, err = w.WriteCancel(b, p.cancel())
+	case io.Writer: // a device or a writable file
+		n, err = w.Write(b)
+	default:
+		return -int64(syscall.EBADF)
 	}
-	return -int64(syscall.EBADF) // opened read-only: files are read-only in W9
+	if err != nil && n == 0 {
+		return errno(err)
+	}
+	return int64(n)
 }
 
 // writev(fd, iov, iovcnt): struct iovec { void *base; size_t len; }.
@@ -136,13 +140,19 @@ func sysWritevFn(p *Process, a [6]uint64) (int64, bool) {
 func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
 	f := p.fds.get(a[0])
 	switch {
-	case f == nil:
+	case f == nil || f.flags&oAccMode == oWRONLY:
 		return ok(-int64(syscall.EBADF))
 	case f.console != nil:
-		return ok(0) // console input reaches processes with the TTY (W10): EOF until then
+		return ok(0) // console input reaches processes with the TTY (W10-S05): EOF until then
 	}
 	buf := make([]byte, min(a[2], maxIO))
-	n, err := f.f.Read(buf)
+	var n int
+	var err error
+	if c, isC := f.f.(Canceller); isC {
+		n, err = c.ReadCancel(buf, p.cancel())
+	} else {
+		n, err = f.f.Read(buf)
+	}
 	if err != nil && err != io.EOF {
 		return ok(errno(err))
 	}
@@ -150,45 +160,6 @@ func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(errno(err))
 	}
 	return ok(int64(n))
-}
-
-const (
-	oAccMode = 3
-	oCloexec = 0x80000
-	atFDCWD  = -100
-)
-
-func sysOpenFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.open(a[0], a[1])) }
-
-func sysOpenatFn(p *Process, a [6]uint64) (int64, bool) {
-	if int32(a[0]) != atFDCWD {
-		name, err := p.mem.CString(a[1], 4096)
-		if err != nil || !strings.HasPrefix(name, "/") {
-			return ok(-int64(syscall.ENOTSUP)) // directory fds come with W10's openat family
-		}
-	}
-	return ok(p.open(a[1], a[2]))
-}
-
-// open: read-only for now; relative paths start at / (no cwd until W10).
-func (p *Process) open(nameVA, flags uint64) int64 {
-	name, err := p.mem.CString(nameVA, 4096)
-	if err != nil {
-		return errno(err)
-	}
-	if flags&oAccMode != 0 {
-		return -int64(syscall.EROFS)
-	}
-	f, err := p.sys.files.Open(p.resolve(name))
-	if err != nil {
-		return errno(err)
-	}
-	fd, err := p.fds.add(newFile(f, nil), 0, flags&oCloexec != 0)
-	if err != nil {
-		f.Close()
-		return errno(err)
-	}
-	return int64(fd)
 }
 
 func sysCloseFn(p *Process, a [6]uint64) (int64, bool) { return ok(errno(p.fds.close(a[0]))) }
@@ -207,41 +178,6 @@ func sysLseekFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(errno(err))
 	}
 	return ok(off)
-}
-
-// fstat fills Linux's struct stat (144 bytes).
-func sysFstatFn(p *Process, a [6]uint64) (int64, bool) {
-	f := p.fds.get(a[0])
-	if f == nil {
-		return ok(-int64(syscall.EBADF))
-	}
-	st := make([]byte, 144)
-	put := func(off int, v uint64) { binary.LittleEndian.PutUint64(st[off:], v) }
-	mode := uint64(syscall.S_IFCHR | 0o620) // the console
-	if f.f != nil {
-		info, err := f.f.Stat()
-		if err != nil {
-			return ok(errno(err))
-		}
-		mode = unixMode(info.Mode())
-		put(48, uint64(info.Size()))
-		put(88, uint64(info.ModTime().Unix())) // st_mtim.tv_sec
-	}
-	put(16, 1)                                           // st_nlink
-	binary.LittleEndian.PutUint32(st[24:], uint32(mode)) // st_mode
-	put(56, PageSize)                                    // st_blksize
-	return ok(errno(p.mem.CopyOut(a[1], st)))
-}
-
-func unixMode(m fs.FileMode) uint64 {
-	t := uint64(syscall.S_IFREG)
-	switch {
-	case m.IsDir():
-		t = syscall.S_IFDIR
-	case m&fs.ModeCharDevice != 0:
-		t = syscall.S_IFCHR
-	}
-	return t | uint64(m.Perm())
 }
 
 // ioctl: no TTY until W10, so TCGETS and TIOCGWINSZ say "not a terminal"

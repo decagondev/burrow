@@ -38,6 +38,14 @@ type Process struct {
 	termSig    int
 	reason     string
 	done       chan struct{}
+	sigWake    chan struct{} // closed when a signal is pending (W10-S04)
+}
+
+// cancel is closed when a signal interrupts p's blocking calls (EINTR).
+func (p *Process) cancel() <-chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.sigWake
 }
 
 // Wait blocks until the process has exited and returns a shell's view of

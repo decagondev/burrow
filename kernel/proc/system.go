@@ -100,7 +100,8 @@ func (s *System) newProcess(file string, mem *Mem, fds *fdTable) *Process {
 	s.nextPID++
 	s.mu.Unlock()
 	return &Process{PID: pid, Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
-		cwd: "/", children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{})}
+		cwd: "/", children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{}),
+		sigWake: make(chan struct{})}
 }
 
 // register publishes p with its thread (s.mu held).

@@ -20,10 +20,16 @@ type file struct {
 	f       fs.File   // nil for the console
 	console io.Writer // non-nil for the console
 	refs    atomic.Int32
+	path    string // io/fs path it was opened at ("" for pipes, the console)
+	flags   int    // O_ACCMODE and the status flags F_GETFL reports
+
+	mu      sync.Mutex
+	dirents []fs.DirEntry // getdents64: entries not returned yet
+	dirRead bool          // ...and whether they were read
 }
 
 func newFile(f fs.File, console io.Writer) *file {
-	d := &file{f: f, console: console}
+	d := &file{f: f, console: console, flags: oRDWR}
 	d.refs.Store(1)
 	return d
 }
@@ -125,6 +131,21 @@ func (t *fdTable) clone() *fdTable {
 		c.fds[n] = fd{e.file.ref(), e.cloexec}
 	}
 	return c
+}
+
+func (t *fdTable) cloexec(n int) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.fds[n].cloexec
+}
+
+func (t *fdTable) setCloexec(n int, on bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if e, ok := t.fds[n]; ok {
+		e.cloexec = on
+		t.fds[n] = e
+	}
 }
 
 // closeOnExec drops every descriptor marked FD_CLOEXEC (execve).
