@@ -7,8 +7,8 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1000 | `nu_irq_wait` | irq | 0 when the IRQ fired | W7 |
 | 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line) | W7 |
 | 0x1002 | `nu_bootinfo` | buf, len | bytes copied of boot_info v2 | W6 |
-| 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 |
-| 0x1004 | `nu_debug_exit` | code | does not return (QEMU tests) | W6 |
+| 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 (done: `amd64.PhysmapBase`) |
+| 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; returns 0 where there is no debug-exit device | W6 (done: `amd64.DebugExit`) |
 | 0x1010 | `nu_as_create` | — | address-space handle | W9 |
 | 0x1011 | `nu_as_map` | as, va, pa, len, prot | 0 | W9 |
 | 0x1012 | `nu_as_unmap` | as, va, len | 0 | W9 |

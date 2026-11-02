@@ -53,7 +53,7 @@ x86-64 has a 48-bit canonical address space: a lower half `0x0000_0000_0000_0000
 |---|---|---|---|
 | `0x0000_0000_0000_0000 - 0x0000_0000_003F_FFFF` | — | unmapped guard: catches NULL derefs | none |
 | `0x0000_0000_0040_0000 - 0x0000_00BF_FFFF_FFFF` | user | static ELF images (`0x400000`), brk heap, mmap | U |
-| `0x0000_00C0_0000_0000 - 0x0000_00FF_FFFF_FFFF` | Go kernel | Go heap arenas (runtime hint `0xc000000000`) | S |
+| `0x0000_00C0_0000_0000 - 0x0000_00FF_FFFF_FFFF` | Go kernel | Go heap arenas (Go <= 1.22 hint `0xc000000000`; Go 1.27 picks a random lower-half hint, which any free range satisfies) | S |
 | `0x0000_0100_0000_0000 - 0x0000_7CFF_FFFF_FFFF` | user | more mmap space | U |
 | `0x0000_7D00_0000_0000 - 0x0000_7DFF_FFFF_FFFF` | Go kernel | runtime `PROT_NONE` reservations, thread stacks | S |
 | `0x0000_7E00_0000_0000 - 0x0000_7EFF_FFFF_FFFF` | Go kernel | Go kernel image (`-ldflags -T 0x7e0000000000`) | S |
@@ -62,7 +62,7 @@ x86-64 has a 48-bit canonical address space: a lower half `0x0000_0000_0000_0000
 | `0xFFFF_FFFF_8000_0000 - ...` | nucleus | nucleus image (`-mcmodel=kernel`, loaded at phys 1 MiB) | S |
 | `0xFFFF_FFFF_C000_0000 - +64 × 20 KiB` | nucleus | kernel stacks: slot i = 4 KiB unmapped guard + 16 KiB stack (`KSTACK_REGION`, `nucleus/sched.c`) | S, NX |
 
-Since W5 the nucleus drops the loader's identity map (PML4[0]) in `vmm_init`, so nothing is mapped below `0x0000_8000_0000_0000` until the Go kernel (W6) reserves it. Device registers are mapped uncached at `physmap_base + phys` (`vm_map_mmio`, e.g. the LAPIC at `0xFEE00000`). Hint-less `vm_reserve` calls are placed from `0x7D00_0000_0000` up (`VM_SEARCH_BASE`); a free hint such as Go's `0xc000000000` is honoured.
+Since W5 the nucleus drops the loader's identity map (PML4[0]) in `vmm_init`, so nothing is mapped below `0x0000_8000_0000_0000` until the Go kernel (W6) reserves it. Device registers are mapped uncached at `physmap_base + phys` (`vm_map_mmio`, e.g. the LAPIC at `0xFEE00000`). Hint-less `vm_reserve` calls are placed from `0x7D00_0000_0000` up (`VM_SEARCH_BASE`); a free hint is honoured. As built in W6 (Go 1.27.3): the Go kernel's segments at `0x7dff_ffff_f000` (R X), `0x7e00_000a_f000` (R), `0x7e00_0018_d000` (RW + bss); its 1 MiB m0 stack and the runtime's hint-less maps from `0x7D00_0000_0000`; the heap at a random hint such as `0x19f9_xxxx_xxxx`.
 
 S = supervisor-only, U = user accessible. The Go kernel and nucleus regions are present in **every** address space but marked supervisor-only, so a user process cannot read them, and its SYSCALL return RIP can never point into Go kernel text (this is what makes the gate's caller check sound, [ADR-0004](../03-decisions/ADR-0004-syscall-gate.md)).
 

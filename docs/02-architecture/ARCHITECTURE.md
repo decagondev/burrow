@@ -87,7 +87,6 @@ sequenceDiagram
     L->>L: W4 - read nucleus ELF (CRC), copy segments, page tables, boot_info v2
     L->>N: W4 - load CR3, jump with RDI = physmap + 0x1000
     N->>N: W5 - GDT/TSS/IDT, PMM, VMM, LAPIC timer, threads, futexes, SSE
-    Note over N: Wave 5 ends here (BURROW:NUCLEUS:OK, ktests)
     N->>G: W6 - load Go ELF, Linux-style stack, enter _rt0_amd64_linux
     G->>N: runtime syscalls (mmap, clone, futex, ...)
     G->>G: main() - drivers, VFS, init process

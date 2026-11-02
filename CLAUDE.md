@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-5 (boot chain + nucleus core: traps, memory, timer, threads, futexes, SSE) are done; Wave 6 (syscall gate + running the stock Go runtime in ring 0) is next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
+Burrow is an educational x86-64 OS: **assembly boot → C loader → C nucleus → Go kernel**, aiming at a POSIX-like system that runs DOOM. Waves 0-6 are done: boot chain, nucleus core (traps, memory, timer, threads, futexes, SSE), and the stock Go 1.27.3 runtime running in ring 0 on the nucleus's Linux-syscall shim. Waves 7-12 (`docs/04-plan/waves/WAVES-07-12.md`: Go drivers, VFS, user space, Doom) are next. Work is planned in "slices" in `docs/04-plan/waves/WAVE-NN-*.md`. Docs start at `docs/README.md`.
 
 ## Commands
 
@@ -14,11 +14,14 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + smoke + ktest + regress (full suite)
+make test         # test-unit + census + smoke + go-smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
 make ktest        # boot one image per tests/ktest/<suite>.txt, run the in-kernel tests
+make go-smoke     # boot build/go.img (nucleus + Go kernel), check tests/smoke/expect/boot_to_go.txt
+make run-go       # the same image, interactive
+make census       # Go runtime syscalls on the host (strace) vs tests/regression/census-go1.27.txt
 make regress      # boot deliberately broken images, assert they fail loudly
 make sizes        # how full stage1 / stage2 / loader are
 make docs-check   # parse every Mermaid block (needs node + npm)
@@ -44,6 +47,7 @@ Expected `make test` tail: `N checks, 0 failures`, `SMOKE PASS [boot_to_loader]`
 
 - **Nucleus structure** (`nucleus/main.c` calls each module's init in order, each prints one `[nucleus] ... ok` marker): `boot.c` (boot_info, physmap, modules) → `gdt.c` → `trap.c`/`trap.asm` → `frames.c` (PMM) → `vmm.c` (drops identity map, CR0.WP) → `apic.c` → `time.c` → `fpu.c` → `sched.c`; then `ktest_run` if a `ktest` boot module exists, else `BURROW:NUCLEUS:OK`. `panic()` in `nucleus/panic.c`; errors are `-errno` with Linux numbers (`nucleus/errno.h`).
 - **Trap path:** every vector enters on an IST stack; `trap.asm` copies the `struct trap_frame` onto the current thread's kernel stack (`g_percpu.kstack_*`) so handlers may block or switch threads. Faults that are allowed are listed in the `.fixup` section (`nucleus/probe.asm`: `probe_read64/probe_write64/probe_ud2`); `trap_last` records them. Anything else prints `[trap] #XX at rip=...` plus registers and panics.
+- **Go kernel (W6):** `kernel/cmd/kernel` is built as a static `GOOS=linux` binary linked at `0x7e0000000000` (`build/kernel.elf`) and shipped only on `build/go.img` as the `kernel` payload; `disk.img` and ktest images stay nucleus-only (fast). `nucleus/go_load.c` maps it and starts thread `go-m0` from a trap frame (`thread_create_from_frame` -> `trap_resume`); `clone` children start the same way with the parent's registers. Every runtime syscall enters `nucleus/syscall.asm` (ring-0 callers classified by RIP in Go or nucleus text, IRETQ back, only RAX/RCX/R11 change) and `nucleus/shim.c`'s table; handlers live in `shim_proc.c`, `shim_mm.c`, `shim_thread.c`, `shim_poll.c` with Linux numbers in `shim.h`. Unknown numbers print `[shim] UNIMPLEMENTED syscall N` once. Nucleus-private calls are `0x1000+` (`NUCLEUS_ABI.md`), reached from Go with `syscall.RawSyscall` (`kernel/arch/amd64/nucleus.go`). Implement each syscall's Linux *semantics* that the runtime relies on (BUG-0009: `MADV_DONTNEED` must zero; `MAP_FIXED` zeroes; futex timeout 0 = do not wait). VM operations hold the address space's `kmutex` (BUG-0008).
 - **Threads:** `schedule()` must update percpu kstack bounds, TSS.RSP0, FS_BASE and FXSAVE state before `switch_to` (PIT-22). Blocking primitives use `thread_block_unlock` (PIT-23). The nucleus's C is `-mgeneral-regs-only`; xmm is only touched from asm.
 
 ## Test conventions (`docs/05-testing/TEST_STRATEGY.md`)

@@ -22,10 +22,11 @@ flowchart TB
 | Smoke | `make smoke` | QEMU headless | ~0.5 s | `boot_to_loader.txt`, `boot_to_nucleus.txt` |
 | Regression | `make regress` | QEMU, mutated images | ~0.5 s | REG-0001 corrupt loader |
 | ktest (W5+) | `make ktest` | QEMU, one image per suite | ~0.5 s per suite | `tests/ktest/trap.txt` |
-| Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall |
+| Go boot (W6+) | `make go-smoke` | QEMU, `build/go.img` | ~7 s | `boot_to_go.txt`: hello + `kernel/selftest` |
+| Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall (`tests/regression/census.sh`) |
 | Docs | `make docs-check` | node + mermaid | seconds | all diagrams parse |
 
-`make test` = unit + smoke + ktest + regress (census joins in W6).
+`make test` = unit + census + smoke + go-smoke + ktest + regress.
 
 ## 2. Rules
 

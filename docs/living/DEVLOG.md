@@ -14,6 +14,35 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-02 — Wave 6 complete: Go says hello from ring 0 (M6)
+
+**Did:** W6-S01..S12. The stock Go 1.27.3 runtime, built as an ordinary static `GOOS=linux` binary with no changes to the toolchain or the runtime, now runs in ring 0 on the C nucleus:
+
+```text
+[kernel] INFO: hello from Go (Burrow kernel)
+BURROW:GO:OK goroutine says 42
+[go-selftest] sleep ok (10 x 100ms, longest 102.63ms)
+[go-selftest] goroutine_ping_pong ok (100000 round trips in 444ms)
+[go-selftest] gc_stress ok (1280 MiB allocated, 68 GC cycles, peak heap 55 MiB)
+BURROW:GO:SELFTEST:OK
+```
+
+The path, one slice at a time: a census on the host (23 syscalls in 1.27, `eventfd2` and `prlimit64` new since 1.22); the kernel ELF as a boot module; a SYSCALL gate that classifies ring-0 callers by RIP and returns with IRETQ; a table-driven shim with "log once" for unknown numbers; `execve`-style start-up (segments, 1 MiB stack, argc/argv/envp/auxv, a trap frame entered with IRETQ); then one boot per missing syscall: `arch_prctl` -> `mmap` -> `clone` -> `futex` -> hello. `eventfd2` + `epoll` made timers work, and the self-tests check the language runtime, goroutines, locks and the GC under 10x the machine's RAM. `make census` catches a Go upgrade that needs a new syscall before it reaches the nucleus.
+
+**Numbers:** 30 syscalls in the shim plus 2 nucleus-private calls; Go kernel 1.5 MiB; `make go-smoke` about 7 s; go.img boot to `BURROW:GO:OK` in about 2 s, most of it reading the ELF over ATA PIO.
+
+**Surprises:**
+- Each step was visible: the runtime prints its own stack traces through `write(2)` from the moment `write` works, so every missing piece named itself (`fatal error: runtime: cannot allocate memory` at `mallocinit`, `failed to create new OS thread (errno=38)` at `newm`).
+- Go 1.27 places its heap at a random hint (`0x19f9...`), not `0xc000000000`: honouring free hints was enough.
+- BUG-0009: Go 1.27 does not clear scavenged spans because Linux's `MADV_DONTNEED` zero-fills. A "harmless" no-op `madvise` turned into a 1-in-8 heap corruption that only the GC stress could show. Finding it took a frame-allocator bitmap (to rule out physical aliasing), memory peeks in the trap report (to see the stale bytes), and reading `mheap.go`.
+- After `select {}` with nothing else alive, the runtime correctly reported "all goroutines are asleep - deadlock!" and called `exit_group`: the kernel now idles in `time.Sleep`.
+
+**Learned:** Implement the contract, not the name: `madvise`, `MAP_FIXED` (zeroes) and futex timeouts of 0 ("do not wait") all have semantics that a runtime builds on. Reading the consumer's source is part of implementing a syscall.
+
+**Next:** W7: Go drivers on the nucleus: `nu_irq_wait/ack`, PS/2 keyboard, a console, and a page-fault report the Go side can understand (PIT-07). Consider a lazy-commit #PF handler so the scavenger can really return memory.
+
+**Links:** BUG-0008, BUG-0009, ADR-0003, ADR-0004, PIT-01, PIT-02, PIT-04, PIT-05, PIT-06, PIT-09
+
 ## 2026-11-02 — Wave 5 complete: nucleus core (M5)
 
 **Did:** W5-S01..S12. `common/` for code shared by loader and nucleus. Own GDT/TSS (selectors ordered for SYSRET, three IST stacks); IDT with 256 generated stubs, a trap frame that is moved from IST1 onto the current thread's kernel stack, register dumps for unhandled faults and a `.fixup` table for faults that are allowed. `ktest`: the loader passes extra payloads as boot modules, the nucleus runs the named tests, `make ktest` boots one image per suite (`trap`, `mm`, `irq`, `sched`). PMM (pure free list + E820 minus boot modules), VMM (map/unmap/protect/translate via the physmap, identity map dropped, CR0.WP on), reserve/commit regions for the Go runtime, 8259 masked and LAPIC on, TSC + LAPIC timer at 1 kHz, preemptive threads with guard-paged kernel stacks, IRQ-saving spinlocks, futexes, per-thread SSE state.

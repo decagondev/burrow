@@ -1,4 +1,4 @@
-# W6 Go Says Hello  (M6)  — status: planned
+# W6 Go Says Hello  (M6)  — status: done
 
 Goal: an unmodified `GOOS=linux` Go binary runs in ring 0 on the nucleus. Contract: [GO_RUNTIME_HOSTING.md](../../02-architecture/GO_RUNTIME_HOSTING.md).
 
@@ -40,3 +40,5 @@ One wake pipe object; `epoll_pwait` = futex-style wait on (pipe written OR timeo
 `tests/regression/census.sh`: run `tools/census` on the host under strace; diff the syscall set against `tests/regression/census-go1.27.txt`; new syscalls fail the test with a pointer to the shim.
 
 Exit: **M6 demo — Go says hello from ring 0.** Write a long DEVLOG entry; this is the project's biggest milestone before Doom.
+
+As built: S03 and S04 landed as one commit (the gate needs the dispatcher to be testable). `nanosleep`/`sched_yield` came forward to S07 because the runtime's error path needed them; Go 1.27 uses `eventfd2`, not `pipe2`, for the netpoller (S10). The Go kernel lives on its own image, `build/go.img` (`make go-smoke`, `make run-go`), so the nucleus-only images stay fast. S11's GC stress exposed BUG-0009 (Go 1.27 trusts `MADV_DONTNEED` to zero memory) and, on the way, BUG-0008.
