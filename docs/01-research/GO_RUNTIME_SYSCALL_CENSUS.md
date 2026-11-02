@@ -40,7 +40,7 @@ The test program: one goroutine sends on a channel, ~2000 x 64 KiB allocations w
 
 ## Result (Go 1.27.3) — the pinned toolchain
 
-23 distinct syscalls (plus `execve`): `arch_prctl clone close epoll_create1 epoll_ctl epoll_pwait eventfd2 fcntl futex gettid madvise mmap nanosleep openat pread64 prlimit64 read rt_sigaction rt_sigprocmask sched_getaffinity sched_yield sigaltstack write`.
+24 distinct syscalls (plus `execve`; `exit_group` counted since the census parses per-call trace lines, as `strace -c` omits calls that never return): `arch_prctl clone close epoll_create1 epoll_ctl epoll_pwait eventfd2 exit_group fcntl futex gettid madvise mmap nanosleep openat pread64 prlimit64 read rt_sigaction rt_sigprocmask sched_getaffinity sched_yield sigaltstack write`.
 
 Differences from 1.22 that change the shim:
 

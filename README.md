@@ -32,7 +32,7 @@ Expected `make test` tail:
 
 ```text
 825 checks, 0 failures
-CENSUS PASS (go1.27.3, 23 syscalls, all in the shim)
+CENSUS PASS (go1.27.3, 24 syscalls, all in the shim)
 SMOKE PASS [boot_to_loader] (53 log lines)
 SMOKE PASS [boot_to_nucleus] (53 log lines)
 SMOKE PASS [boot_to_go] (71 log lines)

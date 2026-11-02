@@ -16,10 +16,12 @@ mkdir -p "$B"
 
 command -v strace >/dev/null || { echo "CENSUS FAIL: strace is not installed"; exit 1; }
 (cd tools && CGO_ENABLED=0 "$GO" build -o "../$B/census" ./census)
-GODEBUG=asyncpreemptoff=1 strace -f -c -o "$B/census.strace" "$B/census" >/dev/null
+GODEBUG=asyncpreemptoff=1 strace -f -qq -o "$B/census.strace" "$B/census" >/dev/null
 
-# strace -c rows end with the syscall name; skip headers, rules and the total.
-awk 'NF >= 4 && $1 ~ /^[0-9.]+$/ && $NF != "total" { print $NF }' "$B/census.strace" \
+# One line per call: "PID name(args...) = ret" or "PID name(... <unfinished ...>".
+# Parse those, not the -c summary table: its layout differs between strace
+# versions (CI's printed a "...>" row). Skip "<... name resumed>" and "+++"/"---".
+sed -nE 's/^[0-9]+ +([a-z_][a-z0-9_]*)\(.*/\1/p' "$B/census.strace" \
   | grep -vx execve | sort -u > "$B/census.seen"
 grep -v '^#' "$EXPECT" | sort -u > "$B/census.expected"
 

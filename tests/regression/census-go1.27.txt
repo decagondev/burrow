@@ -1,4 +1,4 @@
-# Distinct syscalls of tools/census under Go 1.27.3 (strace -f -c on the host).
+# Distinct syscalls of tools/census under Go 1.27.3 (strace -f on the host).
 # tests/regression/census.sh fails if the set gains a name: implement it in
 # nucleus/shim.c first, then add it here. execve is the nucleus's job.
 arch_prctl
@@ -8,6 +8,7 @@ epoll_create1
 epoll_ctl
 epoll_pwait
 eventfd2
+exit_group
 fcntl
 futex
 gettid

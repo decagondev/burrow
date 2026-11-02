@@ -35,6 +35,15 @@ flowchart LR
 
 ## Closed
 
+### BUG-0010: The census parsed strace's summary table, whose layout differs between versions
+- Found: 2026-11-02, the first CI run of Wave 6 (`make census` on ubuntu-latest).
+- Severity: minor (CI failed; the shim was fine).
+- Symptom: `CENSUS FAIL ... new syscalls: ...>` on CI, while the same commit passed locally (Debian, strace 6.13).
+- Root cause: `census.sh` took the last column of each `strace -c` row as the syscall name. The runner's strace printed a row whose last field was `...>`.
+- Fix: run `strace -f -qq` and take the name from each per-call line (`PID name(`). That also counts `exit_group`, which `-c` omits because it never returns, so it joins `census-go1.27.txt` (24 syscalls; the shim already had its row).
+- Regression: `make census` in CI on ubuntu-latest.
+- Lesson: parse a tool's stable output, not its human-formatted summary.
+
 ### BUG-0009: A no-op madvise handed Go stale memory it believed was zeroed
 - Found: 2026-11-02, W6-S11, the new GC-stress selftest: about 1 boot in 8 faulted writing into Go's rodata.
 - Severity: major (silent heap corruption in the Go kernel).
