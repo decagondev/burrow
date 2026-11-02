@@ -2,7 +2,7 @@
 
 Goal: a robust ring-0 base. Everything Go will need in W6 exists and is self-tested.
 
-### [ ] W5-S01 Nucleus console + kprintf reuse
+### [x] W5-S01 Nucleus console + kprintf reuse
 Move `kprintf.c`, `lib_string.c`, `crc32.c`, `char_sink.h` into `common/` built for both loader and nucleus (DRY). Test: all unit tests still pass.
 
 ### [ ] W5-S02 GDT + TSS with IST stacks (E04.F01)

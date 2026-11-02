@@ -33,20 +33,26 @@ LOADER_CFLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror \
 	-ffreestanding -fno-stack-protector -fno-pic -fno-pie \
 	-mno-red-zone -mgeneral-regs-only -mcmodel=small \
 	-fno-asynchronous-unwind-tables -fno-builtin \
-	-Iinclude -Iloader
+	-Iinclude -Icommon -Iloader
 LOADER_LDFLAGS := -nostdlib -static -no-pie -T loader/linker.ld -z max-page-size=0x1000
 
-LOADER_C   := $(wildcard loader/*.c)
-LOADER_OBJ := $(patsubst loader/%.c,$(BUILD)/loader/%.o,$(LOADER_C)) $(BUILD)/loader/entry.o
+# common/ holds freestanding code shared by the loader and the nucleus. Each
+# side compiles it with its own flags (the nucleus needs -mcmodel=kernel).
+COMMON_C   := $(wildcard common/*.c)
+COMMON_H   := $(wildcard common/*.h include/burrow/*.h)
 
-# The nucleus runs in the top 2 GiB (-mcmodel=kernel). It reuses the loader's
-# freestanding serial/kprintf/string modules, compiled a second time.
+LOADER_C   := $(wildcard loader/*.c)
+LOADER_OBJ := $(patsubst loader/%.c,$(BUILD)/loader/%.o,$(LOADER_C)) \
+	$(patsubst common/%.c,$(BUILD)/loader/common_%.o,$(COMMON_C)) $(BUILD)/loader/entry.o
+
+# The nucleus runs in the top 2 GiB (-mcmodel=kernel).
 NUCLEUS_CFLAGS := $(filter-out -mcmodel=small -Iloader,$(LOADER_CFLAGS)) \
-	-mcmodel=kernel -Inucleus -Iloader
+	-mcmodel=kernel -Inucleus
 NUCLEUS_LDFLAGS := -nostdlib -static -no-pie -T nucleus/linker.ld -z max-page-size=0x1000
-NUCLEUS_SHARED := serial kprintf lib_string
+NUCLEUS_ASM := $(wildcard nucleus/*.asm)
 NUCLEUS_OBJ := $(patsubst nucleus/%.c,$(BUILD)/nucleus/%.o,$(wildcard nucleus/*.c)) \
-	$(patsubst %,$(BUILD)/nucleus/shared_%.o,$(NUCLEUS_SHARED)) $(BUILD)/nucleus/entry.o
+	$(patsubst common/%.c,$(BUILD)/nucleus/common_%.o,$(COMMON_C)) \
+	$(patsubst nucleus/%.asm,$(BUILD)/nucleus/%_asm.o,$(NUCLEUS_ASM))
 
 QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
@@ -63,7 +69,10 @@ $(BUILD)/stage2.bin: boot/stage2.asm boot/boot_abi.inc boot/lib16.inc | $(BUILD)
 	$(NASM) -f bin -I boot/ $< -o $@ -l $(BUILD)/stage2.lst
 
 # ---- loader (C) -------------------------------------------------------------
-$(BUILD)/loader/%.o: loader/%.c $(wildcard loader/*.h include/burrow/*.h) | $(BUILD)/loader
+$(BUILD)/loader/%.o: loader/%.c $(wildcard loader/*.h) $(COMMON_H) | $(BUILD)/loader
+	$(CC_TARGET) $(LOADER_CFLAGS) -c $< -o $@
+
+$(BUILD)/loader/common_%.o: common/%.c $(COMMON_H) | $(BUILD)/loader
 	$(CC_TARGET) $(LOADER_CFLAGS) -c $< -o $@
 
 $(BUILD)/loader/entry.o: loader/entry.asm | $(BUILD)/loader
@@ -76,14 +85,14 @@ $(BUILD)/loader.bin: $(BUILD)/loader.elf
 	$(OBJCOPY) -O binary $< $@
 
 # ---- nucleus (C, higher half) -----------------------------------------------
-$(BUILD)/nucleus/%.o: nucleus/%.c $(wildcard nucleus/*.h loader/*.h include/burrow/*.h) | $(BUILD)/nucleus
+$(BUILD)/nucleus/%.o: nucleus/%.c $(wildcard nucleus/*.h) $(COMMON_H) | $(BUILD)/nucleus
 	$(CC_TARGET) $(NUCLEUS_CFLAGS) -c $< -o $@
 
-$(BUILD)/nucleus/shared_%.o: loader/%.c $(wildcard loader/*.h include/burrow/*.h) | $(BUILD)/nucleus
+$(BUILD)/nucleus/common_%.o: common/%.c $(COMMON_H) | $(BUILD)/nucleus
 	$(CC_TARGET) $(NUCLEUS_CFLAGS) -c $< -o $@
 
-$(BUILD)/nucleus/entry.o: nucleus/entry.asm | $(BUILD)/nucleus
-	$(NASM) -f elf64 $< -o $@
+$(BUILD)/nucleus/%_asm.o: nucleus/%.asm $(wildcard nucleus/*.inc) | $(BUILD)/nucleus
+	$(NASM) -f elf64 -I nucleus/ $< -o $@
 
 $(BUILD)/nucleus.elf: $(NUCLEUS_OBJ) nucleus/linker.ld
 	$(LD_TARGET) $(NUCLEUS_LDFLAGS) $(NUCLEUS_OBJ) -o $@
@@ -115,15 +124,17 @@ test: test-unit smoke regress
 
 test-unit: test-c test-go
 
+# Host-testable sources: everything in common/ except serial.c (port I/O),
+# plus the loader's pure modules.
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
-	loader/kprintf.c loader/crc32.c loader/manifest.c loader/memmap.c \
-	loader/elf64.c loader/lib_string.c loader/palloc.c loader/paging.c loader/image.c \
-	loader/elf_load.c loader/vmsetup.c
+	$(filter-out common/serial.c,$(COMMON_C)) \
+	loader/manifest.c loader/memmap.c loader/elf64.c loader/palloc.c loader/paging.c \
+	loader/image.c loader/elf_load.c loader/vmsetup.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
-$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h include/burrow/*.h) | $(BUILD)
+$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h) $(COMMON_H) | $(BUILD)
 	$(HOSTCC) -std=c11 -O0 -g -Wall -Wextra -Werror -fno-builtin \
-		-fsanitize=address,undefined -Iinclude -Iloader -Itests/unit/c \
+		-fsanitize=address,undefined -Iinclude -Icommon -Iloader -Itests/unit/c \
 		$(UNIT_SRC) -o $@
 
 test-c: $(BUILD)/unit_tests

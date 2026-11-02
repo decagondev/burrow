@@ -39,6 +39,7 @@ SMOKE PASS [boot_to_nucleus] (44 log lines)
 ```text
 boot/          stage1.asm (MBR), stage2.asm (real→protected→long), shared .inc files
 include/burrow cross-language contracts: boot_info.h, manifest.h
+common/        freestanding C shared by loader and nucleus: kprintf, string, CRC, serial
 loader/        freestanding C loader: serial, kprintf, CRC, manifest, ELF64, ATA PIO,
                frame allocator, page tables, nucleus hand-off
 nucleus/       higher-half C nucleus (W4: hello + boot_info v2 check)

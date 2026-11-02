@@ -1,8 +1,8 @@
 /* lib_string.h - freestanding string/memory helpers.
  * GCC may emit calls to memcpy/memset/memcmp even with -ffreestanding,
  * so these MUST exist with exactly these names. */
-#ifndef LOADER_LIB_STRING_H
-#define LOADER_LIB_STRING_H
+#ifndef COMMON_LIB_STRING_H
+#define COMMON_LIB_STRING_H
 #include <stddef.h>
 
 void  *memset(void *dst, int c, size_t n);

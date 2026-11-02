@@ -1,6 +1,6 @@
 // Package uart drives a 16550-compatible serial port.
 //
-// It is the Go twin of loader/serial.c. Same hardware, same register
+// It is the Go twin of common/serial.c. Same hardware, same register
 // sequence - compare them side by side while learning.
 package uart
 

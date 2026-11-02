@@ -1,6 +1,6 @@
 /* serial.h - 16550 UART driver (polled). Exposes itself as a char_sink. */
-#ifndef LOADER_SERIAL_H
-#define LOADER_SERIAL_H
+#ifndef COMMON_SERIAL_H
+#define COMMON_SERIAL_H
 #include <stdint.h>
 #include "char_sink.h"
 

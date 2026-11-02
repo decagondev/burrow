@@ -1,7 +1,7 @@
-/* cpu.h - CPUID, MSRs and control registers. With io.h, the only loader
+/* cpu.h - CPUID, MSRs and control registers. With io.h, the only shared
  * header allowed inline asm. Never included by host-tested modules. */
-#ifndef LOADER_CPU_H
-#define LOADER_CPU_H
+#ifndef COMMON_CPU_H
+#define COMMON_CPU_H
 #include <stdint.h>
 
 #define MSR_EFER  0xC0000080u

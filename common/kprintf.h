@@ -1,7 +1,7 @@
 /* kprintf.h - tiny printf. Supports: %% %c %s %d %i %u %x %X %p
  * with optional '0' flag, width, and 'l' / 'll' / 'z' length modifiers. */
-#ifndef LOADER_KPRINTF_H
-#define LOADER_KPRINTF_H
+#ifndef COMMON_KPRINTF_H
+#define COMMON_KPRINTF_H
 #include <stdarg.h>
 #include "char_sink.h"
 

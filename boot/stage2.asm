@@ -377,7 +377,7 @@ pm_entry:
     jmp CODE64_SEL:lm_entry
 
 ; crc32_ieee - ESI = data, ECX = length -> EAX = CRC-32 (IEEE, reflected).
-; Same algorithm as loader/crc32.c and Go's hash/crc32.ChecksumIEEE.
+; Same algorithm as common/crc32.c and Go's hash/crc32.ChecksumIEEE.
 crc32_ieee:
     mov eax, 0xFFFFFFFF
 .byte:

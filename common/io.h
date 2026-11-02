@@ -1,6 +1,6 @@
-/* io.h - x86 port I/O. The only file in the loader allowed inline asm for ports. */
-#ifndef LOADER_IO_H
-#define LOADER_IO_H
+/* io.h - x86 port I/O. With cpu.h, the only shared header allowed inline asm. */
+#ifndef COMMON_IO_H
+#define COMMON_IO_H
 #include <stdint.h>
 
 static inline void outb(uint16_t port, uint8_t v) { __asm__ volatile("outb %0, %1" :: "a"(v), "Nd"(port)); }
