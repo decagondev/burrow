@@ -38,6 +38,25 @@ func TestDecoder(t *testing.T) {
 	}
 }
 
+// Every printable ASCII character, plus Enter, Tab and DEL, survives
+// Encode then Feed.
+func TestEncodeRoundTrip(t *testing.T) {
+	var d Decoder
+	for c := byte(0x20); c < 0x7F; c++ {
+		if got := feed(&d, Encode(c)...); got != string(c) {
+			t.Errorf("Encode(%q) = % x, decodes to %q", c, Encode(c), got)
+		}
+	}
+	for _, c := range []byte{'\r', '\t', 0x7F} {
+		if got := feed(&d, Encode(c)...); got != string(c) {
+			t.Errorf("Encode(%q) decodes to %q", c, got)
+		}
+	}
+	if Encode(0x01) != nil {
+		t.Error("Encode(^A) should be nil: it needs ctrl")
+	}
+}
+
 // Every letter key maps to its letter in both tables.
 func TestDecoderTablesAgree(t *testing.T) {
 	for code, s := range plain {

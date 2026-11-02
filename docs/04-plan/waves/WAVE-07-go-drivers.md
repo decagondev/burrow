@@ -22,7 +22,7 @@ Copy `snippets/kernel/irq_goroutine.go` into `kernel/arch/amd64/irq.go` (`syscal
 ### [x] W7-S06 Panic path (E06.F05, PIT-07)
 A Go panic prints its message and every goroutine (`GOTRACEBACK=all`) on serial, then `exit_group(2)` fails the run instantly (debug-exit `0x11`). A fault whose RIP is in Go text says so and names the tool to symbolize it. A `kargs` boot module becomes extra `argv` words, so a test image can ask the kernel to panic: regression case REG-0006.
 
-### [ ] W7-S07 `hostsim` (E06.F06)
+### [x] W7-S07 `hostsim` (E06.F06)
 The Go kernel's driver stack (registry, PS/2, console) running as a normal host process and in `go test`, with fake ports and a channel-driven IRQ: inject scancodes, read the console's output.
 
 Exit: **M7 demo — Go drives hardware.** `make clean test` green; DEVLOG wave entry.

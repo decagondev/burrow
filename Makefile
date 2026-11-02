@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go debug test test-unit test-c test-go census smoke go-smoke ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census smoke go-smoke ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -185,6 +185,10 @@ smoke: $(BUILD)/disk.img
 # markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img
 	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30 tests/smoke/keys/boot_to_go.keys
+
+# The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
+hostsim:
+	cd kernel && $(GO) run ./cmd/hostsim
 
 # Boot the Go image interactively: the console reads the serial line (Ctrl-A X quits).
 run-go: $(BUILD)/go.img

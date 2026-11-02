@@ -155,7 +155,11 @@ func (c *Controller) Drain(each func(byte)) {
 	}
 }
 
-func init() { driver.Register(&keyboard{}) }
+func init() { driver.Register(NewDriver()) }
+
+// NewDriver is the keyboard driver, for registries other than the kernel's
+// (hostsim, tests).
+func NewDriver() driver.Driver { return &keyboard{} }
 
 type keyboard struct{}
 

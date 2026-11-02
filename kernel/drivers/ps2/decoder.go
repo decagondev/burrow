@@ -43,6 +43,23 @@ var extended = map[byte]string{
 	0x47: "\x1b[H", 0x4F: "\x1b[F", 0x53: "\x1b[3~",
 }
 
+// Encode is the inverse of Feed for one character: the set 1 bytes a
+// keyboard sends to type c (press and release, wrapped in shift when the
+// character needs it). nil if no key types c. For simulators and tests.
+func Encode(c byte) []byte {
+	for code := range plain {
+		if plain[code] == string(c) {
+			return []byte{byte(code), byte(code) | releaseFl}
+		}
+	}
+	for code := range shifted {
+		if shifted[code] == string(c) {
+			return []byte{scLShift, byte(code), byte(code) | releaseFl, scLShift | releaseFl}
+		}
+	}
+	return nil
+}
+
 // Feed takes one byte from the keyboard and returns what it types (often
 // nothing: releases, modifiers, prefixes).
 func (d *Decoder) Feed(sc byte) []byte {
