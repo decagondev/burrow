@@ -4,7 +4,7 @@ Goal: the loader loads a C nucleus ELF linked at `0xFFFFFFFF80100000`, builds re
 
 Pre-reading: MEMORY_MAP.md §2, `snippets/nucleus/linker.ld`, OSDev "Higher Half x86 Bare Bones".
 
-### [ ] W4-S01 Nucleus "hello" ELF (E03.F04.S04)
+### [x] W4-S01 Nucleus "hello" ELF (E03.F04.S04)
 Files: `nucleus/entry.asm`, `nucleus/main.c`, `nucleus/linker.ld` (from snippets), Makefile rule `build/nucleus.elf` with `-mcmodel=kernel -mno-red-zone -mgeneral-regs-only -ffreestanding`.
 Steps: entry sets its own stack (16 KiB in .bss), calls `nucleus_main(bi)`, which writes to COM1 directly (copy `serial.c`).
 Test: `readelf -lW build/nucleus.elf` shows VirtAddr `0xffffffff80100000`, PhysAddr `0x100000`. `mkimage -payload nucleus=` adds it; `-inspect` lists it.

@@ -39,6 +39,15 @@ LOADER_LDFLAGS := -nostdlib -static -no-pie -T loader/linker.ld -z max-page-size
 LOADER_C   := $(wildcard loader/*.c)
 LOADER_OBJ := $(patsubst loader/%.c,$(BUILD)/loader/%.o,$(LOADER_C)) $(BUILD)/loader/entry.o
 
+# The nucleus runs in the top 2 GiB (-mcmodel=kernel). It reuses the loader's
+# freestanding serial/kprintf/string modules, compiled a second time.
+NUCLEUS_CFLAGS := $(filter-out -mcmodel=small -Iloader,$(LOADER_CFLAGS)) \
+	-mcmodel=kernel -Inucleus -Iloader
+NUCLEUS_LDFLAGS := -nostdlib -static -no-pie -T nucleus/linker.ld -z max-page-size=0x1000
+NUCLEUS_SHARED := serial kprintf lib_string
+NUCLEUS_OBJ := $(patsubst nucleus/%.c,$(BUILD)/nucleus/%.o,$(wildcard nucleus/*.c)) \
+	$(patsubst %,$(BUILD)/nucleus/shared_%.o,$(NUCLEUS_SHARED)) $(BUILD)/nucleus/entry.o
+
 QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
@@ -66,14 +75,32 @@ $(BUILD)/loader.elf: $(LOADER_OBJ) loader/linker.ld
 $(BUILD)/loader.bin: $(BUILD)/loader.elf
 	$(OBJCOPY) -O binary $< $@
 
+# ---- nucleus (C, higher half) -----------------------------------------------
+$(BUILD)/nucleus/%.o: nucleus/%.c $(wildcard nucleus/*.h loader/*.h include/burrow/*.h) | $(BUILD)/nucleus
+	$(CC_TARGET) $(NUCLEUS_CFLAGS) -c $< -o $@
+
+$(BUILD)/nucleus/shared_%.o: loader/%.c $(wildcard loader/*.h include/burrow/*.h) | $(BUILD)/nucleus
+	$(CC_TARGET) $(NUCLEUS_CFLAGS) -c $< -o $@
+
+$(BUILD)/nucleus/entry.o: nucleus/entry.asm | $(BUILD)/nucleus
+	$(NASM) -f elf64 $< -o $@
+
+$(BUILD)/nucleus.elf: $(NUCLEUS_OBJ) nucleus/linker.ld
+	$(LD_TARGET) $(NUCLEUS_LDFLAGS) $(NUCLEUS_OBJ) -o $@
+
+# The disk copy drops debug info (gdb uses nucleus.elf); the loader reads all of it.
+$(BUILD)/nucleus.disk.elf: $(BUILD)/nucleus.elf
+	$(OBJCOPY) --strip-debug $< $@
+
 # ---- host tools -------------------------------------------------------------
 $(BUILD)/mkimage: $(wildcard tools/mkimage/*.go) | $(BUILD)
 	cd tools && $(GO) build -o ../$@ ./mkimage
 
 # ---- disk image -------------------------------------------------------------
-$(BUILD)/disk.img: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/mkimage
+$(BUILD)/disk.img: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
+		$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
 	$(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
-		-payload loader=$(BUILD)/loader.bin
+		-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
 
 # ---- run / debug ------------------------------------------------------------
 run: $(BUILD)/disk.img
@@ -111,10 +138,10 @@ smoke: $(BUILD)/disk.img
 regress: $(BUILD)/disk.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
 
-sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin
+sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/nucleus.disk.elf
 	@scripts/sizes.sh $(BUILD)
 
-$(BUILD) $(BUILD)/loader:
+$(BUILD) $(BUILD)/loader $(BUILD)/nucleus:
 	mkdir -p $@
 
 docs-check:
