@@ -12,7 +12,7 @@ Selectors: 0x08 kcode, 0x10 kdata, 0x18 udata32 placeholder, 0x20 udata (0x23 RP
 Generated table of 256 asm stubs (macro), common handler saving all registers into `struct trap_frame`. Handler prints vector name, error code, CR2, RIP and halts with debug-exit failure.
 Test: `ktest` boot flag triggers `ud2` → expected `[trap] #UD at` marker (regression REG-0005).
 
-### [ ] W5-S04 `ktest` runner (E00.F02.S04)
+### [x] W5-S04 `ktest` runner (E00.F02.S04)
 A manifest entry `ktest` (a tiny text file) selects which in-kernel tests run; each prints `[ktest] name ok`. Smoke expect file per suite.
 
 ### [ ] W5-S05 PIC remap + mask all, LAPIC enable (E04.F04)

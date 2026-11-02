@@ -1,0 +1,4 @@
+# Suite "trap": expected faults are caught with the right vector, error and CR2.
+trap_ud_fixup
+trap_gp_fixup
+trap_pf_fixup

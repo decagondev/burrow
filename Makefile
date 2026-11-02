@@ -4,9 +4,10 @@
 #   make            build disk image (build/disk.img)
 #   make run        boot it in QEMU (serial on your terminal, Ctrl-A X quits)
 #   make debug      boot paused, waiting for gdb on :1234 (see docs/06-guides)
-#   make test       unit tests (host) + smoke test (QEMU)
+#   make test       unit tests (host) + smoke + ktest + regression (QEMU)
 #   make test-unit  host-only tests: C (gcc) + Go (go test)
 #   make smoke      boot headless, assert serial markers, check exit code
+#   make ktest      boot one image per tests/ktest suite, run in-kernel tests
 #   make regress    boot deliberately broken images, assert they fail loudly
 #   make sizes      show how full stage1/stage2/loader are
 #   make docs-check parse every Mermaid diagram (needs node + npm)
@@ -58,7 +59,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run debug test test-unit test-c test-go smoke regress sizes docs-check clean
+.PHONY: all run debug test test-unit test-c test-go smoke ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -106,10 +107,20 @@ $(BUILD)/mkimage: $(wildcard tools/mkimage/*.go) | $(BUILD)
 	cd tools && $(GO) build -o ../$@ ./mkimage
 
 # ---- disk image -------------------------------------------------------------
-$(BUILD)/disk.img: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
-		$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
-	$(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
-		-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
+BOOT_PARTS := $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
+	$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
+MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
+	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
+
+$(BUILD)/disk.img: $(BOOT_PARTS)
+	$(MKIMAGE_BOOT)
+
+# One image per ktest suite: the same boot chain plus a "ktest" payload that
+# names the in-kernel tests to run (nucleus/ktest.h).
+KTEST_SUITES := $(basename $(notdir $(wildcard tests/ktest/*.txt)))
+
+$(BUILD)/ktest-%.img: tests/ktest/%.txt $(BOOT_PARTS)
+	$(MKIMAGE_BOOT) -payload ktest=$< >/dev/null
 
 # ---- run / debug ------------------------------------------------------------
 run: $(BUILD)/disk.img
@@ -120,7 +131,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit smoke regress
+test: test-unit smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -149,6 +160,9 @@ SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to
 
 smoke: $(BUILD)/disk.img
 	@for e in $(SMOKE_EXPECT); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done
+
+ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
+	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
 
 regress: $(BUILD)/disk.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img

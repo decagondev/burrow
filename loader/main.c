@@ -38,6 +38,8 @@ static struct ata_channel g_ata0;
 static struct block_device g_disk;
 static uint8_t g_sector[512];
 static struct palloc g_palloc;
+static struct boot_module g_modules[BOOT_MODULES_MAX];
+static uint32_t g_module_count;
 
 /* An image read from disk into palloc'd frames (identity-mapped, so the
  * physical address is also a usable pointer). */
@@ -111,21 +113,53 @@ static void init_frames(const struct boot_info *bi) {
         panic("palloc reserve table full");
 }
 
-static struct disk_image read_nucleus_image(const struct manifest *m) {
-    const struct manifest_entry *e = manifest_find(m, "nucleus");
-    if (!e) panic("no nucleus entry in manifest");
+/* Read one manifest entry into fresh frames and verify it ("verify before you
+ * execute", BUG-0003). Failure text is "<name> CRC mismatch" etc. (REG-0004). */
+static struct disk_image read_payload(const struct manifest_entry *e) {
     uint64_t buf_bytes = ((uint64_t)e->sectors * 512 + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
-    uint64_t pa = palloc_alloc(&g_palloc, buf_bytes / PAGE_SIZE);
-    if (!pa) panic("out of memory for the nucleus image");
-    switch (image_read(&g_disk, e, (void *)(uintptr_t)pa, buf_bytes)) {
-    case IMAGE_OK:           break;
-    case IMAGE_CRC_MISMATCH: panic("nucleus CRC mismatch");
-    default:                 panic("nucleus image could not be read");
+    uint64_t pa = buf_bytes ? palloc_alloc(&g_palloc, buf_bytes / PAGE_SIZE) : 0;
+    enum image_status st = pa ? image_read(&g_disk, e, (void *)(uintptr_t)pa, buf_bytes) : IMAGE_TOO_BIG;
+    if (st != IMAGE_OK) {
+        kprintf("[loader] PANIC: %s %s\n", e->name, pa ? image_status_str(st) : "out of memory");
+        qemu_exit(QEMU_EXIT_FAILURE);
+        cpu_halt_forever();
     }
-    kprintf("[loader] nucleus image crc ok (%llu bytes at phys %llx)\n",
+    kprintf("[loader] %s image crc ok (%llu bytes at phys %llx)\n", e->name,
             (unsigned long long)e->size_bytes, (unsigned long long)pa);
     struct disk_image img = { (const uint8_t *)(uintptr_t)pa, e->size_bytes };
     return img;
+}
+
+static struct disk_image read_nucleus_image(const struct manifest *m) {
+    const struct manifest_entry *e = manifest_find(m, "nucleus");
+    if (!e) panic("no nucleus entry in manifest");
+    return read_payload(e);
+}
+
+static int is_boot_stage(const char *name) {
+    return strncmp(name, "stage2", MANIFEST_NAME_LEN) == 0 || strncmp(name, "loader", MANIFEST_NAME_LEN) == 0 ||
+           strncmp(name, "nucleus", MANIFEST_NAME_LEN) == 0;
+}
+
+static void add_module(const char *name, uint64_t start, uint64_t size) {
+    if (g_module_count == BOOT_MODULES_MAX) panic("too many boot modules");
+    struct boot_module *mod = &g_modules[g_module_count++];
+    size_t len = strlen(name);
+    if (len >= sizeof mod->name) panic("boot module name too long");
+    memcpy(mod->name, name, len);          /* rest stays NUL: g_modules is .bss */
+    mod->phys_start = start;
+    mod->size_bytes = size;
+}
+
+/* Every payload that is not a boot stage ("ktest" today, "kernel" and
+ * "initrd" in W6) is read, verified and handed over as a boot module. */
+static void load_payload_modules(const struct manifest *m) {
+    for (unsigned i = 0; i < m->count; i++) {
+        const struct manifest_entry *e = &m->entries[i];
+        if (is_boot_stage(e->name)) continue;
+        struct disk_image img = read_payload(e);
+        add_module(e->name, (uint64_t)(uintptr_t)img.bytes, img.size_bytes);
+    }
 }
 
 /* Copy PT_LOAD segments to their physical addresses inside the nucleus window. */
@@ -173,14 +207,6 @@ static uint64_t build_page_tables(const struct boot_info *bi, const struct elf_l
     return c.root;
 }
 
-static void set_module(struct boot_module *mod, const char *name, uint64_t start, uint64_t size) {
-    size_t len = strlen(name);
-    if (len >= sizeof mod->name) panic("boot module name too long");
-    memcpy(mod->name, name, len);          /* rest stays NUL from the memset */
-    mod->phys_start = start;
-    mod->size_bytes = size;
-}
-
 /* stage2 handed us v1; the nucleus gets v2 (BOOT_PROTOCOL.md §3). Call last:
  * "loader-frames" must cover every frame palloc handed out, page tables included. */
 static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) {
@@ -188,14 +214,15 @@ static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) 
     for (uint32_t i = 0; i < n->count; i++)
         if (n->seg[i].paddr + n->seg[i].memsz > nucleus_end) nucleus_end = n->seg[i].paddr + n->seg[i].memsz;
     nucleus_end = (nucleus_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    add_module("nucleus", NUCLEUS_PHYS_BASE, nucleus_end - NUCLEUS_PHYS_BASE);
+    add_module("loader-frames", g_palloc.first, g_palloc.end - g_palloc.first);
 
     struct boot_module *mods = (struct boot_module *)(uintptr_t)BOOT_MODULES_PHYS_ADDR;
     memset(mods, 0, BOOT_MODULES_MAX * sizeof *mods);
-    set_module(&mods[0], "nucleus", NUCLEUS_PHYS_BASE, nucleus_end - NUCLEUS_PHYS_BASE);
-    set_module(&mods[1], "loader-frames", g_palloc.first, g_palloc.end - g_palloc.first);
+    memcpy(mods, g_modules, g_module_count * sizeof *mods);
     bi->physmap_base = PHYSMAP_BASE;
     bi->modules_addr = BOOT_MODULES_PHYS_ADDR;
-    bi->module_count = 2;
+    bi->module_count = g_module_count;
     bi->version      = BOOTINFO_VERSION;
     for (uint32_t i = 0; i < bi->module_count; i++)
         kprintf("  module %08llx - %08llx  %s\n",
@@ -222,6 +249,7 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     init_frames(bi);
     struct elf_loaded nucleus;
     load_nucleus(read_nucleus_image(m), &nucleus);
+    load_payload_modules(m);
     uint64_t pml4 = build_page_tables(bi, &nucleus);
     upgrade_boot_info(bi, &nucleus);
 

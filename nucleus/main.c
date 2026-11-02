@@ -2,8 +2,9 @@
  * main.c - Burrow nucleus entry point: brings up each module in order.
  *
  * Runs at 0xFFFFFFFF80100000 on page tables the loader built. Each init step
- * lives in its own module and prints one marker (tests/smoke/expect/). Wave 6
- * adds "load and start the Go kernel" as the last step.
+ * lives in its own module and prints one marker (tests/smoke/expect/). If a
+ * "ktest" boot module is present, the in-kernel tests run instead of the
+ * normal finish. Wave 6 adds "load and start the Go kernel" as the last step.
  *
  * Must never return.
  */
@@ -14,31 +15,12 @@
 #include "serial.h"
 #include "kprintf.h"
 #include "panic.h"
+#include "boot.h"
 #include "gdt.h"
 #include "trap.h"
-
-#define NUCLEUS_VIRT_BASE 0xFFFFFFFF80000000ull   /* nucleus/linker.ld KERNEL_VMA */
+#include "ktest.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
-
-void __attribute__((noreturn)) nucleus_main(struct boot_info *bi);
-
-/* bi is a physmap address; every address INSIDE it is physical. */
-static void check_boot_info(const struct boot_info *bi) {
-    if ((uint64_t)(uintptr_t)nucleus_main < NUCLEUS_VIRT_BASE) panic("not running in the higher half");
-    if (bi->magic != BOOTINFO_MAGIC)     panic("boot_info magic mismatch");
-    if (bi->version != BOOTINFO_VERSION) panic("boot_info version is not 2");
-    if (bi->size != sizeof *bi)          panic("boot_info size mismatch");
-    if ((uint64_t)(uintptr_t)bi != bi->physmap_base + BOOTINFO_PHYS_ADDR) panic("boot_info not in the physmap");
-    if (bi->module_count == 0 || bi->module_count > BOOT_MODULES_MAX) panic("bad module count");
-
-    const struct boot_module *mods = (const struct boot_module *)(uintptr_t)(bi->physmap_base + bi->modules_addr);
-    for (uint32_t i = 0; i < bi->module_count; i++)
-        kprintf("  module %08llx - %08llx  %s\n", (unsigned long long)mods[i].phys_start,
-                (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
-    kprintf("[nucleus] boot_info v2 ok (physmap=%llx, modules=%u, e820 entries=%u)\n",
-            (unsigned long long)bi->physmap_base, bi->module_count, bi->e820_count);
-}
 
 static void init_gdt(void) {
     gdt_init();
@@ -64,9 +46,15 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     kprintf("[nucleus] hello from the higher half (main=%p, boot_info=%p)\n",
             (void *)nucleus_main, (void *)bi);
 
-    check_boot_info(bi);
+    boot_init(bi);
     init_gdt();
     init_idt();
+
+    const struct boot_module *kt = boot_module_find("ktest");
+    if (kt) {
+        kprintf("[ktest] running suite (%llu bytes)\n", (unsigned long long)kt->size_bytes);
+        ktest_run(phys_to_virt(kt->phys_start), kt->size_bytes);
+    }
 
     kprintf("BURROW:NUCLEUS:OK\n");
     qemu_exit(QEMU_EXIT_SUCCESS);

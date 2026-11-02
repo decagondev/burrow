@@ -1,0 +1,8 @@
+# Ordered markers for ktest suite "trap" (tests/ktest/trap.txt). Append-only.
+[nucleus] idt ok
+[ktest] running suite
+[ktest] trap_ud_fixup ok
+[ktest] trap_gp_fixup ok
+[ktest] trap_pf_fixup ok
+[ktest] 3 passed
+BURROW:KTEST:OK

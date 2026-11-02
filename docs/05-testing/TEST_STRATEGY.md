@@ -21,11 +21,11 @@ flowchart TB
 | Contract | inside unit tests + `_Static_assert` | both | — | `TestManifestLayoutMatchesC` |
 | Smoke | `make smoke` | QEMU headless | ~0.5 s | `boot_to_loader.txt`, `boot_to_nucleus.txt` |
 | Regression | `make regress` | QEMU, mutated images | ~0.5 s | REG-0001 corrupt loader |
-| ktest (W5+) | `make ktest` | QEMU | seconds | thread ping-pong |
+| ktest (W5+) | `make ktest` | QEMU, one image per suite | ~0.5 s per suite | `tests/ktest/trap.txt` |
 | Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall |
 | Docs | `make docs-check` | node + mermaid | seconds | all diagrams parse |
 
-`make test` = unit + smoke + regress (extended as waves add ktest and census).
+`make test` = unit + smoke + ktest + regress (census joins in W6).
 
 ## 2. Rules
 
@@ -55,6 +55,7 @@ flowchart TB
 **New pure C module:** create `tests/unit/c/test_<mod>.c`, add the `.c` to `UNIT_SRC` in the Makefile, declare and `RUN()` each test in `test_main.c`.
 **New boot stage marker:** add the print, append the line to the expect file, run `make smoke`.
 **New regression case:** write a mutator function in `tests/regression/run_all.sh`, add `case_run REG-NNNN-name "<expected text>" 35 mutator`, link it from the BUG entry.
+**New ktest (in-kernel test):** write `int kt_<name>(void)` using `KT_CHECK` in a `nucleus/ktest_*.c`, declare it in `nucleus/ktest.h`, add it to the table in `nucleus/ktest.c`, list it in a suite `tests/ktest/<suite>.txt` and append `[ktest] <name> ok` to `tests/ktest/expect/<suite>.txt`. `make ktest` builds `build/ktest-<suite>.img` (the normal image plus a `ktest` payload) and runs the smoke checker on it. A test that must crash goes in the regression suite instead (`with_ktest <name>` in `run_all.sh`, e.g. REG-0005).
 **New Go package:** `_test.go` next to it; use `haltest` fakes; run `make test-go`.
 
 ## 6. Diagram checking
