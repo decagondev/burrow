@@ -19,6 +19,8 @@ TEST(paging_user_bit_reaches_every_level); TEST(paging_rejects_bad_input);
 TEST(paging_refuses_to_overwrite); TEST(paging_out_of_memory);
 TEST(image_reads_and_verifies); TEST(image_detects_corruption);
 TEST(image_rejects_small_dest_and_read_errors);
+TEST(elf_load_copies_and_zeroes); TEST(elf_load_rejects_outside_window);
+TEST(elf_load_rejects_overlap_and_bad_entry);
 
 int main(void) {
     puts("[crc32]");    RUN(crc32_standard_check_value); RUN(crc32_empty);
@@ -40,6 +42,8 @@ int main(void) {
                         RUN(paging_out_of_memory);
     puts("[image]");    RUN(image_reads_and_verifies); RUN(image_detects_corruption);
                         RUN(image_rejects_small_dest_and_read_errors);
+    puts("[elf_load]"); RUN(elf_load_copies_and_zeroes); RUN(elf_load_rejects_outside_window);
+                        RUN(elf_load_rejects_overlap_and_bad_entry);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

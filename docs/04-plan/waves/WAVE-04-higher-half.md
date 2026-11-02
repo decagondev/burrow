@@ -17,7 +17,7 @@ Test: host unit tests with synthetic maps (overlaps, holes, exhaustion).
 File: `loader/image.c`: `image_read(block_device*, entry, dest)` + CRC check.
 Test: marker `[loader] nucleus image crc ok`; regression REG-0004 (corrupt nucleus byte => `PANIC: nucleus CRC`).
 
-### [ ] W4-S04 Copy PT_LOAD segments (E03.F03.S03)
+### [x] W4-S04 Copy PT_LOAD segments (E03.F03.S03)
 Use `elf64_segment_at`; copy `filesz` bytes to `paddr`, zero to `memsz`; reject overlaps with loader/boot data (pure check, unit-tested).
 Test: marker `[loader] nucleus loaded entry=ffffffff80100000`.
 

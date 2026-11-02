@@ -24,6 +24,7 @@
 #include "layout.h"
 #include "palloc.h"
 #include "image.h"
+#include "elf_load.h"
 
 extern char __loader_start[], __loader_image_end[], __bss_end[];
 
@@ -122,6 +123,23 @@ static struct disk_image read_nucleus_image(const struct manifest *m) {
     return img;
 }
 
+/* Copy PT_LOAD segments to their physical addresses inside the nucleus window. */
+static void load_nucleus(struct disk_image img, struct elf_loaded *out) {
+    struct load_window win = { NUCLEUS_PHYS_BASE, NUCLEUS_PHYS_LIMIT,
+                               (uint8_t *)(uintptr_t)NUCLEUS_PHYS_BASE };
+    enum elf_status st = elf64_load(img.bytes, img.size_bytes, &win, out);
+    if (st != ELF_OK) panic(elf_status_str(st));
+    for (uint32_t i = 0; i < out->count; i++) {
+        const struct elf64_segment *s = &out->seg[i];
+        if (s->vaddr < NUCLEUS_VIRT_BASE) panic("nucleus segment below the top 2 GiB");
+        kprintf("  segment %016llx -> phys %08llx  %6llu bytes  %c%c%c\n",
+                (unsigned long long)s->vaddr, (unsigned long long)s->paddr,
+                (unsigned long long)s->memsz, s->flags & 4 ? 'r' : '-',
+                s->flags & 2 ? 'w' : '-', s->flags & 1 ? 'x' : '-');
+    }
+    kprintf("[loader] nucleus loaded entry=%llx\n", (unsigned long long)out->entry);
+}
+
 void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -137,8 +155,8 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     check_disk(bi);
 
     init_frames(bi);
-    struct disk_image nucleus = read_nucleus_image(m);
-    (void)nucleus;
+    struct elf_loaded nucleus;
+    load_nucleus(read_nucleus_image(m), &nucleus);
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */

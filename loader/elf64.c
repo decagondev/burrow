@@ -59,6 +59,8 @@ const char *elf_status_str(enum elf_status s) {
     static const char *const names[] = {
         "ok", "too small", "bad magic", "not 64-bit", "not little-endian",
         "not x86-64", "not ET_EXEC", "bad program headers", "bad segment",
+        "segment outside load window", "segments overlap", "too many segments",
+        "entry not in an executable segment",
     };
     return (unsigned)s < sizeof names / sizeof names[0] ? names[s] : "unknown";
 }

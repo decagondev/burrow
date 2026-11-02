@@ -1,6 +1,6 @@
 /* elf64.h - minimal, defensive ELF64 reader. Pure logic: give it bytes,
  * it tells you what to load where. It never touches memory it was not given.
- * Used in Wave 5 to load the nucleus and Wave 6 to load the Go kernel. */
+ * Used in Wave 4 to load the nucleus (via elf_load.h) and Wave 6 for Go. */
 #ifndef LOADER_ELF64_H
 #define LOADER_ELF64_H
 #include <stdint.h>
@@ -16,6 +16,10 @@ enum elf_status {
     ELF_NOT_EXEC,
     ELF_BAD_PHDRS,
     ELF_BAD_SEGMENT,
+    ELF_OUTSIDE_WINDOW,      /* elf64_load: segment not inside the load window   */
+    ELF_SEGMENTS_OVERLAP,    /* elf64_load: two segments share physical bytes    */
+    ELF_TOO_MANY_SEGMENTS,   /* elf64_load: more than ELF_LOAD_MAX_SEGMENTS      */
+    ELF_BAD_ENTRY,           /* elf64_load: entry not inside an executable segment */
 };
 
 struct elf64_info {
