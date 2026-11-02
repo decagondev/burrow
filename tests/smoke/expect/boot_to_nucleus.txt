@@ -15,4 +15,5 @@ BURROW:LOADER:OK
 [nucleus] pmm ok
 [nucleus] vmm ok
 [nucleus] lapic ok
+[nucleus] time ok
 BURROW:NUCLEUS:OK

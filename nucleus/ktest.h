@@ -32,4 +32,5 @@ int kt_vm_reserve_hint(void);
 
 /* ktest_irq.c */
 int kt_lapic_self_ipi(void);
+int kt_time_tick_rate(void);
 #endif

@@ -1,5 +1,7 @@
 # Ordered markers for ktest suite "irq" (tests/ktest/irq.txt). Append-only.
 [nucleus] lapic ok
+[nucleus] time ok
 [ktest] running suite
 [ktest] lapic_self_ipi ok
+[ktest] time_tick_rate ok
 BURROW:KTEST:OK

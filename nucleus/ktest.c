@@ -18,6 +18,7 @@ static const struct ktest g_tests[] = {
     { "vm_reserve_commit",  kt_vm_reserve_commit },
     { "vm_reserve_hint",    kt_vm_reserve_hint },
     { "lapic_self_ipi",     kt_lapic_self_ipi },
+    { "time_tick_rate",     kt_time_tick_rate },
 };
 
 static const char *g_current;
