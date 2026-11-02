@@ -24,6 +24,7 @@
 #include "time.h"
 #include "fpu.h"
 #include "sched.h"
+#include "syscall.h"
 #include "ktest.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
@@ -63,6 +64,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     time_init();
     fpu_init();
     sched_init();
+    syscall_init();
 
     const struct boot_module *kt = boot_module_find("ktest");
     if (kt) {

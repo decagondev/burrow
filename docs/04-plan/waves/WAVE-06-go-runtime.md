@@ -9,10 +9,10 @@ Timebox: 2 sessions. Failure → plan B review.
 ### [x] W6-S02 Stage the kernel ELF (E05.F02)
 Makefile: build `kernel.elf` (command in GO_RUNTIME_HOSTING §2), `-payload kernel=`. Loader loads it as a module (not segments: the nucleus maps it).
 
-### [ ] W6-S03 Syscall gate (E05.F03)
+### [x] W6-S03 Syscall gate (E05.F03)
 Copy `snippets/nucleus/syscall_gate.asm`. MSRs: EFER.SCE, STAR (`kernel CS 0x08 in 47:32`, `user base 0x18 in 63:48`), LSTAR, FMASK (clear IF, DF, TF). ktest: a C function issuing `syscall` with nr 39 returns 1.
 
-### [ ] W6-S04 Shim skeleton + census-on-failure (E05.F03)
+### [x] W6-S04 Shim skeleton + census-on-failure (E05.F03)
 Copy `syscall_shim.c` with only `write` and the unknown-logger. ktest: unknown nr prints `[shim] UNIMPLEMENTED syscall 999` once.
 
 ### [ ] W6-S05 Map the Go ELF + initial stack (E05.F02)

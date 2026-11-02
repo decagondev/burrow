@@ -1,0 +1,4 @@
+# Suite "syscall": the SYSCALL gate and the Linux shim, called from ring 0.
+syscall_getpid
+syscall_write
+shim_unknown_once

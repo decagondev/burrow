@@ -1,0 +1,9 @@
+# Ordered markers for ktest suite "syscall" (tests/ktest/syscall.txt). Append-only.
+[nucleus] syscall gate ok
+[ktest] running suite
+[ktest] syscall_getpid ok
+[ktest] hello through write(1)
+[ktest] syscall_write ok
+[shim] UNIMPLEMENTED syscall 999
+[ktest] shim_unknown_once ok
+BURROW:KTEST:OK

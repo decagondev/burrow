@@ -27,6 +27,9 @@ static const struct ktest g_tests[] = {
     { "spinlock_counter",   kt_spinlock_counter },
     { "futex_ping_pong",    kt_futex_ping_pong },
     { "futex_timeout_and_eagain", kt_futex_timeout_and_eagain },
+    { "syscall_getpid",     kt_syscall_getpid },
+    { "syscall_write",      kt_syscall_write },
+    { "shim_unknown_once",  kt_shim_unknown_once },
 };
 
 static const char *g_current;

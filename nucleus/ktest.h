@@ -45,4 +45,9 @@ int kt_sse_state_per_thread(void);
 int kt_spinlock_counter(void);
 int kt_futex_ping_pong(void);
 int kt_futex_timeout_and_eagain(void);
+
+/* ktest_syscall.c */
+int kt_syscall_getpid(void);
+int kt_syscall_write(void);
+int kt_shim_unknown_once(void);
 #endif

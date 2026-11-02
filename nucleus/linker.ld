@@ -17,7 +17,11 @@ SECTIONS
 {
     . = KERNEL_VMA + 0x100000;
     __nucleus_start = .;
-    .text   ALIGN(4K) : AT(ADDR(.text)   - KERNEL_VMA) { *(.text.entry) *(.text .text.*) } :text
+    .text   ALIGN(4K) : AT(ADDR(.text)   - KERNEL_VMA) {
+        __text_start = .;                /* syscall.asm: nucleus callers */
+        *(.text.entry) *(.text .text.*)
+        __text_end = .;
+    } :text
     .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VMA) {
         *(.rodata .rodata.*)
         . = ALIGN(8);

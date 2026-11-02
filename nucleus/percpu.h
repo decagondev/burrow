@@ -10,9 +10,11 @@ struct percpu {
     uint64_t kstack_top;      /* +0: current thread's kernel stack, highest address */
     uint64_t kstack_bottom;   /* +8: lowest usable address of that stack            */
     struct thread *current;   /* +16                                                */
+    uint64_t syscall_scratch; /* +24: syscall.asm parks one value here (IF=0)       */
 };
 _Static_assert(__builtin_offsetof(struct percpu, kstack_top) == 0, "trap.asm offset");
 _Static_assert(__builtin_offsetof(struct percpu, kstack_bottom) == 8, "trap.asm offset");
+_Static_assert(__builtin_offsetof(struct percpu, syscall_scratch) == 24, "syscall.asm offset");
 
 extern struct percpu g_percpu;
 #endif

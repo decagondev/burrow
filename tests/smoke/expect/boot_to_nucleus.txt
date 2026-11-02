@@ -18,4 +18,5 @@ BURROW:LOADER:OK
 [nucleus] time ok
 [nucleus] sse ok
 [nucleus] sched ok
+[nucleus] syscall gate ok
 BURROW:NUCLEUS:OK
