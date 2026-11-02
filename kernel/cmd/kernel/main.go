@@ -88,6 +88,7 @@ func main() {
 		MapMMIO: amd64.MapMMIO,
 	})
 	checkBootDisk(log.With("block"))
+	k.mountData(log.With("fat"))
 
 	if screen := startScreen(); screen != nil {
 		out.Add(screen) // the console on serial and on screen

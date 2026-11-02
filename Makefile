@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census smoke go-smoke ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -136,6 +136,12 @@ $(BUILD)/initrd.tar: $(INITRD_FILES) | $(BUILD)
 	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
 		--mode=a-rwx,u+rwX,go+rX -C initrd -cf $@ .
 
+# The data disk (W8): datadisk/ as FAT32, the primary slave, mounted at /mnt.
+DATADISK_FILES := $(shell find datadisk -type f)
+DATA_DRIVE := -drive file=$(BUILD)/data.img,format=raw,if=ide,index=1,media=disk
+$(BUILD)/data.img: $(DATADISK_FILES) $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go) | $(BUILD)
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label burrowdata ../datadisk
+
 # The same boot chain plus the Go kernel and the initrd. Separate from
 # disk.img so the nucleus images stay fast (1.7 MiB over ATA PIO costs
 # ~1.5 s per boot).
@@ -158,7 +164,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census smoke go-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -191,16 +197,16 @@ smoke: $(BUILD)/disk.img
 
 # Boot the Go kernel, type into its console (tests/smoke/keys/) and check its
 # markers (tests/smoke/expect/boot_to_go.txt).
-go-smoke: $(BUILD)/go.img
-	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30 tests/smoke/keys/boot_to_go.keys
+go-smoke: $(BUILD)/go.img $(BUILD)/data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30 tests/smoke/keys/boot_to_go.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:
 	cd kernel && $(GO) run ./cmd/hostsim
 
 # Boot the Go image interactively: the console reads the serial line (Ctrl-A X quits).
-run-go: $(BUILD)/go.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) -serial mon:stdio -display none
+run-go: $(BUILD)/go.img $(BUILD)/data.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display none
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
@@ -211,6 +217,10 @@ regress: $(BUILD)/disk.img $(BUILD)/go.img
 # PIT-09: the Go runtime's syscall set (host strace) vs the pinned census.
 census:
 	GO="$(GO)" tests/regression/census.sh $(BUILD)
+
+# kernel/fs/fat against mkfs.fat/fsck.fat/mtools, both ways (skips without them).
+fat-interop: $(BUILD)/data.img
+	GO="$(GO)" tests/regression/fat_interop.sh $(BUILD)
 
 sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/nucleus.disk.elf
 	@scripts/sizes.sh $(BUILD)

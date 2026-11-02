@@ -22,7 +22,7 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 ### [x] W8-S06 Block layer + ATA PIO in Go (E07.F05)
 `kernel/block`: `Device` (sector size, count, `ReadAt`), a RAM disk, and one conformance test both must pass. `drivers/ata`: IDENTIFY and 28-bit LBA PIO reads on the primary channel (`hal.PortIO16`). On target: read the boot disk's manifest sector and check its magic.
 
-### [ ] W8-S07 FAT32 read-only (E07.F06)
+### [x] W8-S07 FAT32 read-only (E07.F06)
 `tools/mkfat` builds a FAT32 image from a directory (also used by host tests); `make` puts `build/data.img` on the primary slave. `kernel/fs/fat`: `fs.FS` over a `block.Device`, `fstest.TestFS` on a generated image; mounted at `/mnt`.
 
 Exit: **M8 demo — files and pixels.** `make clean test` green; DEVLOG wave entry.

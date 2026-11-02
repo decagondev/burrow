@@ -22,6 +22,10 @@ type write /dev/console written to the console device
 key ret
 type disks
 key ret
+type ls /mnt /mnt/docs
+key ret
+type cat /mnt/hello.txt
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

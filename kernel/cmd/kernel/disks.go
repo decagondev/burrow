@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"burrow/kernel/block"
+	"burrow/kernel/fs/fat"
 	"burrow/kernel/klog"
 )
 
@@ -40,4 +41,22 @@ func listDisks(out io.Writer) {
 		fmt.Fprintf(out, "%s %8d sectors of %d bytes (%d KiB)\n", n, d.Sectors(), d.SectorSize(),
 			d.Sectors()*uint64(d.SectorSize())/1024)
 	}
+}
+
+// mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07).
+func (k *kernel) mountData(log *klog.Logger) {
+	d, ok := block.Get("hdb")
+	if !ok {
+		return
+	}
+	fsys, err := fat.Mount(block.ReaderAt(d))
+	if err != nil {
+		log.Warnf("hdb: %v", err)
+		return
+	}
+	if err := k.fs.Mount("mnt", fsys, "fat32"); err != nil {
+		log.Errorf("mount /mnt: %v", err)
+		return
+	}
+	log.Infof("hdb: FAT32 volume %q mounted at /mnt", fsys.Label)
 }

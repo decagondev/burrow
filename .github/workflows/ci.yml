@@ -14,7 +14,7 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nasm qemu-system-x86 python3 strace
+          sudo apt-get install -y --no-install-recommends nasm qemu-system-x86 python3 strace dosfstools mtools
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.3'

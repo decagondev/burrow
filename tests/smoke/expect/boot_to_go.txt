@@ -17,6 +17,7 @@ BURROW:GO:OK goroutine says 42
 [go-selftest] irq ok
 BURROW:GO:SELFTEST:OK
 [ata] INFO: hda: "QEMU HARDDISK"
+[ata] INFO: hdb: "QEMU HARDDISK"
 [bga] INFO: 1024x768x32 linear framebuffer at 0xfd000000
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
@@ -24,6 +25,7 @@ BURROW:GO:SELFTEST:OK
 [serial] INFO: receive interrupts on irq 4
 [driver] INFO: started: [ata bga pci ps2 serial]
 [block] INFO: hda sector 1: boot manifest "BRWMNFST" found
+[fat] INFO: hdb: FAT32 volume "BURROWDATA" mounted at /mnt
 [console] INFO: ready
 burrow> echo hello from the keyboar
 hello from the keyboard
@@ -44,5 +46,12 @@ burrow> write /dev/console written to the console device
 written to the console device
 burrow> disks
 hda 
+hdb 
+burrow> ls /mnt /mnt/docs
+dr-xr-xr-x        0 docs/
+-r--r--r--       83 hello.txt
+-r--r--r--       72 A-Long-File-Name.text
+burrow> cat /mnt/hello.txt
+Hello from the FAT32 data disk
 burrow> poweroff
 [console] INFO: poweroff
