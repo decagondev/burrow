@@ -34,5 +34,10 @@ typed into ramfs
 burrow> ls /
 drwxr-xr-x        0 etc/
 drwxr-xr-x        0 tmp/
+burrow> ls /dev
+Dcrw--w----        0 console
+Dcrw-rw-rw-        0 null
+burrow> write /dev/console written to the console device
+written to the console device
 burrow> poweroff
 [console] INFO: poweroff

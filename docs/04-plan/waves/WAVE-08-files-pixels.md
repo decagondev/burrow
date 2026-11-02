@@ -13,7 +13,7 @@ Design: the VFS is built on Go's `io/fs` (`fs.FS`, `fs.File`, `fs.ReadDirFile`),
 ### [x] W8-S03 VFS + ramfs (E07.F02)
 `kernel/vfs`: a mount table that is itself an `fs.FS` (longest-prefix mounts, path cleaning, `ReadDir` showing mount points), and `vfs.WriteFile/Mkdir/Remove` for file systems that can write (`vfs.Writable`). ramfs for `/tmp` is a writable `fs/memfs` (no package of its own). Both pass `fstest.TestFS`. Console: `ls`, `cat`, `write <file> <text>`, `mkdir`, `rm`, `mounts`.
 
-### [ ] W8-S04 devfs (E07.F03)
+### [x] W8-S04 devfs (E07.F03)
 `kernel/fs/devfs`: `/dev/null`, `/dev/zero`, `/dev/console` (writes reach the console), and later `/dev/fb0`, `/dev/input/event0`. Device files are registered by drivers.
 
 ### [ ] W8-S05 Framebuffer: BGA + text console (E07.F04)

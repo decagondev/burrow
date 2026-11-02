@@ -15,5 +15,9 @@ type cat /tmp/note
 key ret
 type ls /
 key ret
+type ls /dev
+key ret
+type write /dev/console written to the console device
+key ret
 type poweroff
 key ret

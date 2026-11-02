@@ -13,6 +13,7 @@ import (
 	"sort"
 	"sync"
 
+	"burrow/kernel/fs/devfs"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 )
@@ -24,6 +25,7 @@ type Env struct {
 	IRQ     func(line int) hal.IRQLine
 	Log     *klog.Logger // StartAll gives each driver its own "[name]" child
 	Input   chan<- byte  // console input: keyboards and serial lines write here
+	Dev     *devfs.FS    // where a driver registers its device files (/dev)
 }
 
 // Driver is one device driver.

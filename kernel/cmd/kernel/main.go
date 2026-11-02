@@ -27,7 +27,6 @@ import (
 	_ "burrow/kernel/drivers/pci" // drivers register themselves in init()
 	_ "burrow/kernel/drivers/ps2"
 	"burrow/kernel/drivers/uart"
-	"burrow/kernel/fs/memfs"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/selftest"
@@ -56,9 +55,7 @@ func main() {
 		amd64.DebugExit(0x11)
 	}
 	k.modules = mods
-	k.fs = vfs.New()
-	k.fs.Mount(".", mountInitrd(mods, log.With("initrd")), "tarfs")
-	k.fs.Mount("tmp", memfs.New(), "ramfs")
+	dev := k.mountFiles(log.Writer())
 
 	done := make(chan int)
 	go func() { done <- 42 }()
@@ -82,6 +79,7 @@ func main() {
 		IRQ:     func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
 		Log:     log,
 		Input:   input,
+		Dev:     dev,
 	})
 
 	con := console.New(log.Writer(), input)
