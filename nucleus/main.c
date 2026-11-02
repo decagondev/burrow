@@ -15,6 +15,7 @@
 #include "kprintf.h"
 #include "panic.h"
 #include "gdt.h"
+#include "trap.h"
 
 #define NUCLEUS_VIRT_BASE 0xFFFFFFFF80000000ull   /* nucleus/linker.ld KERNEL_VMA */
 
@@ -45,6 +46,17 @@ static void init_gdt(void) {
     kprintf("[nucleus] gdt ok (cs=%x, tr=%x)\n", read_cs(), read_tr());
 }
 
+/* Prove the whole trap path (stub, IST, copy to kstack, dispatch, fixup, iretq)
+ * with two faults we expect: #UD from ud2 and #GP from a non-canonical read. */
+static void init_idt(void) {
+    trap_init();
+    uint64_t v;
+    if (probe_ud2() != -1 || trap_last.vector != VEC_UD) panic("ud2 not caught");
+    if (probe_read64(0x0000800000000000ull, &v) != -1 || trap_last.vector != VEC_GP)
+        panic("non-canonical read not caught");
+    kprintf("[nucleus] idt ok (fixups caught %s and %s)\n", trap_name(VEC_UD), trap_name(VEC_GP));
+}
+
 void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
@@ -54,6 +66,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
 
     check_boot_info(bi);
     init_gdt();
+    init_idt();
 
     kprintf("BURROW:NUCLEUS:OK\n");
     qemu_exit(QEMU_EXIT_SUCCESS);

@@ -19,6 +19,7 @@ nucleus_entry:
 
 section .bss
 align 16
+global boot_stack, boot_stack_top
 boot_stack:
     resb 16384
 boot_stack_top:

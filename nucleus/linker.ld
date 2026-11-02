@@ -18,7 +18,11 @@ SECTIONS
     . = KERNEL_VMA + 0x100000;
     __nucleus_start = .;
     .text   ALIGN(4K) : AT(ADDR(.text)   - KERNEL_VMA) { *(.text.entry) *(.text .text.*) } :text
-    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VMA) { *(.rodata .rodata.*) } :rodata
+    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VMA) {
+        *(.rodata .rodata.*)
+        . = ALIGN(8);
+        __fixup_start = .; KEEP(*(.fixup)) __fixup_end = .;   /* trap.h: faults allowed here */
+    } :rodata
     .data   ALIGN(4K) : AT(ADDR(.data)   - KERNEL_VMA) { *(.data .data.*) } :data
     .bss    ALIGN(4K) : AT(ADDR(.bss)    - KERNEL_VMA) { __bss_start = .; *(.bss .bss.*) *(COMMON) __bss_end = .; } :data
     __nucleus_end = .;
