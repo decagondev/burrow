@@ -32,15 +32,25 @@ static struct elf_loaded nucleus = {
     },
 };
 
-static struct pt_ctx build(int use_nx, enum pt_status *st) {
+/* 3 GiB below the PCI hole, 1 GiB above 4 GiB (QEMU with -m 4G). */
+static const struct e820_entry big[] = {
+    { 0x0,         0x9FC00,     E820_USABLE,   1 },
+    { 0x100000,    0xBFEE0000,  E820_USABLE,   1 },   /* top 0xBFFE0000 -> low physmap 3 GiB */
+    { 0xBFFE0000,  0x20000,     E820_RESERVED, 1 },
+    { 0xFFFC0000,  0x40000,     E820_RESERVED, 1 },   /* BIOS ROM, in the hole */
+    { 0x100000000, 0x40000000,  E820_USABLE,   1 },
+};
+
+static struct pt_ctx build_map(const struct e820_entry *m, uint32_t n, int use_nx, enum pt_status *st) {
     struct pt_ctx c = { pool_alloc, pool_ptr, 0, 0 };
     used = 0;
     if (pt_init(&c) != PT_OK) abort();
-    struct vm_plan p = { map, 3, &nucleus, use_nx };
+    struct vm_plan p = { m, n, &nucleus, use_nx };
     const char *what;
     *st = vm_build(&c, &p, &what);
     return c;
 }
+static struct pt_ctx build(int use_nx, enum pt_status *st) { return build_map(map, 3, use_nx, st); }
 static uint64_t flags_at(const struct pt_ctx *c, uint64_t va, uint64_t want_pa) {
     uint64_t pa = 0, fl = 0;
     if (pt_translate(c, va, &pa, &fl) != PT_OK || pa != want_pa) return 0;
@@ -48,6 +58,18 @@ static uint64_t flags_at(const struct pt_ctx *c, uint64_t va, uint64_t want_pa) 
 }
 
 TEST(vm_physmap_size_rounds_to_2m) { CHECK_EQ_U64(vm_physmap_size(map, 3), 0x8000000); }
+TEST(vm_physmap_skips_the_pci_hole) {
+    CHECK_EQ_U64(vm_physmap_size(big, 5), 0x100000000ull);       /* 3 GiB + 1 GiB */
+    enum pt_status st;
+    struct pt_ctx c = build_map(big, 5, 1, &st);
+    CHECK(st == PT_OK);
+    CHECK(flags_at(&c, PHYSMAP_BASE + 0xBFFFF000ull, 0xBFFFF000ull) & PTE_W);   /* ACPI tables */
+    CHECK(flags_at(&c, PHYSMAP_BASE + 0x13FFFF000ull, 0x13FFFF000ull) & PTE_NX); /* high RAM */
+    uint64_t pa, fl;
+    CHECK(pt_translate(&c, PHYSMAP_BASE + 0xFD000000ull, &pa, &fl) == PT_NOT_MAPPED); /* framebuffer */
+    CHECK(pt_translate(&c, PHYSMAP_BASE + 0xC0000000ull, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_translate(&c, PHYSMAP_BASE + 0x140000000ull, &pa, &fl) == PT_NOT_MAPPED);
+}
 TEST(vm_build_three_mappings) {
     enum pt_status st;
     struct pt_ctx c = build(1, &st);

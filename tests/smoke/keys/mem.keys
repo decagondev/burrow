@@ -1,0 +1,22 @@
+# Memory (W14-S01), on a 2 GiB guest: 1.5 GiB touched and checked, then a
+# program that keeps asking until it is killed for running out of memory;
+# the system survives and the memory came back. syslat first (BUG-0014).
+wait burrow> 
+type run /bin/syslat
+key ret
+wait syslat: ok
+wait burrow> 
+type run /bin/memtest 1536
+key ret
+wait memtest: 1536 MiB ok
+wait burrow> 
+type run /bin/memtest oom
+key ret
+wait out of memory
+wait burrow> 
+type run /bin/memtest 1536
+key ret
+wait memtest: 1536 MiB ok
+wait burrow> 
+type poweroff
+key ret

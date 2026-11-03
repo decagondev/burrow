@@ -14,7 +14,7 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1011 | `nu_as_map` | as, va, pa, len, prot | 0; user pages, prot bits 1 = write, 2 = execute (read is implied); va, pa, len page-aligned, va + len <= 2^47 | W9 |
 | 0x1012 | `nu_as_unmap` | as, va, len | 0; frames are not freed (they belong to whoever allocated them) | W9 |
 | 0x1013 | `nu_as_translate` | as, va | pa or -EFAULT | W9 |
-| 0x1014 | `nu_page_alloc` | count (1) | physical address of a zeroed frame, or -ENOMEM | W9 |
+| 0x1014 | `nu_page_alloc` | count (1) | physical address of a zeroed frame, or -ENOMEM (also while only `USER_RESERVE_FRAMES`, 32 MiB, are free: they stay for the kernel, W14-S01) | W9 |
 | 0x1015 | `nu_page_free` | pa, count (1) | 0 | W9 |
 | 0x1016 | `nu_as_destroy` | as | 0, frees its page tables; -EBUSY while a thread still runs in it | W9 |
 | 0x1020 | `nu_uthread_create` | as, rip, rsp, fs | tid of a ring-3 thread, runnable at once | W9 |

@@ -23,7 +23,7 @@ TEST(image_reads_and_verifies); TEST(image_detects_corruption);
 TEST(image_rejects_small_dest_and_read_errors);
 TEST(elf_load_copies_and_zeroes); TEST(elf_load_rejects_outside_window);
 TEST(elf_load_rejects_overlap_and_bad_entry);
-TEST(vm_physmap_size_rounds_to_2m); TEST(vm_build_three_mappings);
+TEST(vm_physmap_size_rounds_to_2m); TEST(vm_physmap_skips_the_pci_hole); TEST(vm_build_three_mappings);
 TEST(vm_build_nucleus_is_w_xor_x); TEST(vm_build_without_nx); TEST(vm_build_rejects_shared_pages);
 TEST(pmm_counts_usable_frames); TEST(pmm_never_hands_out_reserved); TEST(pmm_alloc_all_free_all);
 TEST(pmm_skips_frame_zero);
@@ -56,7 +56,7 @@ int main(void) {
                         RUN(image_rejects_small_dest_and_read_errors);
     puts("[elf_load]"); RUN(elf_load_copies_and_zeroes); RUN(elf_load_rejects_outside_window);
                         RUN(elf_load_rejects_overlap_and_bad_entry);
-    puts("[vmsetup]");  RUN(vm_physmap_size_rounds_to_2m); RUN(vm_build_three_mappings);
+    puts("[vmsetup]");  RUN(vm_physmap_size_rounds_to_2m); RUN(vm_physmap_skips_the_pci_hole); RUN(vm_build_three_mappings);
                         RUN(vm_build_nucleus_is_w_xor_x); RUN(vm_build_without_nx);
                         RUN(vm_build_rejects_shared_pages);
     puts("[pmm]");      RUN(pmm_counts_usable_frames); RUN(pmm_never_hands_out_reserved);

@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0014: Every system call and page fault from a process took about 2 ms
+- Found: 2026-11-03, W14-S01: `memtest` needed 8 s for 16 MiB; a probe timed 2000 `getpid` calls at 4 s.
+- Severity: major (since W9: every user program ran at up to 500 system calls a second; Doom hid it with few calls per frame).
+- Symptom: 2000 us per `getpid` and per first-touch page fault, the same at 128 MiB and 2 GiB.
+- Root cause: the dispatcher (`System.Serve`) waits for requests with a blocking `syscall.Syscall`, which keeps its M's P in `_Psyscall`. With one P, the handler goroutine it had just started sat in that P's run queue until sysmon took the P back, and sysmon sleeps in steps of the nucleus's 1 ms tick: about two ticks per request.
+- Fix: `Serve` calls `runtime.Gosched()` after starting the handlers, so they run (and reply) before the dispatcher blocks again. 84 us per call, 100 us per fault (QEMU TCG).
+- Mitigation: `user/syslat.c` in `make mem-smoke` fails above 500 us per call or fault. Any goroutine that blocks in the nucleus while others have work holds the only P until sysmon notices; IRQ waits and timers still pay that (milliseconds, fine for input), and a tickless nucleus timer would remove it for good.
+- Regression: `syslat: ok` in `tests/smoke/expect/mem.txt`.
+- Lesson: with GOMAXPROCS 1 a blocking syscall stops the world until sysmon wakes, and sysmon is only as quick as the kernel's sleep; measure the per-call cost before blaming the work.
+
 ### BUG-0013: The Doom smoke test dumped the screen during Doom's screen melt
 - Found: 2026-11-03, W11-S05: `make doom-smoke` failed 2 runs in the first 3 and was put down to a one-off; seen again in W13-S03 (2 failures in 3).
 - Severity: minor (the test, not the kernel: Doom ran correctly every time).

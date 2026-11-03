@@ -2,7 +2,8 @@
  * of paging.h. Three mappings, MEMORY_MAP.md §2:
  *   1. identity [0, 1 GiB), 2 MiB pages, RWX  - temporary: the loader keeps
  *      running from low memory until it jumps (PIT-21)
- *   2. physmap  PHYSMAP_BASE + [0, top of usable RAM), 2 MiB pages, RW, NX
+ *   2. physmap  PHYSMAP_BASE + [0, top of RAM below 4 GiB) and every usable
+ *      range above 4 GiB (not the PCI hole), 2 MiB pages where aligned, RW, NX
  *   3. nucleus  each PT_LOAD at its vaddr, 4 KiB pages, W^X from ELF flags
  * NX bits are only used when the CPU supports them (EFER.NXE, PIT-20). */
 #ifndef LOADER_VMSETUP_H
@@ -22,6 +23,7 @@ struct vm_plan {
 /* Builds all three mappings into c (pt_init already done). On failure *what
  * names the mapping that failed. */
 enum pt_status vm_build(struct pt_ctx *c, const struct vm_plan *p, const char **what);
-/* Size of the physmap: top of usable RAM rounded up to 2 MiB. */
+/* Bytes the physmap maps: RAM below 4 GiB up to its top (rounded up to
+ * 2 MiB) plus the usable ranges above 4 GiB. */
 uint64_t vm_physmap_size(const struct e820_entry *map, uint32_t count);
 #endif

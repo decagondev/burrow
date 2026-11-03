@@ -1,0 +1,12 @@
+# Ordered markers for memory (W14-S01, tests/smoke/keys/mem.keys), on a 2 GiB guest. Append-only.
+[loader] memory ok (2047 MiB usable)
+burrow> run /bin/syslat
+syslat: ok
+burrow> run /bin/memtest 1536
+memtest: 1536 MiB ok
+burrow> run /bin/memtest oom
+memtest: touched 1024 MiB
+killed: out of memory
+burrow> run /bin/memtest 1536
+memtest: 1536 MiB ok
+burrow> poweroff

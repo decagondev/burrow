@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"runtime"
 	"sync"
 
 	"burrow/kernel/klog"
@@ -185,6 +186,10 @@ func (s *System) Serve() error {
 		for _, r := range buf[:n] {
 			go s.handle(r)
 		}
+		// Let the handlers run before blocking again (BUG-0014): Wait is a
+		// blocking syscall that keeps this M's P, so with one P a handler
+		// queued now would wait for sysmon to take the P back (2 ms).
+		runtime.Gosched()
 	}
 }
 
@@ -205,9 +210,17 @@ func (s *System) handle(r Request) {
 	case r.Nr == InterruptNr: // stopped so that a pending signal can run
 		t.stopped(false, 0, sigInfo{}, 0)
 		return
-	case r.IsFault() && r.Vector() == 14 && r.Args[2]&pfPresent == 0 &&
-		t.p.mem.FaultIn(r.Args[0], r.Args[2]&pfWrite != 0):
-		s.nu.Reply(t.nt, 0) // a first touch of demand-zero memory: resume
+	case r.IsFault() && r.Vector() == 14 && r.Args[2]&pfPresent == 0:
+		switch t.p.mem.FaultIn(r.Args[0], r.Args[2]&pfWrite != 0) {
+		case FaultResume:
+			s.nu.Reply(t.nt, 0) // a first touch of demand-zero memory: resume
+			return
+		case FaultNoMem: // as Linux's OOM killer would, but only the one asking
+			t.p.exit(0, sigKILL, fmt.Sprintf("out of memory at %#x (rip %#x)", r.Args[0], r.Args[1]))
+			return
+		}
+		sig, what := faultSignal(r.Vector())
+		t.stopped(true, sig, sigInfo{signo: int32(sig), code: siKernel, addr: r.Args[0], what: what}, r.Args[1])
 		return
 	case r.IsFault():
 		sig, what := faultSignal(r.Vector())

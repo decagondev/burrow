@@ -92,22 +92,33 @@ func (m *Mem) fillLocked(p uint64, a area) (page, error) {
 	return pg, nil
 }
 
-// FaultIn answers a ring-3 page fault at va: true if va is in an area that
-// allows the access and its page now has a frame (the thread may resume);
-// false for a real fault (a SIGSEGV).
-func (m *Mem) FaultIn(va uint64, write bool) bool {
+// Fault outcomes for FaultIn.
+type Fault int
+
+const (
+	FaultResume Fault = iota // the page now has a frame: the thread may resume
+	FaultSignal              // a real fault: SIGSEGV
+	FaultNoMem               // the page is allowed but no frame is left: kill (W14-S01)
+)
+
+// FaultIn answers a ring-3 page fault at va: FaultResume if va is in an
+// area that allows the access and its page now has a frame, FaultNoMem if
+// it would but the nucleus has no frame to give, FaultSignal otherwise.
+func (m *Mem) FaultIn(va uint64, write bool) Fault {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p := pageDown(va)
 	if _, backed := m.pages[p]; backed || va >= UserTop {
-		return false // the page is there: a protection fault
+		return FaultSignal // the page is there: a protection fault
 	}
 	a, ok := m.areaAt(va)
 	if !ok || a.none || write && a.prot&ProtWrite == 0 {
-		return false
+		return FaultSignal
 	}
-	_, err := m.fillLocked(p, a)
-	return err == nil
+	if _, err := m.fillLocked(p, a); err != nil {
+		return FaultNoMem
+	}
+	return FaultResume
 }
 
 // Areas lists the areas (tests).

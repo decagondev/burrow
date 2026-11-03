@@ -11,6 +11,9 @@
 #define USER_VA_TOP  (1ull << 47)    /* user addresses are below this */
 #define UPROT_WRITE  1u
 #define UPROT_EXEC   2u
+/* nu_page_alloc leaves this many frames for the kernel (W14-S01): a process
+ * that asks for the last of RAM gets -ENOMEM, not the Go kernel's next page. */
+#define USER_RESERVE_FRAMES ((32ull << 20) / 4096)
 
 long uspace_create(void);
 long uspace_map(uint64_t h, uint64_t va, uint64_t pa, uint64_t len, uint64_t prot);

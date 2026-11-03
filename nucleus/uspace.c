@@ -98,6 +98,7 @@ long uspace_destroy(uint64_t h) {
 
 long uspace_page_alloc(uint64_t count) {
     if (count != 1) return -EINVAL;
+    if (frames_free_count() <= USER_RESERVE_FRAMES) return -ENOMEM;
     uint64_t pa = frame_alloc_zeroed();
     return pa ? (long)pa : -ENOMEM;
 }

@@ -26,6 +26,7 @@ flowchart TB
 | FAT interop (W8+) | `make fat-interop` | host: `fsck.fat`, `mkfs.fat`, mtools | seconds | our FAT32 images vs Linux's tools, both ways; skips if they are missing |
 | hostsim (W7+) | `go test ./hostsim` (part of `make test-go`) | host, simulated 8042/16550/IRQ lines | <1 s | the driver stack and console without QEMU; `make hostsim` runs it interactively |
 | Census (W6+) | `make census` | host strace | seconds | Go upgrade adds a syscall (`tests/regression/census.sh`) |
+| Memory (W14+) | `make mem-smoke` | QEMU, `build/go.img` on a 2 GiB guest | ~2.5 min | `mem.txt`: `syslat` (BUG-0014), 1.5 GiB touched and checked, a program killed for running out of memory, and the memory back afterwards |
 | Docs | `make docs-check` | node + mermaid | seconds | all diagrams parse |
 
 `make test` = unit + census + smoke + go-smoke + ktest + regress.

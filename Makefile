@@ -58,11 +58,13 @@ NUCLEUS_OBJ := $(patsubst nucleus/%.c,$(BUILD)/nucleus/%.o,$(wildcard nucleus/*.
 	$(patsubst common/%.c,$(BUILD)/nucleus/common_%.o,$(COMMON_C)) \
 	$(patsubst nucleus/%.asm,$(BUILD)/nucleus/%_asm.o,$(NUCLEUS_ASM))
 
+# The nucleus-only images run in 128 MiB; the Go images get more (W14-S01).
+GO_MEM ?= 512M
 QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -234,7 +236,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -269,24 +271,24 @@ smoke: $(BUILD)/disk.img
 # Boot the Go kernel, type into its console (tests/smoke/keys/) and check its
 # markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 60 tests/smoke/keys/boot_to_go.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 60 tests/smoke/keys/boot_to_go.keys
 
 # The devices programs use (W11): /dev/fb0 drawn and its pixels read back
 # (tests/smoke/expect/devices.screen), /dev/input/event0.
 devices-smoke: $(BUILD)/go.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/devices.txt 60 tests/smoke/keys/devices.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/devices.txt 60 tests/smoke/keys/devices.keys
 
 # Doom typed into (W11-S05); skips until `make doom` ran.
 doom-smoke:
 	@if [ -f $(BUILD)/doom-root/doom ]; then $(MAKE) --no-print-directory doom-smoke-run; \
 	else echo "DOOM SMOKE SKIP (make doom downloads and builds it)"; fi
 doom-smoke-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
 
 # Doom's own benchmark (W11-S06, RISKS R-07): -timedemo demo1 as fast as it
 # goes (about 70 s in QEMU, so not part of make test); fails below 20 fps.
 doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
 	@python3 -c 'import re,sys; m=re.search(r"\(([0-9.]+) fps\)", open(sys.argv[1], errors="replace").read()); fps=float(m.group(1)) if m else 0; print("DOOM BENCH %.1f fps (timedemo demo1)" % fps); sys.exit(fps < 20)' $(BUILD)/smoke-doom-bench.log
 
 # Disk writes (W13-S03): a kernel argument (disktest=hdb) makes the Go kernel
@@ -299,13 +301,18 @@ $(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
 disk-smoke: $(BUILD)/go-disktest.img
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
-	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk" \
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk" \
 		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
 	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
 
 # Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
+# Memory (W14-S01): on a 2 GiB guest, 1.5 GiB touched and checked, then a
+# program killed for running out of memory, and the memory back afterwards.
+mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
+	MEM=2G QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem.txt 300 tests/smoke/keys/mem.keys
+
 ports-smoke: $(BUILD)/go.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds
@@ -324,7 +331,7 @@ ports-dl-smoke:
 	@if [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory ports-dl-smoke-run; \
 	else echo "PORTS SMOKE SKIP (make ports downloads and builds Lua, C++ and TinyCC)"; fi
 ports-dl-smoke-run: $(BUILD)/go-ports.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-ports.img tests/smoke/expect/ports-dl.txt 90 tests/smoke/keys/ports-dl.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-ports.img tests/smoke/expect/ports-dl.txt 90 tests/smoke/keys/ports-dl.keys
 
 # The workbench (W13-S05): busybox (sh, vi), Lua and TinyCC on one image,
 # and a home disk that persists. $(HOME_IMG) (repository root, git-ignored)
@@ -344,7 +351,7 @@ $(BUILD)/initrd-dev.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/ports-roo
 $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) \
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
@@ -356,9 +363,9 @@ dev-smoke:
 dev-smoke-run: $(BUILD)/go-dev.img
 	rm -f $(BUILD)/home-test.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-test.img -label burrowhome -size 64 ../workbench
-	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-1.txt 120 tests/smoke/keys/dev-1.keys
-	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-2.txt 90 tests/smoke/keys/dev-2.keys
 	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-test.img >/dev/null && echo "HOME DISK PASS (fsck.fat after two boots)"; \
 	else echo "HOME DISK SKIP (no fsck.fat)"; fi
@@ -368,7 +375,7 @@ busybox-smoke:
 	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory busybox-smoke-run; \
 	else echo "BUSYBOX SMOKE SKIP (make busybox downloads and builds it)"; fi
 busybox-smoke-run: $(BUILD)/go-busybox.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 90 tests/smoke/keys/busybox.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 90 tests/smoke/keys/busybox.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:
@@ -378,18 +385,18 @@ hostsim:
 # quits). GO_DISPLAY=gtk (or sdl) also shows the screen and takes the keyboard.
 GO_DISPLAY ?= none
 run-go: $(BUILD)/go.img $(BUILD)/data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # busybox, interactive (W10-S08, vi since W13-S01): needs `make busybox`
 # first. At burrow> type `run /bin/busybox sh`; vi draws on the screen
 # console (VT100 since W13-S02) and on this terminal (the serial line).
 run-busybox: $(BUILD)/go-busybox.img $(BUILD)/data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-busybox.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-busybox.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # Doom, interactive (W11): needs `make doom` first. At burrow> type
 #   run /bin/doom -iwad /mnt/freedoom1.wad
 run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done

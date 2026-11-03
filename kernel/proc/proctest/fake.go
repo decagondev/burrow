@@ -16,6 +16,7 @@ type Fake struct {
 	mu      sync.Mutex
 	frames  map[uint64][]byte
 	nextPA  uint64
+	limit   int                           // frames PageAlloc may hand out at once; 0 = no limit
 	spaces  map[uint64]map[uint64]mapping // as -> va -> mapping
 	nextAS  uint64
 	threads map[uint64]*Thread
@@ -115,9 +116,20 @@ func (f *Fake) Unmap(as, va, n uint64) error {
 	return nil
 }
 
+// LimitFrames makes PageAlloc fail with ENOMEM once n frames are in use
+// (0 removes the limit), as nu_page_alloc does at the kernel's reserve.
+func (f *Fake) LimitFrames(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.limit = n
+}
+
 func (f *Fake) PageAlloc() (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.limit > 0 && len(f.frames) >= f.limit {
+		return 0, syscall.ENOMEM
+	}
 	pa := f.nextPA
 	f.nextPA += proc.PageSize
 	f.frames[pa] = make([]byte, proc.PageSize)

@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S01 more memory, and BUG-0014
+
+**Did:** Go images boot with 512 MiB (`GO_MEM`); `make mem-smoke` touches 1.5 GiB on a 2 GiB guest. The physmap no longer maps the PCI hole as RAM on guests over 3 GiB, and a process that runs out of memory is killed (`SIGKILL`, logged) instead of panicking the nucleus, which now keeps 32 MiB for the kernel.
+
+**Surprise:** the first `memtest` needed 8 s for 16 MiB. Not memory at all: every system call took 2 ms (BUG-0014). The dispatcher blocks in the nucleus holding Go's only P, so each handler waited for sysmon, which sleeps in 1 ms ticks. One `runtime.Gosched()` made calls 24 times faster (84 us). It had been there since W9; Doom made too few calls to notice.
+
+**Learned:** with GOMAXPROCS 1, every blocking syscall is a scheduling decision. A latency test (`syslat`) belongs next to the throughput ones.
+
+**Next:** W14-S02, the PS/2 mouse.
+
 ## 2026-11-03 — Waves 14 and 15 planned: desktop groundwork, then Qt
 
 **Did:** looked at what TinyX `Xfbdev`, dwm, GTK and Qt need from the kernel, and planned [W14](../04-plan/waves/WAVE-14-desktop-groundwork.md) and [W15](../04-plan/waves/WAVE-15-qt.md).

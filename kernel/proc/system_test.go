@@ -341,3 +341,21 @@ func TestDemandZero(t *testing.T) {
 		t.Errorf("write to a read-only area: status %d %q", st, why)
 	}
 }
+
+// A first touch the nucleus has no frame for kills the process (SIGKILL,
+// logged as out of memory) and gives its frames back (W14-S01).
+func TestOutOfMemoryKills(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	big := uint64(r.call(p, 9, 0, 1<<30, 3, 0x22, ^uint64(0), 0))
+	r.nu.LimitFrames(r.nu.FramesInUse())
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: proc.FaultBase | 14, Args: [6]uint64{big, 0x400200, 2}})
+	st, why := wait(t, p)
+	if st != 128+9 || !strings.Contains(why, "out of memory") {
+		t.Errorf("status %d %q, want 137 and out of memory", st, why)
+	}
+	r.nu.LimitFrames(0)
+	if n := r.nu.FramesInUse(); n != 0 {
+		t.Errorf("%d frames still in use after the kill", n)
+	}
+}
