@@ -64,6 +64,8 @@ flowchart TB
 
 **User processes** (W9+): nucleus mechanism in the ktest suite `user` (ring-3 code assembled by hand in `nucleus/ktest_uthread.c`); Go policy in `kernel/proc` against `proctest.Fake` (inject a request, read the reply); end to end in `make go-smoke` (`run /bin/hello`, `/bin/crash`, `/bin/musl-hello`). A new syscall: add it to `kernel/proc`'s table, a test in `system_test.go`, a row in `POSIX_COVERAGE.md`; compare with Linux by running the same static binary there under `strace`.
 
+**A Unix** (W10+): register access, fork/exec threads, resumed faults and interrupt stops are ktests in `nucleus/ktest_uregs.c` (suite `user`). The fake nucleus models them too (`Regs`, `StartThreadFrom`, `SetSpace`, `Interrupt`), so `kernel/proc`'s process tree, descriptors, signals and terminal calls are host tests (`tree_test.go`, `fd_test.go`, `signal_test.go`, `tty_test.go`, run with `-race`); `kernel/tty` tests the line discipline alone. End to end, `boot_to_go.keys` types a shell session: a pipeline, a redirect, `^C` on `spin`, `exit`. Each keys-file `wait` searches only after the previous match, so repeated prompts are unambiguous.
+
 **Typing into a boot** (W7+): pass a keys file as the 4th argument of `tests/smoke/smoke.sh`. Steps: `wait <text>` (in the serial log), `type <text>`, `key <qemu-key-name>`. The guest's output, not the keys file, is what the expect file checks.
 
 **New Go driver:** a package under `kernel/drivers/` that calls `driver.Register` from `init()` and touches hardware only through `driver.Env`; host-test it with `haltest` fakes (`FakePorts`, `FakeIRQ`, `Fake8042`), add it to `kernel/hostsim` if the console can reach it, and import it for side effects in `kernel/cmd/kernel/main.go`.

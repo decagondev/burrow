@@ -258,7 +258,7 @@ sequenceDiagram
     D->>T: nu_irq_ack(1) - unmask
 ```
 
-### 7.3 A user system call (Wave 9)
+### 7.3 A user system call (Wave 9, full frames since Wave 10)
 
 ```mermaid
 sequenceDiagram
@@ -274,7 +274,8 @@ sequenceDiagram
     GD->>H: go handle(req)
     H->>H: VFS read, copyout through the physmap
     H->>GATE: nu_syscall_reply(tid, result)
-    GATE-->>P: SYSRETQ (a non-canonical RIP became a fault before this)
+    H->>H: signal pending? write an rt_sigframe, nu_uthread_regs(set)
+    GATE-->>P: IRETQ from the saved trap_frame (a non-canonical RIP becomes a fault first)
 ```
 
 ### 7.4 One DOOM frame (Wave 11)

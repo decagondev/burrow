@@ -1,4 +1,4 @@
-# W10 A Unix  (M10)  — status: in progress
+# W10 A Unix  (M10)  — status: done (S08 deferred)
 
 Goal: processes behave like Unix processes: `fork`, `execve`, `wait4`, pipes and `dup`, a working directory, signals with handlers, and a terminal with a line discipline where `^C` interrupts the foreground job. Demo: a shell at the console runs `ls / | wc -l`, and `^C` stops a busy loop. Stories: E09.F01-F05 ([BACKLOG.md](../BACKLOG.md)).
 
@@ -34,3 +34,5 @@ PID 1 is a Go-side init: it adopts orphans and reaps zombies; the console's shel
 Build busybox (static, musl) from its source release; run `busybox sh` and its applets.
 
 Exit: **M10 demo — a Unix.** `make clean test` green; DEVLOG wave entry.
+
+As built: one commit per slice; S08 waits for the go-ahead to download busybox, so M10 is met with our own musl shell and tools. Registers stay in the nucleus: the user syscall path saves a whole `trap_frame` and returns with IRETQ (SYSRETQ is gone for user threads), and Go edits a stopped thread through `nu_uthread_regs`, which sanitizes RFLAGS, RIP and MXCSR. Only a syscall's answer becomes RAX; answered faults and interrupt stops resume the thread as it stands. fork copies eagerly. Signals are delivered by Go when a request finishes or when an interrupt stop arrives, with a Linux `rt_sigframe`. The console stays a Go program: `sh` hands it the terminal's foreground group and forwards keys only while a reader waits. init is a Go process (PID 1) with no thread of its own.

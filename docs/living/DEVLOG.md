@@ -14,6 +14,48 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — Wave 10 complete: a Unix (M10)
+
+**Did:** W10-S01..S07. The console starts a shell, and the shell behaves like a Unix shell:
+
+```text
+burrow> sh
+$ ls / | wc -l
+5
+$ echo hi > /tmp/x; cat /tmp/x
+hi
+$ cd /etc; pwd; ls
+/etc
+hostname
+motd
+$ spin
+spin: spinning until ^C
+^C
+$ echo $?
+130
+$ exit
+burrow> ps
+  PID  PPID  PGID STATE    COMMAND
+    1     0     1 kernel   init
+```
+
+Nucleus (mechanism): user syscalls save a whole `trap_frame` and return with IRETQ. Go reads and writes a stopped thread's registers (`nu_uthread_regs`, sanitized), starts a thread from a register image (fork), moves a thread to a new address space (execve), and stops a busy thread at its next return to ring 3 (`nu_uthread_interrupt`). Answered faults and interrupt stops resume the thread. Go (policy): a process tree with zombies, `wait4` and init at PID 1; descriptors (dup, pipes, cloexec, fcntl), a cwd and the `*at` calls, writable `/tmp`; signals (handlers, masks, Linux `rt_sigframe`, `SA_RESTART`, `EINTR`, `SIGCHLD`, faults as signals); `kernel/tty` (canonical and raw modes, termios, `^C`/`^\` to the foreground group, setpgid/setsid). Userland: `user/sh.c` (pipelines, redirects, `;`, `$?`, cd/pwd/exit, one process group per job) and `ls cat echo wc kill sleep spin`.
+
+**Numbers:** 66 Linux calls in `POSIX_COVERAGE.md`, 45 of them new; 11 ring-3 ktests (4 new); go-smoke types the whole session above in about 18 s and passed 6/6 repeats (the `user` ktests 8/8); `kernel/proc` and `kernel/tty` pass under `-race -count=3`.
+
+**Surprises:**
+- Keeping registers in the nucleus was the right line: fork, execve and signal delivery are each a read-modify-write of one 672-byte image, and the nucleus only checks what Go writes (user RIP/RSP, RFLAGS bits, MXCSR).
+- A stale reply was the hardest bug: an interrupt stop's answer must not become RAX, or a thread stopped mid-loop resumes with a syscall result in a register it was using. Only a syscall's answer sets RAX now.
+- `kill(-1)` meant "the group of pid 1" to our first code and "every process" to POSIX; `KillGroup` made the group case explicit.
+- The console is a Go program, not a process, so it cannot just `tcsetpgrp`. It gives the terminal's foreground group to the shell, forwards signal keys at once and other keys only while a reader waits, and puts leftovers back (`Console.Unread`).
+- Keys-file waits that searched the whole log matched an earlier `spin: spinning`; each wait now starts after the previous match.
+
+**Learned:** A request queue plus "give Go the registers" is enough mechanism for all of Unix process semantics; nothing in W10 needed the nucleus to know what a process, file or signal is. Write the fake nucleus with the same resume rules as the real one, or the host tests pass on semantics the kernel does not have.
+
+**Next:** W10-S08 busybox (needs a go-ahead to download its source), then W11: `/dev/fb0` mmap, raw keyboard, Doom.
+
+**Links:** ADR-0004, ADR-0006, PIT-24, BUG-0012
+
 ## 2026-11-02 — Wave 9 complete: the first process (M9)
 
 **Did:** W9-S01..S06 and BUG-0012. Static Linux programs run in ring 3 and the Go kernel serves their system calls:
