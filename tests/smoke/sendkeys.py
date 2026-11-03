@@ -26,6 +26,8 @@ import time
 
 KEY_DELAY_S = 0.02            # between keys: the guest drains the 8042 per IRQ
 BUTTONS = {'left': 1, 'right': 2, 'middle': 4}   # QEMU's mouse_button mask
+MOUSE_STEP = 400              # pixels per axis per mouse_move: what QEMU's queue holds
+MOUSE_DELAY_S = 0.15          # between mouse_move steps, for the guest to drain them
 NAMES = {' ': 'spc', '-': 'minus', '.': 'dot', '/': 'slash', ',': 'comma',
          '=': 'equal', ';': 'semicolon', "'": 'apostrophe',
          '|': 'shift-backslash', '>': 'shift-dot', '<': 'shift-comma', '$': 'shift-4',
@@ -131,9 +133,18 @@ def main():
             elif op == 'key':
                 press(arg)
             elif op == 'mouse':
-                dx, dy = arg.split()
-                s.sendall(f'mouse_move {int(dx)} {int(dy)}\n'.encode())
-                time.sleep(KEY_DELAY_S)
+                # QEMU's PS/2 queue holds a few packets of at most 127 each;
+                # motion that does not fit waits until the next input event and
+                # merges with it. So a long move goes in steps the queue takes,
+                # each given time to drain (W15-S04: -2000 then +530 arrived
+                # as one net move).
+                dx, dy = (int(v) for v in arg.split())
+                while dx or dy:
+                    sx = max(-MOUSE_STEP, min(MOUSE_STEP, dx))
+                    sy = max(-MOUSE_STEP, min(MOUSE_STEP, dy))
+                    s.sendall(f'mouse_move {sx} {sy}\n'.encode())
+                    dx, dy = dx - sx, dy - sy
+                    time.sleep(MOUSE_DELAY_S)
             elif op == 'click':
                 for state in (BUTTONS[arg], 0):
                     s.sendall(f'mouse_button {state}\n'.encode())

@@ -17,4 +17,14 @@ qtwindow: shown 1024x768
 burrow> run /opt/qt/bin/qtwindow --crash-after 3000
 qtwindow: shown 1024x768
 qtwindow: aborting with the screen taken
+burrow> run /opt/qt/bin/qtdemo
+qtdemo: ready 1024x768
+qtdemo: typed "hello burrow"
+qtdemo: press at 529,125
+qtdemo: added "hello burrow" (1 items)
+qtdemo: added "second" (2 items)
+qtdemo: press at 21,12
+qtdemo: menu open
+qtdemo: menu closed
+qtdemo: quit
 burrow> poweroff

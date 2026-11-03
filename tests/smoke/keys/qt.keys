@@ -23,5 +23,37 @@ wait qtwindow: aborting
 wait burrow>
 sleep 1
 screendump build/screen-qt-crash.ppm
+# S04: qtdemo's widgets by keyboard and mouse. Type into the line edit
+# (it has the focus); send the mouse to the corner (Qt clamps it at 0,0,
+# wherever its cursor started), then to the Add button (529,125: qtdemo's
+# ready line says where) and click
+# (sendkeys.py splits long moves so QEMU's PS/2 queue takes them);
+# type a second line and press Enter; open the File menu (21,12), close it
+# with Esc; quit with Ctrl+Q.
+type run /opt/qt/bin/qtdemo
+key ret
+wait qtdemo: ready
+type hello burrow
+wait typed "hello burrow"
+mouse -2000 -2000
+sleep 1
+mouse 529 125
+sleep 1
+click left
+wait added "hello burrow"
+type second
+key ret
+wait added "second"
+mouse -508 -113
+sleep 1
+click left
+wait menu open
+sleep 1
+screendump build/screen-qt-demo.ppm
+key esc
+wait menu closed
+key ctrl-q
+wait qtdemo: quit
+wait burrow>
 type poweroff
 key ret

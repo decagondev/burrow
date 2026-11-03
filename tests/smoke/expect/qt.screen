@@ -17,3 +17,12 @@ pixel build/screen-qt-after.ppm 1022 700 #1e1e28
 size  build/screen-qt-crash.ppm 1024 768
 pixel build/screen-qt-crash.ppm 0 2 #007d9c
 pixel build/screen-qt-crash.ppm 1022 700 #1e1e28
+# qtdemo with its File menu open (W15-S04): the window, the list's white,
+# the stem of the h of "hello burrow" in the list, and the menu's frame.
+size  build/screen-qt-demo.ppm 1024 768
+pixel build/screen-qt-demo.ppm 900 700 #efefef
+pixel build/screen-qt-demo.ppm 400 400 #ffffff
+pixel build/screen-qt-demo.ppm 47 178 #000000
+pixel build/screen-qt-demo.ppm 45 180 #ffffff
+pixel build/screen-qt-demo.ppm 155 50 #767676
+pixel build/screen-qt-demo.ppm 80 84 #767676

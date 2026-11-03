@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15-S04 keyboard and mouse into Qt widgets
+
+**Did:** `qtdemo`, a Qt widgets window (a menu bar, a line edit, an Add button, a list), driven by the PS/2 keyboard and mouse through Qt's own evdev handlers and Qt's drawn cursor. The smoke test types into the line edit, clicks Add, presses Enter for a second line, opens and closes the File menu, and quits with Ctrl+Q; serial markers and screen checks prove each step.
+
+**Surprise:** the kernel needed nothing; the test needed three things. QEMU's PS/2 queue holds only a few packets, and motion that does not fit is kept until the next input event and merged into it, so a big move towards the corner swallowed the move back out (`sendkeys.py` now splits moves). Qt's central widget starts below the menu bar, so fixed widget positions are not screen positions (`qtdemo` prints where its widgets are). And a clicked button takes the keyboard focus, so the next typing went into the button.
+
+**Next:** W15-S05, measuring and fixing Qt's speed on Burrow.
+
 ## 2026-11-03 — W15-S03 Qt draws on /dev/fb0
 
 **Did:** `qtwindow` on Burrow through Qt's linuxfb platform: it opens `/dev/fb0`, reads the mode, maps it, paints three rectangles and a line of DejaVu Sans from FreeType, and the console returns when it quits, and when it aborts with the screen taken. `qt.screen` checks 14 pixels, one inside a glyph.
