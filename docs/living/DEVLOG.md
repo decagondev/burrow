@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W16-S02 Xfbdev on Burrow
+
+**Did:** TinyX's `Xfbdev` runs on Burrow from the X disk at `/opt/x11` and serves `xhello`: a window with rectangles, the core font and Xft text, a mouse click and a key, then the console comes back when the server is killed (`make x11-smoke`, now in `make test`). New in the kernel: interval timers and `SIGALRM`, `KDGKBENT` with a US keymap, `statfs`/`fstatfs`, `fadvise64`, `mremap`, and `link` answering `-EPERM`.
+
+**Surprise:** the server itself asked for little; the trouble was all in the edges. The core font `fixed` could not open because the aliases named fonts our build never made, and the mouse showed BUG-0018: W14's `/dev/input/mice` answered PS/2 commands in a way no test that writes everything at once could catch, so TinyX's handshake first stalled and then lost packet alignment. Reading TinyX's `mouse.c` beside Linux's `mousedev.c` found both halves.
+
+**Next:** W16-S03, st on a pseudo-terminal.
+
+Links: BUG-0018
+
 ## 2026-11-03 — W16-S01 the X stack on Linux first
 
 **Did:** `make x11` fetches 26 pinned sources and builds the X libraries (Xlib, xcb, Xft, fontconfig, FreeType, libXfont 1), the core fonts, TinyX's `Xfbdev`, dwm, st and dmenu, all static for musl: 17 MB for the whole desktop, against 82 MB for five Qt programs. On the host, against Xvfb and driven by xdotool, a new `xhello` draws with the core font and Xft and takes a key, st runs busybox `sh`, dmenu returns a chosen line, and dwm manages a window and quits. The census has 48 calls; Burrow lacks three (`fadvise64`, `fstatfs`, `mremap`), named for S02.

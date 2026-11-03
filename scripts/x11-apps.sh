@@ -16,7 +16,10 @@ if [ ! -f "$OUT/fonts/misc/fonts.dir" ]; then
       bdftopcf -t "$bdf" | gzip -9n > "$OUT/fonts/misc/$(basename "$bdf" .bdf).pcf.gz"
     done
   done
-  cp "$CACHE/src/font-alias-1.0.5/misc/fonts.alias" "$OUT/fonts/misc/fonts.alias"
+  # The BDFs are ISO 10646; misc-misc's own build makes the 8859 sets with
+  # ucs2any. Their first 256 characters are Latin-1, so the aliases point at
+  # the 10646 fonts: "fixed" is the 6x13 Unicode font (W16-S02).
+  sed 's/-iso8859-1$/-iso10646-1/' "$CACHE/src/font-alias-1.0.5/misc/fonts.alias" > "$OUT/fonts/misc/fonts.alias"
   mkfontdir "$OUT/fonts/misc"
   echo "x11: core fonts ($(ls "$OUT/fonts/misc" | grep -c pcf) PCF files)"
 fi

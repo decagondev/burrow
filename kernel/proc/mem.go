@@ -107,6 +107,10 @@ func (m *Mem) MapDevice(va, pa, n uint64, prot Prot) error {
 func (m *Mem) Unmap(va, n uint64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.unmapLocked(va, n)
+}
+
+func (m *Mem) unmapLocked(va, n uint64) error {
 	m.cutAreas(pageDown(va), pageUp(va+n))
 	for p := pageDown(va); p < va+n && p < UserTop; p += PageSize {
 		pg, ok := m.pages[p]

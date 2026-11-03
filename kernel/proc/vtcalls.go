@@ -16,6 +16,8 @@ import (
 
 // <linux/kd.h> and <linux/vt.h>
 const (
+	kiocsound  = 0x4B2F
+	kdmktone   = 0x4B30
 	kdgetled   = 0x4B31
 	kdsetled   = 0x4B32
 	kdgkbtype  = 0x4B33
@@ -23,6 +25,8 @@ const (
 	kdgetmode  = 0x4B3B
 	kdgkbmode  = 0x4B44
 	kdskbmode  = 0x4B45
+	kdgkbent   = 0x4B46
+	kdskbent   = 0x4B47
 	vtOpenqry  = 0x5600
 	vtGetmode  = 0x5601
 	vtSetmode  = 0x5602
@@ -30,6 +34,7 @@ const (
 	vtReldisp  = 0x5605
 	vtActivate = 0x5606
 	vtWaitact  = 0x5607
+	vtDisalloc = 0x5608
 
 	kb101     = 2 // KDGKBTYPE: a PC keyboard
 	theVT     = 1
@@ -100,8 +105,19 @@ func (p *Process) vtIoctl(req, arg uint64) (res int64, handled bool) {
 		return errno(p.mem.CopyOut(arg, []byte{kb101})), true
 	case kdgetled:
 		return errno(p.mem.CopyOut(arg, []byte{0})), true
-	case kdsetled, vtReldisp:
-		return 0, true // no LEDs to light; nothing to hand over
+	case kdsetled, vtReldisp, kiocsound, kdmktone, kdskbent, vtDisalloc:
+		return 0, true // no LEDs to light, nothing to hand over, no speaker; the keymap is fixed
+	case kdgkbent: // struct kbentry {u8 table, index; u16 value} (W16-S02: TinyX reads its keymap)
+		b := make([]byte, 4)
+		if err := p.mem.CopyIn(arg, b); err != nil {
+			return errno(err), true
+		}
+		v, okKey := vt.KeymapEntry(b[0], b[1])
+		if !okKey {
+			return -int64(syscall.EINVAL), true
+		}
+		le.PutUint16(b[2:], v)
+		return errno(p.mem.CopyOut(arg, b)), true
 	case vtOpenqry:
 		return putInt(theVT), true
 	case vtGetstate: // struct vt_stat {active, signal, state}: terminal 1 in use

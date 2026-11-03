@@ -23,16 +23,18 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 13 | `rt_sigaction` | done | W10 | `SA_SIGINFO SA_RESTORER SA_RESTART SA_NODEFER SA_RESETHAND SA_ONSTACK` (W12) |
 | 14 | `rt_sigprocmask` | done | W10 | |
 | 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
-| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`, and since W14 (`kernel/proc/vtcalls.go`, `kernel/vt`) `KDGKBMODE KDSKBMODE` (`K_XLATE K_UNICODE K_RAW K_MEDIUMRAW K_OFF`), `KDGETMODE KDSETMODE` (`KD_TEXT KD_GRAPHICS`: the console stops and resumes drawing), `KDGKBTYPE` (`KB_101`), `KDGETLED KDSETLED`, and one virtual terminal, number 1: `VT_OPENQRY VT_GETSTATE VT_ACTIVATE VT_WAITACTIVE` (`-ENXIO` for any other), `VT_GETMODE VT_SETMODE VT_RELDISP`; every mode a process set is undone when it exits; sockets and, since W15 (BUG-0016), pipes: `FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only, and since W14 `FBIOGETCMAP` (a linear ramp: truecolour has no palette), `FBIOPUTCMAP` and `FBIOBLANK` (accepted); `/dev/input/event0` and `event1`: `EVIOCGNAME EVIOCGVERSION EVIOCGID EVIOCGRAB`, and since W14 `EVIOCGBIT EVIOCGKEY EVIOCGPHYS` with empty `EVIOCGPROP EVIOCGLED EVIOCGSND EVIOCGSW` (`EVIOCGUNIQ` is `-ENOENT`); anything else `-ENOTTY` |
+| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`, and since W14 (`kernel/proc/vtcalls.go`, `kernel/vt`) `KDGKBMODE KDSKBMODE` (`K_XLATE K_UNICODE K_RAW K_MEDIUMRAW K_OFF`), `KDGETMODE KDSETMODE` (`KD_TEXT KD_GRAPHICS`: the console stops and resumes drawing), `KDGKBTYPE` (`KB_101`), `KDGETLED KDSETLED`, and one virtual terminal, number 1: `VT_OPENQRY VT_GETSTATE VT_ACTIVATE VT_WAITACTIVE` (`-ENXIO` for any other), `VT_GETMODE VT_SETMODE VT_RELDISP`, and since W16 the keymap TinyX reads: `KDGKBENT` (a US layout, `kernel/vt/keymap.go`), with `KDSKBENT KIOCSOUND KDMKTONE VT_DISALLOCATE` accepted; every mode a process set is undone when it exits; sockets and, since W15 (BUG-0016), pipes: `FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only, and since W14 `FBIOGETCMAP` (a linear ramp: truecolour has no palette), `FBIOPUTCMAP` and `FBIOBLANK` (accepted); `/dev/input/event0` and `event1`: `EVIOCGNAME EVIOCGVERSION EVIOCGID EVIOCGRAB`, and since W14 `EVIOCGBIT EVIOCGKEY EVIOCGPHYS` with empty `EVIOCGPROP EVIOCGLED EVIOCGSND EVIOCGSW` (`EVIOCGUNIQ` is `-ENOENT`); anything else `-ENOTTY` |
 | 19 | `readv` | done | W11 | one read of the vectors' total length (at most 1 MiB), scattered over them |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
 | 23 | `select` | partial | W14 | over the same readiness as `poll` (`kernel/proc/select.go`); a hang-up also marks a descriptor in the write set; the time left is not written back into the timeout |
 | 24 | `sched_yield` | done | W12 | |
+| 25 | `mremap` | done | W16 | shrink and grow in place, `MREMAP_MAYMOVE` (data and frames move, nothing is copied), `MREMAP_FIXED`; `-EFAULT` for a range not mapped |
 | 28 | `madvise` | partial | W12 | `MADV_DONTNEED` gives frames back (anonymous memory reads as zero, a file mapping as the file again); other advice accepted |
 | 32, 33 | `dup` `dup2` | done | W10 |  |
 | 34 | `pause` | done | W10 | |
+| 36, 37, 38 | `getitimer` `alarm` `setitimer` | partial | W16 | `ITIMER_REAL` sends `SIGALRM` once or every interval (`kernel/proc/itimer.go`); `ITIMER_VIRTUAL` and `ITIMER_PROF` are kept and reported but never fire (no CPU time is measured); kept across `execve`, not inherited by `fork` |
 | 35 | `nanosleep` | partial | W10 | `EINTR` when a signal arrives; the remaining time is not written back |
 | 39 | `getpid` | done | W9 |  |
 | 41 | `socket` | partial | W14 | `AF_UNIX` only (`kernel/proc/socknames.go`), the same types and flags as `socketpair`; other families `-EAFNOSUPPORT` (there is no network) |
@@ -70,6 +72,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 79 | `getcwd` | done | W10 |  |
 | 80, 81 | `chdir` `fchdir` | done | W10 |  |
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |
+| 86, 265 | `link` `linkat` | stub | W16 | no file system has hard links: `-EPERM` for a source that exists (as Linux's vfat), else its error |
 | 87 | `unlink` | done | W10 | `-EISDIR` for directories |
 | 89, 267 | `readlink` `readlinkat` | done | W14 | there are no symbolic links: `-EINVAL` for a path that exists, else its error |
 | 102, 104, 107, 108 | `getuid` `getgid` `geteuid` `getegid` | partial | W9 | everyone is root (0) |
@@ -81,12 +84,14 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | done | W12 | the main thread's tid is the pid; tids share the pid number space |
 | 200, 234 | `tkill` `tgkill` | done | W12 | a signal for one thread |
+| 137, 138 | `statfs` `fstatfs` | partial | W16 | `f_type` names the file system (`TMPFS_MAGIC` for `/tmp` and `/dev`, `RAMFS_MAGIC` for the initrd, `MSDOS_SUPER_MAGIC` for FAT), `f_bsize` 4096, `f_namelen` 255; sizes read as 0 |
 | 202 | `futex` | partial | W12 | `WAIT WAKE WAIT_BITSET WAKE_BITSET REQUEUE CMP_REQUEUE`, timeouts (`FUTEX_CLOCK_REALTIME` deadlines since W14), `EINTR`; private to an address space (no PI, no robust lists) |
 | 203 | `sched_setaffinity` | done | W14 | one CPU: accepted when the mask holds CPU 0, else `-EINVAL` |
 | 204 | `sched_getaffinity` | done | W12 | one CPU |
 | 213, 291 | `epoll_create` `epoll_create1` | done | W12 | `EPOLL_CLOEXEC` |
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
 | 218 | `set_tid_address` | done | W12 | the word is cleared and futex-woken when the thread exits |
+| 221 | `fadvise64` | stub | W16 | nothing to tune: 0 for any file, `-ESPIPE` for pipes and sockets, `-EINVAL` for unknown advice |
 | 228 | `clock_gettime` | done | W9 | since W14 `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` are wall time from the CMOS clock (`drivers/rtc`, read once at boot, taken as UTC); every other clock counts from boot; `-EINVAL` for 10 and above 11 |
 | 229 | `clock_getres` | done | W14 | 1 ns for every clock |
 | 96, 201 | `gettimeofday` `time` | done | W14 | wall time; the timezone `gettimeofday` reports is UTC |

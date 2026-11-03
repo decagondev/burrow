@@ -78,6 +78,16 @@ func depth(p string) int {
 	return strings.Count(p, "/") + 1
 }
 
+// KindOf is the kind of the mount that holds name ("tarfs", "fat32", ...;
+// statfs, W16-S02), or "" when nothing does.
+func (v *VFS) KindOf(name string) string {
+	m, _, ok := v.resolve(name)
+	if !ok {
+		return ""
+	}
+	return m.kind
+}
+
 // Mounts lists the mount table, root first.
 func (v *VFS) Mounts() []MountInfo {
 	v.mu.RLock()

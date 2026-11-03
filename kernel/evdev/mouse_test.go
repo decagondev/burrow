@@ -96,12 +96,32 @@ func TestMice(t *testing.T) {
 	if got, want := miceRead(t, h), []byte{0x08, 127, 0, 0x08, 73, 0}; !reflect.DeepEqual(got, want) {
 		t.Errorf("split move % x, want % x", got, want)
 	}
-	h.Write([]byte{0xF3, 200, 0xF3, 100, 0xF3, 80, 0xF2})
-	if got, want := miceRead(t, h), []byte{0xFA, 0xFA, 0xFA, 0xFA, 0xFA, 0xFA, 0xFA, 0x03}; !reflect.DeepEqual(got, want) {
-		t.Errorf("handshake answers % x, want % x", got, want)
+	mo.Feed(1, 0, 0, 0)
+	h.Write([]byte{0xF3, 200, 0xF3, 100, 0xF3, 80, 0xF2}) // only the last answer stays, read first (BUG-0018)
+	if got, want := miceRead(t, h), []byte{0xFA, 0x03}; !reflect.DeepEqual(got, want) {
+		t.Errorf("handshake answer % x, want % x", got, want)
+	}
+	if got, want := miceRead(t, h), []byte{0x08, 1, 0}; !reflect.DeepEqual(got, want) {
+		t.Errorf("motion after the answer % x, want % x", got, want)
 	}
 	mo.Feed(0, 0, 1, 0) // wheel up: -1 in the fourth byte, as a PS/2 mouse sends
 	if got, want := miceRead(t, h), []byte{0x08, 0, 0, 0xFF}; !reflect.DeepEqual(got, want) {
 		t.Errorf("wheel packet % x, want % x", got, want)
+	}
+}
+
+// BUG-0018: with bytes waiting, Poll said POLLIN and not POLLOUT, so a
+// nonblocking writer (TinyX sending the IntelliMouse handshake one byte
+// at a time) got EAGAIN after the first ACK and never finished.
+func TestMiceAlwaysWritable(t *testing.T) {
+	d, _ := NewMice().Open()
+	h := d.(*miceHandle)
+	h.Write([]byte{0xF3})
+	if rev, _ := h.Poll(); rev != 0x1|0x4 {
+		t.Errorf("Poll with an ACK queued = %#x, want POLLIN|POLLOUT", rev)
+	}
+	miceRead(t, h)
+	if rev, _ := h.Poll(); rev != 0x4 {
+		t.Errorf("Poll with nothing queued = %#x, want POLLOUT", rev)
 	}
 }

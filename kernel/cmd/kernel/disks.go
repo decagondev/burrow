@@ -47,20 +47,22 @@ func listDisks(out io.Writer) {
 }
 
 // homeLabel marks a FAT volume as the user's home (W13-S05): it mounts at
-// /home instead of /mnt. make run-dev attaches such a disk. qtLabel marks
-// the Qt data disk (W15-S02): it mounts at /opt/qt, and its qt.env joins
-// the environment of every program the console runs.
-const (
-	homeLabel = "BURROWHOME"
-	qtLabel   = "QTDATA"
-	qtEnvFile = "opt/qt/qt.env"
-)
+// /home instead of /mnt. make run-dev attaches such a disk.
+const homeLabel = "BURROWHOME"
+
+// dataDisks are the labels of the program disks: where each mounts and the
+// file of variables that joins the environment of every program the
+// console runs (the Qt disk, W15-S02; the X disk, W16-S02).
+var dataDisks = map[string]struct{ point, env string }{
+	"QTDATA":  {"opt/qt", "opt/qt/qt.env"},
+	"X11DATA": {"opt/x11", "opt/x11/x11.env"},
+}
 
 // mountData mounts every data disk (hdb, and since W15-S06 the secondary
 // channel's hdc and hdd) that holds FAT32 (W8-S07), read-write when the
 // disk can be written (W13-S04), at the place its label names: /home for
 // the home disk (W13-S05), /opt/qt for the Qt disk (W15-S02), /mnt for the
-// first other one.
+// first other one, and /opt/x11 for the X disk (W16-S02).
 func (k *kernel) mountData(log *klog.Logger) {
 	for _, name := range []string{"hdb", "hdc", "hdd"} {
 		if d, ok := block.Get(name); ok {
@@ -84,20 +86,22 @@ func (k *kernel) mountDisk(log *klog.Logger, name string, d block.Device) {
 		return
 	}
 	point := "mnt"
-	switch fsys.Label {
-	case homeLabel:
+	disk, isData := dataDisks[fsys.Label]
+	switch {
+	case fsys.Label == homeLabel:
 		point = "home"
-	case qtLabel:
-		point = "opt/qt"
+	case isData:
+		point = disk.point
 	}
 	if err := k.fs.Mount(point, fsys, "fat32"); err != nil {
 		log.Errorf("%s: mount /%s: %v", name, point, err)
 		return
 	}
 	log.Infof("%s: FAT32 volume %q mounted at /%s (%s)", name, fsys.Label, point, mode)
-	if point == "opt/qt" {
-		k.env = readEnv(k.fs, qtEnvFile)
-		log.Infof("%s: %d variables for every program", qtEnvFile, len(k.env))
+	if isData {
+		env := readEnv(k.fs, disk.env)
+		k.env = append(k.env, env...)
+		log.Infof("%s: %d variables for every program", disk.env, len(env))
 	}
 }
 

@@ -1,0 +1,38 @@
+# The X desktop on Burrow (W16), typed into the console of go-dev.img with
+# the X disk (x11-data.img, mounted at /opt/x11). S02: Xfbdev on /dev/fb0
+# with xhello as its first client. One command line starts the server in the
+# background, runs xhello and stops the server, because while X runs the
+# keyboard is X's (K_MEDIUMRAW): the q that ends xhello reaches it through X.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xhello; kill $!; wait; tail -3 /tmp/x.log
+key ret
+wait xhello: exposed
+sleep 2
+screendump build/screen-x11-xhello.ppm
+# TinyX trusts a mouse protocol after 5 good packets (MAX_VALID), then
+# switches it to IntelliMouse; the first moves are spent on that. Up and
+# left: X accelerates moves, and the pointer must stay on the window.
+mouse -20 -10
+mouse -20 -10
+mouse -20 -10
+mouse -20 -10
+mouse -20 -10
+mouse -20 -10
+sleep 1
+mouse -20 -10
+mouse -20 -10
+sleep 1
+click left
+wait xhello: button 1
+type q
+wait xhello: ok
+sleep 2
+screendump build/screen-x11-after.ppm
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

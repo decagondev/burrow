@@ -6,7 +6,9 @@ package evdev
 // the IntelliMouse handshake (set sample rate 200, 100, 80); then 4-byte
 // packets carry the wheel. Commands written to it are answered the way a
 // PS/2 mouse would (ACK 0xFA, the device id for 0xF2, 0xAA 0x00 after a
-// reset). Never blocks the driver: a full queue drops packets.
+// reset), and as in mousedev only the last command's answer is kept: it is
+// read before any motion (BUG-0018: TinyX counts on it). Never blocks the
+// driver: a full queue drops packets.
 
 import (
 	"sync"
@@ -74,7 +76,8 @@ func clampWheel(v int) int { return max(-7, min(7, v)) }
 type miceHandle struct {
 	m       *Mice
 	mu      sync.Mutex
-	queue   []byte
+	queue   []byte // motion packets
+	resp    []byte // the answer to the last command written, read first
 	changed chan struct{}
 	imps    bool
 	rates   [3]byte // the last three sample rates set
@@ -107,6 +110,12 @@ func (h *miceHandle) Read(b []byte) (int, error) { return h.ReadCancel(b, nil) }
 func (h *miceHandle) ReadCancel(b []byte, cancel <-chan struct{}) (int, error) {
 	for {
 		h.mu.Lock()
+		if len(h.resp) > 0 {
+			n := copy(b, h.resp)
+			h.resp = h.resp[n:]
+			h.mu.Unlock()
+			return n, nil
+		}
 		if len(h.queue) > 0 {
 			n := copy(b, h.queue)
 			h.queue = h.queue[n:]
@@ -123,7 +132,7 @@ func (h *miceHandle) ReadCancel(b []byte, cancel <-chan struct{}) (int, error) {
 	}
 }
 
-// Write takes PS/2 mouse commands and queues the answers.
+// Write takes PS/2 mouse commands; each answer replaces the last one.
 func (h *miceHandle) Write(b []byte) (int, error) {
 	for _, c := range b {
 		h.mu.Lock()
@@ -138,12 +147,12 @@ func (h *miceHandle) Write(b []byte) (int, error) {
 		h.mu.Unlock()
 		switch {
 		case rate:
-			h.queueBytes(psAck)
+			h.respond(psAck)
 		case c == 0xF3: // set sample rate: the argument follows
 			h.mu.Lock()
 			h.rateArg = true
 			h.mu.Unlock()
-			h.queueBytes(psAck)
+			h.respond(psAck)
 		case c == 0xF2: // get device id
 			id := byte(idPS2)
 			h.mu.Lock()
@@ -151,19 +160,28 @@ func (h *miceHandle) Write(b []byte) (int, error) {
 				id = idIMPS2
 			}
 			h.mu.Unlock()
-			h.queueBytes(psAck, id)
+			h.respond(psAck, id)
 		case c == 0xFF: // reset
 			h.mu.Lock()
 			h.imps = false
 			h.mu.Unlock()
-			h.queueBytes(psAck, 0xAA, 0x00)
+			h.respond(psAck, 0xAA, 0x00)
 		case c == 0xE9: // status request: stream mode, resolution 2, 100 samples/s
-			h.queueBytes(psAck, 0x00, 0x02, 100)
+			h.respond(psAck, 0x00, 0x02, 100)
 		default:
-			h.queueBytes(psAck)
+			h.respond(psAck)
 		}
 	}
 	return len(b), nil
+}
+
+// respond makes b the pending answer, dropping one not yet read.
+func (h *miceHandle) respond(b ...byte) {
+	h.mu.Lock()
+	h.resp = b
+	close(h.changed)
+	h.changed = make(chan struct{})
+	h.mu.Unlock()
 }
 
 func (h *miceHandle) WriteCancel(b []byte, _ <-chan struct{}) (int, error) { return h.Write(b) }
@@ -171,10 +189,11 @@ func (h *miceHandle) WriteCancel(b []byte, _ <-chan struct{}) (int, error) { ret
 func (h *miceHandle) Poll() (int16, <-chan struct{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if len(h.queue) > 0 {
-		return 0x1, h.changed
+	const pollOut = 0x4 // commands are always accepted, bytes waiting or not (BUG-0018)
+	if len(h.queue) > 0 || len(h.resp) > 0 {
+		return 0x1 | pollOut, h.changed
 	}
-	return 0x4, h.changed // POLLOUT: commands are always accepted
+	return pollOut, h.changed
 }
 
 func (h *miceHandle) Close() error {

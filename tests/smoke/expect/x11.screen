@@ -1,0 +1,17 @@
+# Pixels of the X desktop on Burrow (W16), dumped by tests/smoke/keys/x11.keys.
+# Append-only.
+# S02: Xfbdev on /dev/fb0 with xhello (user/x11/xhello.c) mapped at (20,20):
+# its three rectangles, its background, the Xft text, and X's own root weave
+# (the server's default background) outside the window.
+size  build/screen-x11-xhello.ppm 1024 768
+pixel build/screen-x11-xhello.ppm 140 120 #e03030
+pixel build/screen-x11-xhello.ppm 340 120 #30c050
+pixel build/screen-x11-xhello.ppm 540 120 #3060e0
+pixel build/screen-x11-xhello.ppm 40 380 #202430
+pixel build/screen-x11-xhello.ppm 100 280 #ffffff
+pixel build/screen-x11-xhello.ppm 800 600 #000000
+pixel build/screen-x11-xhello.ppm 801 601 #ffffff
+# after the server exits: the console is back (the band and the paper)
+size  build/screen-x11-after.ppm 1024 768
+pixel build/screen-x11-after.ppm 10 40 #007d9c
+pixel build/screen-x11-after.ppm 500 500 #1e1e28

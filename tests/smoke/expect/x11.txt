@@ -1,0 +1,10 @@
+# Ordered markers for the X desktop on Burrow (W16, tests/smoke/keys/x11.keys). Append-only.
+mounted at /opt/x11
+opt/x11/x11.env: 2 variables for every program
+xhello: connected to :0
+xhello: core font fixed, Xft font DejaVu Sans
+xhello: exposed
+xhello: button 1
+xhello: key q
+xhello: ok
+burrow> poweroff

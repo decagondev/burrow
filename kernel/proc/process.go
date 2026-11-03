@@ -28,7 +28,8 @@ type Process struct {
 	brkStart, brk uint64
 	mmapNext      uint64
 	cwd           string
-	umask         uint32 // kept for umask(2); nothing has permissions to mask yet
+	umask         uint32    // kept for umask(2); nothing has permissions to mask yet
+	timers        [3]itimer // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
 
 	children   map[int]*Process // live and zombie (s.mu)
 	childEvent chan struct{}    // a child exited (capacity 1)
@@ -112,6 +113,7 @@ func (p *Process) exit(code, sig int, reason string) {
 	}
 	s.futexDrop(p.mem)
 	s.releaseVT(p.PID) // a crashed graphics program gives the console back (W14-S08)
+	p.stopTimers()
 	if err := p.mem.Close(); err != nil {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
 	}

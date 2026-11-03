@@ -12,11 +12,11 @@ close 3
 connect 42
 dup2 33
 exit_group 231
-fadvise64 221 # W16-S02: fontconfig's posix_fadvise
+fadvise64 221
 fcntl 72
 fork 57
 fstat 5
-fstatfs 138 # W16-S02: fontconfig asks what file system holds its cache
+fstatfs 138
 getdents64 217
 getegid 108
 geteuid 107
@@ -31,7 +31,7 @@ ioctl 16
 lseek 8
 madvise 28
 mmap 9
-mremap 25 # W16-S02: musl's realloc of large blocks
+mremap 25
 munmap 11
 open 2
 poll 7

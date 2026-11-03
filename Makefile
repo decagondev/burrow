@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -236,7 +236,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -333,6 +333,18 @@ x11: | $(BUILD)
 	scripts/x11.sh $(BUILD)/x11-root
 x11-census: $(BUILD)/busybox
 	tests/regression/x11-linux.sh $(BUILD) census
+# The X disk (W16-S02): build/x11-root as FAT32, label X11DATA, mounted at
+# /opt/x11 (x11.env joins every program's environment). x11-smoke boots
+# go-dev.img (busybox, for the shell that starts the server) with it.
+X11_DRIVE := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=1,media=disk
+$(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev user/x11/x11.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	cp user/x11/x11.env $(BUILD)/x11-root/x11.env
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label x11data -size 64 ../$(BUILD)/x11-root
+x11-smoke:
+	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then \
+		$(MAKE) --no-print-directory x11-smoke-run; else echo "X11 SMOKE SKIP (make x11 busybox ports)"; fi
+x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 150 tests/smoke/keys/x11.keys
 
 # Qt (W15-S01): `make qt` fetches qtbase 6.12.0 and the DejaVu fonts once
 # (scripts/qt.sh, sha256-pinned, ~/.cache/burrow-qt), builds Qt for the host

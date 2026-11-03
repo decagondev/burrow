@@ -35,6 +35,15 @@ flowchart LR
 
 ## Closed
 
+### BUG-0018: /dev/input/mice stalled and misaligned TinyX's mouse handshake
+- Found: 2026-11-03, W16-S02: under `Xfbdev`, a click never reached `xhello`; with the write fixed, a left click arrived as buttons 3 and 5.
+- Severity: major for any program that talks PS/2 to `/dev/input/mice` (since W14-S02; the W14 tests wrote the handshake in one call and read it all back, so they passed).
+- Symptom: TinyX wrote the first byte of the IntelliMouse knock (`0xF3`) and nothing more; then, after the first fix, it chose the 3-byte protocol while the device sent 4-byte packets.
+- Root cause: two differences from Linux's mousedev. `Poll` reported POLLIN *instead of* POLLOUT while bytes waited, so the next nonblocking `write` of a command got `EAGAIN` and `select` never said writable; and every command byte queued its own ACK behind the motion, where mousedev keeps one pending answer, replaced by each byte written and read before any motion. TinyX writes seven bytes and then expects `FA 03`; seven ACKs ahead of the id made `ps2SkipInit` miss it, so it fell back to plain PS/2.
+- Fix: the device is always writable, and a command's answer replaces the pending one and is read first (`kernel/evdev/mice.go`).
+- Regression: `TestMiceAlwaysWritable` and the handshake case of `TestMice` (`kernel/evdev`); `make x11-smoke` clicks in `xhello`.
+- Lesson: an emulated device must match the real one's timing-free behaviour exactly; a test that writes everything at once and reads everything back cannot see how a driver that waits for each answer will get on.
+
 ### BUG-0017: Reading a disk cost about 340 microseconds a sector
 - Found: 2026-11-03, W15-S05: `qtbench` took 11 s from `execve` to `main`; a timed `execve` spent 10.5 s of it reading the 15 MB program from the FAT disk.
 - Severity: major (since W8: every read from a data disk, Doom's WAD included, ran at about 1.4 MB/s under QEMU).
