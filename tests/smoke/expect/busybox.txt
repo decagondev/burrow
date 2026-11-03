@@ -16,4 +16,8 @@ n1n2n3
 sleeping
 status 130
 # exit
+burrow> run /bin/busybox vi /tmp/v.txt
+'/tmp/v.txt' 2L, 26C
+hello from vi
+second line
 burrow> poweroff

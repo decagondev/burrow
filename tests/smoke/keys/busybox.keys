@@ -26,5 +26,24 @@ key ret
 type exit
 key ret
 wait burrow>
+# vi (W13-S01): insert two lines, :wq, then cat the file. vi draws each
+# typed character with its own cursor move, so the text appears as one run
+# only in cat's output. (The console's run splits on spaces: no quotes.)
+type run /bin/busybox vi /tmp/v.txt
+key ret
+sleep 2
+type i
+type hello from vi
+key ret
+type second line
+key esc
+sleep 1
+type :wq
+key ret
+wait burrow>
+type run /bin/busybox cat /tmp/v.txt
+key ret
+wait second line
+wait burrow>
 type poweroff
 key ret

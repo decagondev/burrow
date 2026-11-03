@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -317,7 +317,7 @@ busybox-smoke:
 	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory busybox-smoke-run; \
 	else echo "BUSYBOX SMOKE SKIP (make busybox downloads and builds it)"; fi
 busybox-smoke-run: $(BUILD)/go-busybox.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 60 tests/smoke/keys/busybox.keys
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 90 tests/smoke/keys/busybox.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:
@@ -328,6 +328,12 @@ hostsim:
 GO_DISPLAY ?= none
 run-go: $(BUILD)/go.img $(BUILD)/data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+
+# busybox, interactive (W10-S08, vi since W13-S01): needs `make busybox`
+# first. At burrow> type `run /bin/busybox sh`; vi draws correctly in this
+# terminal (the serial line) until the screen console learns VT100 (W13-S02).
+run-busybox: $(BUILD)/go-busybox.img $(BUILD)/data.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-busybox.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # Doom, interactive (W11): needs `make doom` first. At burrow> type
 #   run /bin/doom -iwad /mnt/freedoom1.wad

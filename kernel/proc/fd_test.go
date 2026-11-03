@@ -209,3 +209,31 @@ func TestStatAndGetdents(t *testing.T) {
 		t.Errorf("uname sysname %q", s)
 	}
 }
+
+func TestTruncate(t *testing.T) {
+	r, v := vfsRig(t)
+	p := r.spawn()
+	path := r.str(p, scratch, "/tmp/t.txt")
+	fd := uint64(r.call(p, 2, path, 0x41, 0o644)) // O_WRONLY|O_CREAT
+	r.put(p, scratch+64, []byte("hello world"))
+	r.call(p, 1, fd, scratch+64, 11)
+	if r.call(p, 77, fd, 5) != 0 {
+		t.Fatal("ftruncate")
+	}
+	if got, _ := fs.ReadFile(v, "tmp/t.txt"); string(got) != "hello" {
+		t.Errorf("after ftruncate(5): %q", got)
+	}
+	if r.call(p, 76, path, 8) != 0 {
+		t.Fatal("truncate")
+	}
+	if got, _ := fs.ReadFile(v, "tmp/t.txt"); string(got) != "hello\x00\x00\x00" {
+		t.Errorf("after truncate(8): %q", got)
+	}
+	if e := r.call(p, 77, 1, 0); e != -int64(syscall.EINVAL) {
+		t.Errorf("ftruncate of the console = %d, want EINVAL", e)
+	}
+	ro := uint64(r.call(p, 2, r.str(p, scratch+128, "/etc/motd"), 0))
+	if e := r.call(p, 77, ro, 0); e != -int64(syscall.EBADF) {
+		t.Errorf("ftruncate of a read-only fd = %d, want EBADF", e)
+	}
+}

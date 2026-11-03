@@ -17,6 +17,7 @@
 | M10 | A Unix | busybox shell, pipes, fork/exec | W10 |
 | M11 | **DOOM** | Freedoom E1M1 playable in QEMU (done: `make doom-smoke`) | W11 |
 | M12 | Ports | Lua REPL, C++ hello with exceptions, Go user program | W12 |
+| M13 | A workbench | edit, save and build code inside Burrow; files survive a reboot | W13 |
 
 ```mermaid
 flowchart LR

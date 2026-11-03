@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/fs"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -73,6 +74,21 @@ func (w *wfile) Seek(offset int64, whence int) (int64, error) {
 	return offset, nil
 }
 
+// Truncate makes the file n bytes long (cut, or zero-filled) and writes it back.
+func (w *wfile) Truncate(n int64) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if n < 0 {
+		return fs.ErrInvalid
+	}
+	if n <= int64(len(w.data)) {
+		w.data = w.data[:n]
+	} else {
+		w.data = append(w.data, make([]byte, n-int64(len(w.data)))...)
+	}
+	return w.fsys.WriteFile(w.name, append([]byte(nil), w.data...))
+}
+
 func (w *wfile) Close() error { return nil }
 
 func (w *wfile) Stat() (fs.FileInfo, error) {
@@ -100,4 +116,36 @@ func baseName(name string) string {
 		}
 	}
 	return name
+}
+
+// ftruncate(fd, length): a regular file open for writing (EINVAL otherwise,
+// EBADF if not open for writing), as Linux.
+func sysFtruncateFn(p *Process, a [6]uint64) (int64, bool) {
+	f := p.fds.get(a[0])
+	switch {
+	case f == nil || f.flags&oAccMode == oRDONLY:
+		return ok(-int64(syscall.EBADF))
+	case int64(a[1]) < 0:
+		return ok(-int64(syscall.EINVAL))
+	}
+	t, isT := f.f.(interface{ Truncate(int64) error })
+	if !isT {
+		return ok(-int64(syscall.EINVAL))
+	}
+	return ok(errno(t.Truncate(int64(a[1]))))
+}
+
+// truncate(path, length): open for writing, truncate, close.
+func sysTruncateFn(p *Process, a [6]uint64) (int64, bool) {
+	fd := p.openAt(uint64(atFDCWD&0xFFFFFFFF), a[0], oWRONLY)
+	if fd < 0 {
+		return ok(fd)
+	}
+	defer p.fds.close(uint64(fd))
+	return sysFtruncateFn(p, [6]uint64{uint64(fd), a[1]})
+}
+
+func init() {
+	table[76] = sysTruncateFn
+	table[77] = sysFtruncateFn
 }

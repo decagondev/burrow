@@ -117,6 +117,10 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 *Exit: we can bring software over quickly.* [W12]
 - Lua 5.4 REPL (pure C, easiest first port) · C++ hello with exceptions + `std::thread` (static libstdc++/libc++) · Go user programs (`GOOS=linux`, needs clone/futex in user mode — reuse nucleus) · TinyCC or a C compiler running *on* Burrow · porting guide `docs/06-guides/PORTING.md`.
 
+## E13 A Workbench
+*Exit: code can be written, saved and built inside Burrow.* [W13]
+- An editor (busybox `vi`; kilo optional) · the screen console as a VT100-subset terminal · ATA writes · writable FAT32 checked by `fsck.fat` · a persistent `/home` and `make run-dev`.
+
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [later]
 - SMP (APs via INIT-SIPI, per-CPU GS, `GOMAXPROCS>1`) · SMEP/SMAP/NX everywhere · UEFI front-end producing boot_info · virtio-blk/virtio-net · networking with a Go stack (gVisor netstack candidate) · real-hardware boot · XSAVE/AVX state · ACPI shutdown.

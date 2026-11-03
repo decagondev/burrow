@@ -41,6 +41,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 60 | `exit` | done | W12 | ends the calling thread (clearing and waking its `clear_child_tid`); the last thread ends the process |
 | 62 | `kill` | done | W10 | pid > 0, 0, -1, < -1; signal 0 checks existence |
 | 61 | `wait4` | partial | W10 | pid > 0, -1, 0, < -1; `WNOHANG`; Linux status words; `rusage` is not filled |
+| 76, 77 | `truncate` `ftruncate` | partial | W13 | regular files open for writing (`/tmp`); `-EINVAL` for others, `-EBADF` if not open for writing |
 | 97, 160, 302 | `getrlimit` `setrlimit` `prlimit64` | partial | W12 | fixed limits (`RLIMIT_NOFILE` 256, `RLIMIT_STACK` the stack size, others unlimited); lowering is accepted, raising past the hard limit `-EPERM` |
 | 130 | `rt_sigsuspend` | done | W10 | |
 | 131 | `sigaltstack` | done | W12 | per thread; `SA_ONSTACK` handlers run on it; not inherited by new threads |

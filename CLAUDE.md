@@ -25,6 +25,7 @@ make census       # Go runtime syscalls on the host (strace) vs tests/regression
 make hostsim      # the Go console + drivers on simulated hardware (kernel/hostsim), no QEMU
 make fat-interop  # kernel/fs/fat vs fsck.fat/mkfs.fat/mtools (skips without dosfstools + mtools)
 make devices-smoke # /dev/fb0 (and /dev/input/event0) driven by user programs, pixels checked (part of make test)
+make run-busybox  # the busybox image interactively (vi, ash; needs make busybox)
 make doom         # download (once, pinned, ~/.cache/burrow-doom) doomgeneric + Freedoom; build build/doom-root/{doom,freedoom1.wad}
 make doom-smoke   # Doom on build/go-doom.img: title, E1M1, quit; pixels checked (part of make test; skips without make doom)
 make doom-bench   # Doom's timedemo demo1, fails below 20 fps (~70 s; not in make test)
