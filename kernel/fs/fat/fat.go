@@ -6,12 +6,15 @@ import (
 	"io"
 	"io/fs"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 )
 
-// FS is a mounted FAT32 volume, read-only. The FAT is read once at Mount;
-// directories and file data are read from the disk on demand.
+// FS is a mounted FAT32 volume. The FAT is read once at Mount and kept in
+// memory; directories and file data are read from the disk on demand.
+// Mounted with MountRW it can also be written (write.go). Safe for
+// concurrent use: writes are serialized, reads of directories share a lock.
 type FS struct {
 	r            io.ReaderAt
 	clusterBytes int64
@@ -19,6 +22,15 @@ type FS struct {
 	rootCluster  uint32
 	fat          []uint32
 	Label        string
+
+	mu       sync.RWMutex
+	disk     Disk           // nil: read-only
+	fatStart int64          // byte offset of the first FAT
+	fatBytes int64          // one FAT's size
+	numFATs  int            // copies kept identical
+	fsInfo   int64          // byte offset of FSInfo, or 0
+	dirty    map[int64]bool // FAT sectors (by index) changed since the last commit
+	nextFree uint32         // where the next allocation starts looking
 }
 
 // Mount reads the boot sector and the first FAT of the volume behind r.
@@ -55,6 +67,11 @@ func Mount(r io.ReaderAt) (*FS, error) {
 		rootCluster: le.Uint32(b[bpbRootClus:]),
 		fat:         make([]uint32, len(raw)/4),
 		Label:       strings.TrimSpace(string(b[bsVolLab : bsVolLab+11])),
+		fatStart:    rsvd * bps, fatBytes: fatSz * bps, numFATs: int(nfats),
+		dirty: map[int64]bool{}, nextFree: 2,
+	}
+	if fsi := int64(le.Uint16(b[bpbFSInfo:])); fsi > 0 && fsi < rsvd {
+		f.fsInfo = fsi * bps
 	}
 	for i := range f.fat {
 		f.fat[i] = le.Uint32(raw[4*i:]) & fatMask
@@ -85,58 +102,97 @@ type entry struct {
 
 func (e *entry) info() fs.FileInfo { return fileInfo{e} }
 
-// readDir decodes a directory's entries.
+// readDir decodes a directory's entries ("." and ".." left out).
 func (f *FS) readDir(first uint32) ([]*entry, error) {
+	d, err := f.scan(first)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*entry, 0, len(d.recs))
+	for _, r := range d.recs {
+		if r.e.name != "." && r.e.name != ".." {
+			out = append(out, r.e)
+		}
+	}
+	return out, nil
+}
+
+// dirRec is one decoded entry with where it lives: slots [start, end] of
+// its directory (the long-name entries, then the short one at end).
+type dirRec struct {
+	e          *entry
+	short      []byte // the 32-byte short entry
+	start, end int
+}
+
+// dirData is a directory as stored: its raw slots, where each lives on
+// the disk, and the decoded entries.
+type dirData struct {
+	raw  []byte  // every slot of every cluster
+	offs []int64 // disk offset of each slot
+	recs []dirRec
+}
+
+// scan reads and decodes the directory whose first cluster is first.
+func (f *FS) scan(first uint32) (*dirData, error) {
 	clusters, err := f.chain(first)
 	if err != nil {
 		return nil, err
 	}
-	var out []*entry
-	var long []uint16
-	var sum byte
-	buf := make([]byte, f.clusterBytes)
+	d := &dirData{}
 	for _, c := range clusters {
-		if _, err := f.r.ReadAt(buf, f.dataStart+int64(c-2)*f.clusterBytes); err != nil {
+		buf := make([]byte, f.clusterBytes)
+		base := f.dataStart + int64(c-2)*f.clusterBytes
+		if _, err := f.r.ReadAt(buf, base); err != nil {
 			return nil, err
 		}
-		for off := 0; off < len(buf); off += dirEntry {
-			e := buf[off : off+dirEntry]
-			switch {
-			case e[0] == entryEnd:
-				return out, nil
-			case e[0] == entryDeleted:
-				long = nil
-			case e[dirAttr] == attrLFN:
-				if e[lfnOrd]&lfnLast != 0 {
-					long, sum = nil, e[lfnChecksum]
-				}
-				part := make([]uint16, 0, lfnCharsEach)
-				for _, o := range lfnOffsets {
-					part = append(part, le.Uint16(e[o:]))
-				}
-				long = append(part, long...) // parts come last-first
-			case e[dirAttr]&attrVolumeID != 0:
-				long = nil
-			default:
-				name := shortName(e)
-				if long != nil && sum == shortChecksum(e) {
-					name = decodeLong(long)
-				}
-				long = nil
-				if name == "." || name == ".." {
-					continue
-				}
-				out = append(out, &entry{
-					name:    name,
-					dir:     e[dirAttr]&attrDirectory != 0,
-					first:   uint32(le.Uint16(e[dirClusHi:]))<<16 | uint32(le.Uint16(e[dirClusLo:])),
-					size:    int64(le.Uint32(e[dirFileSize:])),
-					modTime: unpackTime(le.Uint16(e[dirWrtDate:]), le.Uint16(e[dirWrtTime:])),
-				})
-			}
+		d.raw = append(d.raw, buf...)
+		for off := int64(0); off < f.clusterBytes; off += dirEntry {
+			d.offs = append(d.offs, base+off)
 		}
 	}
-	return out, nil
+	var long []uint16
+	var sum byte
+	start := -1
+	for i := 0; i < len(d.offs); i++ {
+		e := d.raw[i*dirEntry : (i+1)*dirEntry]
+		switch {
+		case e[0] == entryEnd:
+			return d, nil
+		case e[0] == entryDeleted:
+			long, start = nil, -1
+		case e[dirAttr] == attrLFN:
+			if e[lfnOrd]&lfnLast != 0 {
+				long, sum, start = nil, e[lfnChecksum], i
+			}
+			part := make([]uint16, 0, lfnCharsEach)
+			for _, o := range lfnOffsets {
+				part = append(part, le.Uint16(e[o:]))
+			}
+			long = append(part, long...) // parts come last-first
+		case e[dirAttr]&attrVolumeID != 0:
+			long, start = nil, -1
+		default:
+			name := shortName(e)
+			if long != nil && sum == shortChecksum(e) {
+				name = decodeLong(long)
+			} else {
+				start = i // a short name alone (or orphaned long entries before it)
+			}
+			if start < 0 {
+				start = i
+			}
+			d.recs = append(d.recs, dirRec{e: &entry{
+				name:    name,
+				dir:     e[dirAttr]&attrDirectory != 0,
+				first:   uint32(le.Uint16(e[dirClusHi:]))<<16 | uint32(le.Uint16(e[dirClusLo:])),
+				size:    int64(le.Uint32(e[dirFileSize:])),
+				modTime: unpackTime(le.Uint16(e[dirWrtDate:]), le.Uint16(e[dirWrtTime:])),
+			}, short: e, start: start, end: i})
+			long, start = nil, -1
+		}
+	}
+	return d, nil
 }
 
 func decodeLong(u []uint16) string {
@@ -204,6 +260,8 @@ func (f *FS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
 	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	e, err := f.lookup(name)
 	if err != nil {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: err}

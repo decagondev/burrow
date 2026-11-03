@@ -43,13 +43,22 @@ func listDisks(out io.Writer) {
 	}
 }
 
-// mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07).
+// mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07),
+// read-write when the disk can be written (W13-S04).
 func (k *kernel) mountData(log *klog.Logger) {
 	d, ok := block.Get("hdb")
 	if !ok {
 		return
 	}
-	fsys, err := fat.Mount(block.ReaderAt(d))
+	var fsys *fat.FS
+	var err error
+	mode := "read-only"
+	if w, isW := d.(block.Writer); isW {
+		fsys, err = fat.MountRW(fatDisk{block.ReaderAt(d), block.WriterAt(w), w})
+		mode = "read-write"
+	} else {
+		fsys, err = fat.Mount(block.ReaderAt(d))
+	}
 	if err != nil {
 		log.Warnf("hdb: %v", err)
 		return
@@ -58,5 +67,14 @@ func (k *kernel) mountData(log *klog.Logger) {
 		log.Errorf("mount /mnt: %v", err)
 		return
 	}
-	log.Infof("hdb: FAT32 volume %q mounted at /mnt", fsys.Label)
+	log.Infof("hdb: FAT32 volume %q mounted at /mnt (%s)", fsys.Label, mode)
 }
+
+// fatDisk is a block.Writer as the fat.Disk a writable mount needs.
+type fatDisk struct {
+	io.ReaderAt
+	io.WriterAt
+	w block.Writer
+}
+
+func (d fatDisk) Flush() error { return d.w.Flush() }
