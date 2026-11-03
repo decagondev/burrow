@@ -311,8 +311,9 @@ disk-smoke: $(BUILD)/go-disktest.img
 mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=2G QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem.txt 300 tests/smoke/keys/mem.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
+	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a

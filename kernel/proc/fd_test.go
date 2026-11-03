@@ -86,9 +86,23 @@ func TestPipeEOFAndEPIPE(t *testing.T) {
 		t.Errorf("read after the last writer closed = %d, want 0 (EOF)", n)
 	}
 	r.call(p, 22, scratch)
-	r.call(p, 3, 4) // the new pipe is 4 (read) and 5 (write): close the read end
+	r.call(p, 3, 4)                      // the new pipe is 4 (read) and 5 (write): close the read end
+	r.call(p, 13, 13, r.sigIgn(p), 0, 8) // SIGPIPE ignored: the write says EPIPE
 	if e := r.call(p, 1, 5, scratch, 1); e != -int64(syscall.EPIPE) {
 		t.Errorf("write with no reader = %d", e)
+	}
+}
+
+// BUG-0015: a write to a pipe with no reader raises SIGPIPE, whose default
+// action ends the writer (status 128 + 13, as `yes | head` needs).
+func TestBUG0015PipeSIGPIPE(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	r.call(p, 22, scratch)
+	r.call(p, 3, 3) // close the read end
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 1, Args: [6]uint64{4, scratch, 1}})
+	if st, _ := wait(t, p); st != 128+13 {
+		t.Errorf("writer's status %d, want 141 (SIGPIPE)", st)
 	}
 }
 

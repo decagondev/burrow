@@ -37,4 +37,35 @@ mmaptest: /tmp/mmap.dat ok (12388 bytes)
 mmaptest: /bin/sh ok
 mmaptest: /mnt/hello.txt ok (83 bytes)
 mmaptest: ok
+burrow> run /bin/socktest
+socktest: peek ok
+socktest: stream-joins ok
+socktest: dontwait ok
+socktest: writev-readv ok
+socktest: waitall ok
+socktest: shut-wr-eof ok
+socktest: shut-wr-epipe ok
+socktest: sigpipe ok
+socktest: dgram-boundaries ok
+socktest: dgram-trunc ok
+socktest: dgram-recvmsg ok
+socktest: seqpacket-boundaries ok
+socktest: seqpacket-trunc ok
+socktest: seqpacket-recvmsg ok
+socktest: nonblock ok
+socktest: cloexec ok
+socktest: poll-idle ok
+socktest: fionread ok
+socktest: select ok
+socktest: poll-hup ok
+socktest: epoll-rdhup ok
+socktest: closed-eof ok
+socktest: so_type ok
+socktest: so_sndbuf ok
+socktest: so_rcvbuf-doubled ok
+socktest: fstat-sock ok
+socktest: enotsock ok
+socktest: raw-is-dgram ok
+socktest: inet-pair ok
+socktest: ok
 burrow> poweroff

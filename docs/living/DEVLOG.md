@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S06 Unix socket pairs
+
+**Did:** `socketpair(AF_UNIX)` for stream, datagram and seqpacket sockets, with `send`/`recv`, `sendmsg`/`recvmsg`, `shutdown`, the `MSG_` flags, `SO_TYPE`/`SO_ERROR`/the buffer sizes, `FIONREAD` and `S_IFSOCK`. Each end is a `Canceller` and a `Poller`, the same shape as a pipe end, so read/write, non-blocking mode, `EINTR`, poll, select and epoll worked without a line changed in them. `socktest` makes 29 checks; `make ports-smoke` runs it on the host's Linux and then on Burrow, and it passed on Burrow's first boot.
+
+**Surprise:** pipes had never raised `SIGPIPE` (BUG-0015): a writer with no reader got `EPIPE` and carried on. `Thread.write` now sends the signal, for pipes and sockets alike. Copying Linux exactly also meant two answers I would not have guessed: `socketpair(AF_INET)` is `EOPNOTSUPP`, and `AF_UNIX` quietly turns `SOCK_RAW` into `SOCK_DGRAM`.
+
+**Next:** W14-S07, socket names, `listen`/`accept`/`connect`, and `SCM_RIGHTS`.
+
 ## 2026-11-03 — W14-S05 mmap of files
 
 **Did:** `mmap` maps regular files privately: an area remembers its file and the offset at its start, and a page fills from the file when it is first touched (a fault, or the kernel copying in or out), with zeros past the end of the file. Splits from `munmap`, `mprotect` and `MAP_FIXED` keep the offsets right; `MADV_DONTNEED` lets the file show through again; fork copies the pages like any private memory. Read-only `MAP_SHARED` is the same thing; writable `MAP_SHARED` is `-ENODEV`, since nothing writes pages back. `mmaptest` maps a file from each file system (memfs, tarfs, FAT) and passed on the first boot.

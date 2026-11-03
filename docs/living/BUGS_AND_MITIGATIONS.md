@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0015: A write to a pipe with no reader never raised SIGPIPE
+- Found: 2026-11-03, W14-S06: planning sockets "with EPIPE and SIGPIPE like pipes" showed that pipes had only the EPIPE half.
+- Severity: minor (since W10: a writer got `-EPIPE` and had to notice; `yes | head` style pipelines left the writer running until it checked its errors).
+- Symptom: `write` to a pipe whose read end was closed returned `-EPIPE` and the writer carried on; Linux also sends `SIGPIPE`, whose default action ends it.
+- Root cause: `Thread.write` passed the pipe's `EPIPE` straight back; nothing raised the signal, and no test wrote to a pipe without ignoring the result.
+- Fix: `Thread.write` sends `SIGPIPE` to the calling thread whenever a write ends in `EPIPE` (pipes and stream sockets alike); `send`, `sendto` and `sendmsg` do the same unless `MSG_NOSIGNAL`.
+- Mitigation: `socktest`'s `sigpipe` check runs on the host's Linux and on Burrow in `make ports-smoke`, so the two must agree.
+- Regression: `TestBUG0015PipeSIGPIPE` in `kernel/proc/fd_test.go` (status 141).
+- Lesson: an error code is half of some Linux contracts; check the signal that goes with it (`SIGPIPE`, `SIGCHLD`, `SIGTTOU`).
+
 ### BUG-0014: Every system call and page fault from a process took about 2 ms
 - Found: 2026-11-03, W14-S01: `memtest` needed 8 s for 16 MiB; a probe timed 2000 `getpid` calls at 4 s.
 - Severity: major (since W9: every user program ran at up to 500 system calls a second; Doom hid it with few calls per frame).

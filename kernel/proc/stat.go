@@ -49,6 +49,8 @@ func unixMode(m fs.FileMode) uint64 {
 		t = syscall.S_IFCHR
 	case m&fs.ModeNamedPipe != 0:
 		t = syscall.S_IFIFO
+	case m&fs.ModeSocket != 0:
+		t = syscall.S_IFSOCK
 	}
 	return t | uint64(m.Perm())
 }

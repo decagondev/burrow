@@ -9,11 +9,11 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | Nr | Call | Status | Since | Notes |
 |---|---|---|---|---|
 | 0 | `read` | done | W9 | files, pipes and the terminal (blocking, `EINTR` with signals), devices |
-| 1 | `write` | partial | W9 | console, pipes (`EPIPE`), devices, writable files under `/tmp` (written back whole on every write) |
+| 1 | `write` | partial | W9 | console, pipes and sockets (`EPIPE` and, since W14, `SIGPIPE`: BUG-0015), devices, writable files under `/tmp` (written back whole on every write) |
 | 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` or `/home` on a FAT32 disk since W13: `-EACCES` on the read-only root) |
 | 3 | `close` | done | W9 |  |
 | 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
-| 5 | `fstat` | partial | W9 | `st_mode`, `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
+| 5 | `fstat` | partial | W9 | `st_mode` (`S_IFSOCK` for sockets since W14), `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
 | 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |
 | 9 | `mmap` | partial | W9 | anonymous private memory (demand-zero since W12: a reservation costs nothing, a page gets its frame at first touch; `PROT_NONE` is inaccessible), and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); regular files privately since W14 (`MAP_PRIVATE`, and read-only `MAP_SHARED`, which is the same thing; any page-aligned offset, `PROT_EXEC`, `MAP_FIXED`; pages fill from the file at first touch, past its end they read as zeros, writes stay in the process and fork copies them; the mapping outlives `close`; `-EACCES` on a write-only descriptor, `-ENODEV` for writable `MAP_SHARED`, pipes, the terminal, directories and devices without memory); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
@@ -35,6 +35,11 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 34 | `pause` | done | W10 | |
 | 35 | `nanosleep` | partial | W10 | `EINTR` when a signal arrives; the remaining time is not written back |
 | 39 | `getpid` | done | W9 |  |
+| 44, 45 | `sendto` `recvfrom` | partial | W14 | Unix socket pairs (`kernel/proc/sockcalls.go`); `MSG_PEEK MSG_DONTWAIT MSG_WAITALL MSG_TRUNC MSG_NOSIGNAL`; a destination address is `-EISCONN` (names are W14-S07); the peer address reads as unnamed |
+| 46, 47 | `sendmsg` `recvmsg` | partial | W14 | as `sendto`/`recvfrom` over an iovec list; `msg_flags` reports `MSG_TRUNC`; control messages are `-EOPNOTSUPP` until W14-S07 |
+| 48 | `shutdown` | done | W14 | `SHUT_RD SHUT_WR SHUT_RDWR`, with Linux's peer semantics (end of file, `EPIPE`); `-ENOTSOCK` |
+| 53 | `socketpair` | done | W14 | `AF_UNIX` `SOCK_STREAM SOCK_DGRAM SOCK_SEQPACKET` (`SOCK_RAW` is a datagram pair, as on Linux), `SOCK_NONBLOCK SOCK_CLOEXEC`; boundaries kept for datagram and seqpacket; readiness for `poll`, `select` and epoll with `POLLRDHUP`; `FIONREAD`; `AF_INET`/`AF_INET6` are `-EOPNOTSUPP`, other families `-EAFNOSUPPORT` |
+| 54, 55 | `setsockopt` `getsockopt` | partial | W14 | `SOL_SOCKET`: `SO_TYPE SO_ERROR SO_SNDBUF SO_RCVBUF` read, the buffer sizes set (doubled and clamped as Linux does); others `-ENOPROTOOPT` |
 | 56 | `clone` | partial | W12 | threads (`CLONE_VM`, `CLONE_FS`, `CLONE_FILES`, `CLONE_SIGHAND` and `CLONE_THREAD` together; `SETTLS PARENT_SETTID CHILD_SETTID CHILD_CLEARTID`) and the fork shape; `CLONE_VM` without `CLONE_THREAD` (vfork, posix_spawn) copies like fork |
 | 57 | `fork` | partial | W10 | memory copied eagerly (copy-on-write later); descriptors share their open file descriptions |
 | 58 | `vfork` | partial | W10 | a full fork (the parent is not suspended) |

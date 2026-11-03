@@ -84,7 +84,17 @@ func sysWriteFn(t *Thread, a [6]uint64) (int64, bool) {
 	return ok(t.write(a[0], buf))
 }
 
+// write is one write(2); EPIPE also raises SIGPIPE at the caller, as on
+// Linux (BUG-0015: before W14-S06 pipes returned EPIPE silently).
 func (t *Thread) write(fd uint64, b []byte) int64 {
+	r := t.writeFile(fd, b)
+	if r == -int64(syscall.EPIPE) {
+		t.send(sigPIPE, sigInfo{signo: sigPIPE, code: siKernel})
+	}
+	return r
+}
+
+func (t *Thread) writeFile(fd uint64, b []byte) int64 {
 	p := t.p
 	f := p.fds.get(fd)
 	switch {
