@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -322,6 +322,17 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
+
+# Qt (W15-S01): `make qt` fetches qtbase 6.12.0 and the DejaVu fonts once
+# (scripts/qt.sh, sha256-pinned, ~/.cache/burrow-qt), builds Qt for the host
+# and statically for Burrow with the ports' musl toolchain, then user/qt into
+# build/qt-root (bin/, fonts/). The first build takes a long while; neither
+# target is in make test. `make qt-census` runs the Qt programs under strace
+# on the host and compares with tests/regression/census-qt.txt.
+qt: | $(BUILD)
+	scripts/qt.sh $(BUILD)/qt-root
+qt-census:
+	tests/regression/census-qt.sh $(BUILD)
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds

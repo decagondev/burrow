@@ -1,0 +1,42 @@
+# System calls of the static musl Qt 6.12.0 programs (qthello, qtwindow
+# offscreen) under strace -f on the host: name and Linux x86-64 number.
+# tests/regression/census-qt.sh (make qt-census) fails if Qt starts using a
+# name not listed here; kernel/proc's TestCensusQt fails if a listed call
+# has no handler, unless its line names the slice that adds it (# W15-Sxx).
+# Seen by strace (make qt-census):
+access 21
+arch_prctl 158
+brk 12
+clone 56
+close 3
+eventfd2 290
+exit 60
+exit_group 231
+fcntl 72
+fstat 5
+futex 202
+getcwd 79
+getdents64 217
+geteuid 107
+getrandom 318
+getuid 102
+ioctl 16
+lstat 6
+madvise 28
+mmap 9
+mprotect 10
+munmap 11
+open 2
+ppoll 271
+prctl 157
+read 0
+readlink 89
+rt_sigprocmask 14
+sched_getaffinity 204
+set_tid_address 218
+stat 4
+write 1
+writev 20
+# Not seen by strace: musl reads these through Linux's vDSO, which Burrow has not,
+# so on Burrow they are real system calls.
+clock_gettime 228 # vdso

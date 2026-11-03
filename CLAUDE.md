@@ -38,6 +38,8 @@ make ports-smoke  # threads (musl pthreads) and gohello (a Go user program) on g
 make ports        # download (once, pinned, ~/.cache/burrow-ports) Lua, TinyCC, a musl C++ toolchain; build build/ports-root
 make ports-dl-smoke # Lua, cxxtest, tcc on go-ports.img (part of make test; skips without make ports)
 make busybox      # download (once, sha256-pinned, ~/.cache/burrow-busybox) and build build/busybox
+make qt           # download (once, pinned, ~/.cache/burrow-qt) qtbase 6.12.0 + DejaVu; build host Qt, static musl Qt, user/qt into build/qt-root (long; needs make ports)
+make qt-census    # Qt programs under strace on the host vs tests/regression/census-qt.txt (kernel/proc TestCensusQt checks each call is served)
 make busybox-smoke # busybox ash typed on build/go-busybox.img (part of make test; skips without build/busybox)
 # user/*.c are built with musl-gcc (musl-tools); MUSL_GCC=/path/to/musl-gcc overrides it
 make regress      # boot deliberately broken images, assert they fail loudly

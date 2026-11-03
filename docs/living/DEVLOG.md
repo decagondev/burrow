@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15-S01 Qt on Linux first
+
+**Did:** `scripts/qt.sh` (`make qt`) fetches qtbase 6.12.0, its security diff and the DejaVu fonts (all sha256-pinned), builds Qt for the host (the tools a cross build runs) and then statically for Burrow with the musl toolchain the ports already use: Widgets, linuxfb and evdev, with FreeType, HarfBuzz, PCRE2 and libpng bundled and fontconfig, udev, libinput, D-Bus, OpenGL and ICU switched off. `user/qt` has `qthello` (QtCore: moc, a queued signal across a `QThread`, timers, `QFile`) and `qtwindow` (a `QRasterWindow` with rectangles and DejaVu text), both static-PIE; both run on Linux, `qtwindow` through the offscreen platform into a PNG. The census, like W6's for Go, ran both under strace.
+
+**Surprise:** how little Qt asks for: 33 distinct system calls, and every one already had a handler, mostly thanks to W14 (`eventfd2`, `ppoll`, `getrandom`, `readlink`). The census cannot see one call: musl reads `clock_gettime` through the vDSO, which Burrow lacks, so it is listed by hand. Building our programs needed Qt's own `qt.toolchain.cmake`: with ours, `find_package` looked only inside the musl sysroot.
+
+**Next:** W15-S02, `qthello` on Burrow from a FAT data disk at `/opt/qt`.
+
 ## 2026-11-03 — W14 done: desktop groundwork (M14)
 
 **Did:** the wave in eight slices: 512 MiB images and physmap above 4 GiB with an out-of-memory kill (S01, with BUG-0014: every system call took 2 ms); a PS/2 mouse as `/dev/input/event1` and `/dev/input/mice` (S02); `select`, `getrandom` and the start-up calls (S03); a real-time clock that made every date real (S04); `mmap` of files (S05); Unix socket pairs (S06, with BUG-0015: pipes never raised `SIGPIPE`), then names, `connect`/`accept` and `SCM_RIGHTS` (S07); and the console's `KD*`/`VT_*` modes (S08). The M14 demo, `make desk-smoke`, runs the test programs and `paint`: it takes the screen with `KD_GRAPHICS` and `K_OFF`, gets its colours from a forked palette process over `/tmp/paint.sock`, paints a stroke the smoke test drags with the mouse, and gives the screen back; a second `paint` crashes with the screen taken and the kernel gives it back by itself. Four test programs (`startup`, `socktest`, `socknames`, and `mmaptest` in part) run on the host's Linux before Burrow, so their checks are Linux's answers, not mine.

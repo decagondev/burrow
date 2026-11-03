@@ -200,3 +200,12 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-25 | W9 | Kernel follows a user pointer into kernel memory | copyin/copyout validate ranges against user VMAs |
 | PIT-26 | W10 | fork copies the Go kernel mappings as user-visible | kernel ranges always supervisor-only; ktest |
 | PIT-27 | W11 | Framebuffer pitch != width*4 | always use `line_length` (done in the Doom snippet) |
+| PIT-30 | W14 | RAM above 4 GiB and the PCI hole are new for the PMM and the physmap | done in W14-S01: the physmap maps only usable ranges above 4 GiB; host test `vm_physmap_skips_the_pci_hole`, and a 6 GiB guest by hand |
+| PIT-31 | W14 | The mouse and keyboard share the 8042's data port: a byte read by the wrong side is lost | done in W14-S02: one drain under a mutex for both IRQs, routed by the status register's aux bit; the mouse starts after the keyboard |
+| PIT-32 | W14 | QEMU sends PS/2 motion only while its window has grabbed the pointer | open: click into the window (Ctrl-Alt-G lets go); an absolute pointer (vmmouse, USB tablet) is for later |
+| PIT-33 | W14 | Descriptors passed over sockets can form cycles (a socket sent over itself) | accepted: queued descriptors close when the receiving socket closes; Linux's garbage collector is not copied, a rare leak is |
+| PIT-34 | W15 | A static qtbase is a long build and about 2 GiB on disk | built once into `~/.cache/burrow-qt` by `make qt`, never inside `make test`; host and target builds share one feature list (`COMMON` in `scripts/qt.sh`) so `moc` sees the same features |
+| PIT-35 | W15 | Qt's cross build probes the host's libraries (pkg-config, system FreeType) | done in W15-S01: every library bundled (`-qt-freetype -qt-harfbuzz -qt-pcre -qt-zlib -qt-libpng`), `PKG_CONFIG_LIBDIR=/nonexistent`, a toolchain file with the musl sysroot; programs build with Qt's own `qt.toolchain.cmake` |
+| PIT-36 | W15 | The census misses calls Qt makes only on Burrow, and calls strace cannot see | W15-S01 found one at once: musl reads `clock_gettime` through the vDSO, so it is listed by hand (`# vdso`); paths Burrow answers differently show in the `unimplemented syscall` log |
+| PIT-37 | W15 | A Qt program (fonts, a 3 MiB backing store) runs in tens of MiB, and fork copies eagerly (`QProcess`) | 512 MiB since W14-S01; copy-on-write fork stays in the backlog |
+| PIT-38 | W15 | The newest Qt may need a newer compiler than musl.cc's GCC 11.2.1 | checked in W15-S01: qtbase 6.12.0 builds with it |
