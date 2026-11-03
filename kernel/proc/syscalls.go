@@ -3,6 +3,7 @@ package proc
 import (
 	"encoding/binary"
 	"io"
+	"path"
 	"syscall"
 	"time"
 )
@@ -35,6 +36,7 @@ const (
 	sysGetgid        = 104
 	sysGeteuid       = 107
 	sysGetegid       = 108
+	sysPrctl         = 157
 	sysArchPrctl     = 158
 	sysGettid        = 186
 	sysSetTidAddress = 218
@@ -52,7 +54,7 @@ var table = map[uint64]handler{
 	sysRead: sysReadFn, sysWrite: sysWriteFn, sysOpen: sysOpenFn, sysClose: sysCloseFn,
 	sysFstat: sysFstatFn, sysLseek: sysLseekFn, sysMmap: sysMmapFn, sysMunmap: sysMunmapFn,
 	sysBrk: sysBrkFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
-	sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
+	sysPrctl: sysPrctlFn, sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
 	sysExit: sysExitFn, sysExitGroup: sysExitFn,
 	sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
 	sysWait4: sysWait4Fn, sysGetppid: sysGetppidFn,
@@ -183,6 +185,8 @@ func sysLseekFn(p *Process, a [6]uint64) (int64, bool) {
 const (
 	archSetFS = 0x1002
 	archGetFS = 0x1003
+	prSetName = 15 // prctl options
+	prGetName = 16
 )
 
 func sysArchPrctlFn(p *Process, a [6]uint64) (int64, bool) {
@@ -202,6 +206,22 @@ func sysArchPrctlFn(p *Process, a [6]uint64) (int64, bool) {
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], fs)
 		return ok(errno(p.mem.CopyOut(a[1], b[:])))
+	}
+	return ok(-int64(syscall.EINVAL))
+}
+
+// prctl: only the thread name. PR_SET_NAME is accepted and ignored (ps
+// shows the program path); PR_GET_NAME returns the path's base name.
+func sysPrctlFn(p *Process, a [6]uint64) (int64, bool) {
+	switch a[0] {
+	case prSetName:
+		return ok(0)
+	case prGetName:
+		p.mu.Lock()
+		name := make([]byte, 16) // TASK_COMM_LEN, NUL-padded
+		copy(name[:15], path.Base(p.Path))
+		p.mu.Unlock()
+		return ok(errno(p.mem.CopyOut(a[1], name)))
 	}
 	return ok(-int64(syscall.EINVAL))
 }

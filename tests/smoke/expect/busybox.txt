@@ -1,0 +1,19 @@
+# Ordered markers for busybox sh at the Go kernel's console (W10-S08,
+# tests/smoke/keys/busybox.keys). Append-only.
+burrow> run /bin/busybox sh
+BusyBox v1.36.1
+# echo $((6*7)) from busybox
+42 from busybox
+# ls / | wc -l
+5
+# seq 5 | sort -r | head -n 2
+5
+4
+# cd /etc && pwd && cat motd | grep -c .
+/etc
+4
+n1n2n3
+sleeping
+status 130
+# exit
+burrow> poweroff

@@ -125,6 +125,10 @@ func (p *Process) takeSignal() (int, sigaction, sigInfo) {
 	return sig, p.actions[sig], p.info[sig]
 }
 
+// neverRestarted are the calls Linux fails with EINTR after a handler even
+// with SA_RESTART (signal(7)): poll, ppoll, pause, nanosleep, rt_sigsuspend.
+var neverRestarted = map[uint64]bool{7: true, 271: true, 34: true, 35: true, 130: true}
+
 // finish answers a system call: before the thread returns to ring 3, a
 // pending signal runs its handler (or its default action) first.
 func (p *Process) finish(res int64, nr uint64) {
@@ -145,7 +149,7 @@ func (p *Process) finish(res int64, nr uint64) {
 		return
 	}
 	r.RAX = uint64(res)
-	if res == -int64(syscall.EINTR) && act.flags&saRestart != 0 {
+	if res == -int64(syscall.EINTR) && act.flags&saRestart != 0 && !neverRestarted[nr] {
 		r.RIP -= 2 // back onto the SYSCALL instruction: the call runs again
 		r.RAX = nr
 	}

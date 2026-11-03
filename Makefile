@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -154,6 +154,20 @@ $(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) | $(BUILD)
 	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
 		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-root -cf $@ .
 
+# busybox (W10-S08): `make busybox` downloads the pinned source release once
+# (scripts/busybox.sh, sha256-checked) and builds build/busybox. It goes only
+# on build/go-busybox.img, whose initrd is the usual one plus /bin/busybox, so
+# go.img and its expect file stay as they are.
+busybox: | $(BUILD)
+	MUSL_GCC="$(MUSL_GCC)" scripts/busybox.sh $(BUILD)/busybox
+$(BUILD)/initrd-busybox.tar: $(BUILD)/initrd.tar $(BUILD)/busybox
+	rm -rf $(BUILD)/initrd-busybox-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-busybox-root
+	cp $(BUILD)/busybox $(BUILD)/initrd-busybox-root/bin/busybox
+	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-busybox-root -cf $@ .
+$(BUILD)/go-busybox.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-busybox.tar
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
+
 # The data disk (W8): datadisk/ as FAT32, the primary slave, mounted at /mnt.
 DATADISK_FILES := $(shell find datadisk -type f)
 DATA_DRIVE := -drive file=$(BUILD)/data.img,format=raw,if=ide,index=1,media=disk
@@ -182,7 +196,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -217,6 +231,13 @@ smoke: $(BUILD)/disk.img
 # markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 60 tests/smoke/keys/boot_to_go.keys
+
+# busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
+busybox-smoke:
+	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory busybox-smoke-run; \
+	else echo "BUSYBOX SMOKE SKIP (make busybox downloads and builds it)"; fi
+busybox-smoke-run: $(BUILD)/go-busybox.img $(BUILD)/data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 60 tests/smoke/keys/busybox.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

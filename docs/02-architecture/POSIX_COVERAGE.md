@@ -14,6 +14,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 3 | `close` | done | W9 |  |
 | 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
 | 5 | `fstat` | partial | W9 | `st_mode`, `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
+| 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |
 | 9 | `mmap` | partial | W9 | anonymous private memory only (`-ENODEV` for files; `/dev/fb0` in W11); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
 | 11 | `munmap` | done | W9 |  |
@@ -49,6 +50,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 111, 121 | `getpgrp` `getpgid` | done | W10 | |
 | 112, 124 | `setsid` `getsid` | done | W10 | |
 | 110 | `getppid` | done | W10 | orphans are adopted by init (pid 1) |
+| 157 | `prctl` | stub | W10 | `PR_SET_NAME` accepted and ignored, `PR_GET_NAME` = the program's base name; anything else `-EINVAL` |
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | partial | W9 | = pid (one thread per process) |
 | 200, 234 | `tkill` `tgkill` | done | W10 | tid = pid (one thread per process) |
@@ -60,11 +62,12 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 258, 263 | `mkdirat` `unlinkat` | done | W10 | `AT_REMOVEDIR` |
 | 262 | `newfstatat` | done | W10 | `AT_EMPTY_PATH` |
 | 269, 439 | `faccessat` `faccessat2` | partial | W10 | existence only |
+| 271 | `ppoll` | partial | W10 | as `poll`; the signal mask argument is ignored |
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |
 
 **Terminal.** fds 0-2 of a program are the console terminal (`kernel/tty`): canonical mode with echo, erase (DEL, `^H`), kill (`^U`), end of file (`^D`); `ICRNL`; raw mode through `TCSETS` (a half-typed line becomes input). `^C`, `^\` and `^Z` send `SIGINT`, `SIGQUIT` and `SIGTSTP` to the foreground process group (the console's `run` gives it the program's group). Output is not post-processed (the console already turns `\n` into `\r\n`).
 
-**Signals.** Delivered when a system call returns, or, for a process that is computing, at its next timer tick (the nucleus stops the thread with an interrupt request). Default actions: terminate (status 128 + n in the shell), ignore for `SIGCHLD SIGCONT SIGURG SIGWINCH`; the job-control stops (`SIGSTOP SIGTSTP SIGTTIN SIGTTOU`) are ignored until stopped processes exist. Blocking calls (pipe reads and writes, `wait4`, `nanosleep`, `pause`) return `EINTR`, or start again with `SA_RESTART`. `SIGCHLD` goes to the parent on every exit. `execve` resets caught signals to the default.
+**Signals.** Delivered when a system call returns, or, for a process that is computing, at its next timer tick (the nucleus stops the thread with an interrupt request). Default actions: terminate (status 128 + n in the shell), ignore for `SIGCHLD SIGCONT SIGURG SIGWINCH`; the job-control stops (`SIGSTOP SIGTSTP SIGTTIN SIGTTOU`) are ignored until stopped processes exist. Blocking calls (pipe and terminal reads and writes, `wait4`) return `EINTR`, or start again with `SA_RESTART`; `poll`, `ppoll`, `pause`, `nanosleep` and `rt_sigsuspend` always return `EINTR`, as on Linux. `SIGCHLD` goes to the parent on every exit. `execve` resets caught signals to the default.
 
 **Faults.** An exception in ring 3 becomes `SIGSEGV`, `SIGILL` or `SIGFPE`: delivered to a handler if the process installed one (with `si_addr` set), otherwise the process ends with the status a Linux shell would show: 139 (SIGSEGV) for page faults and general protection faults, 132 (SIGILL) for invalid opcodes, 136 (SIGFPE) for divide errors. The kernel logs `pid N (prog) killed: page fault at 0x... (rip 0x...)`.

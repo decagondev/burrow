@@ -131,6 +131,27 @@ func (e *pipeEnd) Close() error {
 	return nil
 }
 
+// Poll: a read end is readable with data and hung up without writers; a
+// write end is writable with room and in error without readers (Linux).
+func (e *pipeEnd) Poll() (int16, <-chan struct{}) {
+	p := e.p
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var rev int16
+	switch {
+	case e.reader && len(p.buf) > 0:
+		rev = pollIn
+	case !e.reader && p.readers == 0:
+		rev = pollErr
+	case !e.reader && len(p.buf) < PipeSize:
+		rev = pollOut
+	}
+	if e.reader && p.writers == 0 {
+		rev |= pollHup
+	}
+	return rev, p.changed
+}
+
 func (e *pipeEnd) Stat() (fs.FileInfo, error) { return pipeInfo{}, nil }
 
 type pipeInfo struct{}

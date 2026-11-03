@@ -1,4 +1,4 @@
-# W10 A Unix  (M10)  — status: done (S08 deferred)
+# W10 A Unix  (M10)  — status: done
 
 Goal: processes behave like Unix processes: `fork`, `execve`, `wait4`, pipes and `dup`, a working directory, signals with handlers, and a terminal with a line discipline where `^C` interrupts the foreground job. Demo: a shell at the console runs `ls / | wc -l`, and `^C` stops a busy loop. Stories: E09.F01-F05 ([BACKLOG.md](../BACKLOG.md)).
 
@@ -30,9 +30,9 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S07 init in Go (E09.F05)
 PID 1 is a Go-side init: it adopts orphans and reaps zombies; the console's shell runs as its child.
 
-### [ ] W10-S08 busybox (E09.F05) — needs a go-ahead to download its source
-Build busybox (static, musl) from its source release; run `busybox sh` and its applets.
+### [x] W10-S08 busybox (E09.F05)
+Build busybox (static, musl) from its source release; run `busybox sh` and its applets. As built: `make busybox` (`scripts/busybox.sh`) fetches 1.36.1, the newest release marked stable, once into `~/.cache/burrow-busybox`, checks it against a pinned sha256 and builds the options in `user/busybox.config` (ash with line editing and job control, about 60 applets, found without links via `FEATURE_SH_STANDALONE`). It ships only on `build/go-busybox.img`; `make busybox-smoke` types an ash session and skips without a build. It needed `poll`/`ppoll` (ash's line editor; a poller on the terminal counts as a reader) and `prctl`; along the way `poll`, `pause`, `nanosleep` and `rt_sigsuspend` stopped restarting under `SA_RESTART`, as on Linux.
 
 Exit: **M10 demo — a Unix.** `make clean test` green; DEVLOG wave entry.
 
-As built: one commit per slice; S08 waits for the go-ahead to download busybox, so M10 is met with our own musl shell and tools. Registers stay in the nucleus: the user syscall path saves a whole `trap_frame` and returns with IRETQ (SYSRETQ is gone for user threads), and Go edits a stopped thread through `nu_uthread_regs`, which sanitizes RFLAGS, RIP and MXCSR. Only a syscall's answer becomes RAX; answered faults and interrupt stops resume the thread as it stands. fork copies eagerly. Signals are delivered by Go when a request finishes or when an interrupt stop arrives, with a Linux `rt_sigframe`. The console stays a Go program: `sh` hands it the terminal's foreground group and forwards keys only while a reader waits. init is a Go process (PID 1) with no thread of its own.
+As built: one commit per slice. M10 runs on our own musl shell and tools in `go.img` and on busybox ash in `go-busybox.img`. Registers stay in the nucleus: the user syscall path saves a whole `trap_frame` and returns with IRETQ (SYSRETQ is gone for user threads), and Go edits a stopped thread through `nu_uthread_regs`, which sanitizes RFLAGS, RIP and MXCSR. Only a syscall's answer becomes RAX; answered faults and interrupt stops resume the thread as it stands. fork copies eagerly. Signals are delivered by Go when a request finishes or when an interrupt stop arrives, with a Linux `rt_sigframe`. The console stays a Go program: `sh` hands it the terminal's foreground group and forwards keys only while a reader waits. init is a Go process (PID 1) with no thread of its own.

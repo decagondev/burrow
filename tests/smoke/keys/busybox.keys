@@ -1,0 +1,30 @@
+# busybox sh (W10-S08) typed into the Go kernel's console: the shell
+# itself, applets without links in /bin, a pipeline, arithmetic, a loop,
+# ^C on a foreground sleep, and back to the console.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait #
+type echo $((6*7)) from busybox
+key ret
+type ls / | wc -l
+key ret
+type seq 5 | sort -r | head -n 2
+key ret
+type cd /etc && pwd && cat motd | grep -c .
+key ret
+type for i in 1 2 3; do echo n$i; done | tr -d '\n'; echo
+key ret
+# the child prints once it owns the terminal; the typed text has '' in it,
+# so the wait cannot match the echo of the command line
+type sh -c 'echo slee''ping; exec sleep 30'
+key ret
+wait sleeping
+key ctrl-c
+type echo status $?
+key ret
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

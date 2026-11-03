@@ -197,6 +197,18 @@ func (t *TTY) ReadCancel(p []byte, cancel <-chan struct{}) (int, error) {
 	}
 }
 
+// Poll reports whether a read would return at once (input or end of file)
+// and a channel closed at the next change (poll(2)).
+func (t *TTY) Poll() (readable bool, changed <-chan struct{}) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.ready) > 0 || t.eof > 0, t.changed
+}
+
+// Waiting counts a poller waiting for input as a reader (+1, then -1),
+// so HasReader is true while it waits.
+func (t *TTY) Waiting(delta int) { t.mu.Lock(); t.readers += delta; t.mu.Unlock() }
+
 // HasReader: a program is waiting for input right now.
 func (t *TTY) HasReader() bool { t.mu.Lock(); defer t.mu.Unlock(); return t.readers > 0 }
 

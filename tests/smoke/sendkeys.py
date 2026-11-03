@@ -22,7 +22,8 @@ NAMES = {' ': 'spc', '-': 'minus', '.': 'dot', '/': 'slash', ',': 'comma',
          '=': 'equal', ';': 'semicolon', "'": 'apostrophe',
          '|': 'shift-backslash', '>': 'shift-dot', '<': 'shift-comma', '$': 'shift-4',
          '?': 'shift-slash', '"': 'shift-apostrophe', '_': 'shift-minus', '&': 'shift-7',
-         '*': 'shift-8', '!': 'shift-1', ':': 'shift-semicolon'}
+         '*': 'shift-8', '!': 'shift-1', ':': 'shift-semicolon',
+         '(': 'shift-9', ')': 'shift-0', '\\': 'backslash'}
 
 
 def key_name(ch):

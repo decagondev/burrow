@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W10-S08 busybox
+
+**Did:** `make busybox` fetches busybox 1.36.1 (the newest release busybox.net marks stable) once, checks the pinned sha256 and builds a 320 KiB static musl binary from `user/busybox.config`: ash with line editing and job control, about 60 applets, run without links in `/bin` (`FEATURE_SH_STANDALONE`, exec path `/bin/busybox`). `make busybox-smoke` boots `go-busybox.img` and types a session: `$((6*7))`, `ls / | wc -l`, `seq 5 | sort -r | head -n 2`, `cd /etc && pwd && cat motd | grep -c .`, a `for` loop, `^C` on a foreground `sleep` (status 130), `exit`. It skips when no busybox build is present, so `make test` and CI work without the download.
+
+**Surprise:** it nearly worked first time. The first boot logged two unknown calls: `prctl` (the name) and `poll`, which ash's line editor calls before every key. Our console forwards keys only while a program reads, so a program that polls the terminal has to count as a reader too, or it would wait forever. Writing the `poll` test also showed that we restarted every EINTR under `SA_RESTART`; Linux never restarts `poll`, `pause`, `nanosleep` or `rt_sigsuspend`.
+
+**Learned:** A smoke wait that matches the echo of the command line is no wait at all: print something the typed text does not contain (`echo slee''ping`).
+
+**Links:** E09.F05
+
 ## 2026-11-03 — Wave 10 complete: a Unix (M10)
 
 **Did:** W10-S01..S07. The console starts a shell, and the shell behaves like a Unix shell:

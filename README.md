@@ -15,7 +15,7 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M7: Go drivers (IRQs as goroutine wake-ups, PS/2 keyboard, serial, console, PCI) | **done: type at `burrow>`** |
 | M8: files and pixels (initrd, VFS, devfs, FAT32, framebuffer, ATA in Go) | **done: `cat /etc/motd`, a text console on screen** |
 | M9: first process (ring 3, static ELF, musl, syscalls served by Go) | **done: `run /bin/musl-hello`** |
-| M10: a Unix (fork, exec, pipes, signals, a TTY, a shell) | **done: `sh`, then `ls / \| wc -l` and `^C`** (busybox: W10-S08, pending) |
+| M10: a Unix (fork, exec, pipes, signals, a TTY, a shell) | **done: `sh`, then `ls / \| wc -l` and `^C`; busybox ash** |
 | M11: DOOM | next ([Waves 11-12](docs/04-plan/waves/WAVES-07-12.md)) |
 
 ## Quick start
@@ -43,6 +43,7 @@ SMOKE PASS [boot_to_loader] (54 log lines)
 SMOKE PASS [boot_to_nucleus] (54 log lines)
 SCREEN PASS (8 checks)
 SMOKE PASS [boot_to_go] (194 log lines)
+SMOKE PASS [busybox] (119 log lines)   # SKIP until make busybox has built it
 SMOKE PASS [irq] (68 log lines)
 SMOKE PASS [mm] (66 log lines)
 SMOKE PASS [sched] (79 log lines)

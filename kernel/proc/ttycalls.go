@@ -29,6 +29,14 @@ func (f ttyFile) ReadCancel(b []byte, c <-chan struct{}) (int, error) {
 func (f ttyFile) WriteCancel(b []byte, c <-chan struct{}) (int, error) {
 	return f.t.WriteCancel(b, c)
 }
+func (f ttyFile) Poll() (int16, <-chan struct{}) {
+	readable, ch := f.t.Poll()
+	if readable {
+		return pollIn | pollOut, ch
+	}
+	return pollOut, ch
+}
+func (f ttyFile) WaitInput(delta int)        { f.t.Waiting(delta) }
 func (f ttyFile) Close() error               { return nil }
 func (f ttyFile) Stat() (fs.FileInfo, error) { return ttyInfo{}, nil }
 
