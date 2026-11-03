@@ -55,11 +55,18 @@ func (p *Process) openAt(dirfd, nameVA uint64, flags int) int64 {
 	if err != nil {
 		return errno(err)
 	}
-	if f, isTTY := p.sys.ttyByPath(name); isTTY { // the console terminal (W14-S08)
-		f.flags = flags & (oAccMode | oNonblock)
-		n, err := p.fds.add(f, 0, flags&oCloexec != 0)
+	tf, isTTY := p.ttyByPath(name) // the console terminal (W14-S08) or the controlling one
+	if isPTYPath(name) {           // a pseudo-terminal (W16-S03)
+		if tf, err = p.sys.openPTY(name); err != nil {
+			return errno(err)
+		}
+		tf.path, isTTY = name, true
+	}
+	if isTTY {
+		tf.flags = flags & (oAccMode | oNonblock)
+		n, err := p.fds.add(tf, 0, flags&oCloexec != 0)
 		if err != nil {
-			f.unref()
+			tf.unref()
 			return errno(err)
 		}
 		return int64(n)

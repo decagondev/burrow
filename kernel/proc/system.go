@@ -25,14 +25,15 @@ type System struct {
 	names   sockNames // bound Unix socket names (socknames.go)
 
 	mu       sync.Mutex
-	byTID    map[uint64]*Thread // live threads, by nucleus thread
-	gone     map[uint64]bool    // threads ended while a request of theirs may still be queued
-	byPID    map[int]*Process   // live processes and zombies
-	nextPID  int                // pids and tids share one number space
-	reported map[uint64]bool    // unknown syscall numbers already logged
-	tty      *tty.TTY           // the controlling terminal (SetTerminal), or nil
-	vt       *vt.VT             // its keyboard and display modes (SetVT), or nil
-	init     *Process           // pid 1 (kernel-side, no thread)
+	byTID    map[uint64]*Thread  // live threads, by nucleus thread
+	gone     map[uint64]bool     // threads ended while a request of theirs may still be queued
+	byPID    map[int]*Process    // live processes and zombies
+	nextPID  int                 // pids and tids share one number space
+	reported map[uint64]bool     // unknown syscall numbers already logged
+	tty      *tty.TTY            // the controlling terminal (SetTerminal), or nil
+	ptys     map[int]*tty.Master // open pseudo-terminal pairs by number (ptycalls.go)
+	vt       *vt.VT              // its keyboard and display modes (SetVT), or nil
+	init     *Process            // pid 1 (kernel-side, no thread)
 
 	futexMu sync.Mutex
 	futexes map[futexKey][]*futexWaiter // futex.go

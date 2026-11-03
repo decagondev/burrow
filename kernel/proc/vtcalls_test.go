@@ -82,3 +82,30 @@ func TestVTCalls(t *testing.T) {
 		t.Errorf("KDGKBTYPE = %d", e)
 	}
 }
+
+// BUG-0020: a keyboard mode change drops the terminal's unread input, as
+// Linux's KDSKBMODE does: key codes X never read (the release of the Enter
+// that ended its last client) reached the shell after the server exited.
+func TestKbModeChangeFlushesInput(t *testing.T) {
+	r, _ := vfsRig(t)
+	term := tty.New(r.console, 30, 100)
+	r.sys.SetTerminal(term)
+	r.sys.SetVT(vt.New())
+	p := r.spawn()
+	r.call(p, 16, 0, 0x4B45, 2) // KDSKBMODE K_MEDIUMRAW
+	for _, b := range []byte("junk\n") {
+		term.Input(b)
+	}
+	if r.call(p, 16, 0, 0x4B45, 1); term.Pending() != 0 { // K_XLATE
+		t.Errorf("KDSKBMODE left %d bytes unread", term.Pending())
+	}
+	r.call(p, 16, 0, 0x4B45, 2)
+	for _, b := range []byte("junk\n") {
+		term.Input(b)
+	}
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 60}) // the server exits: its mode is undone
+	wait(t, p)
+	if term.Pending() != 0 {
+		t.Errorf("exit with K_MEDIUMRAW left %d bytes unread", term.Pending())
+	}
+}

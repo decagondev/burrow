@@ -35,6 +35,24 @@ flowchart LR
 
 ## Closed
 
+### BUG-0020: Key codes an X server never read reached the shell after it
+- Found: 2026-11-03, W16-S03, in the full `make test`: after st and Xfbdev exited, the console's shell read `exit` with a stray byte 0x9C in front (the release of Enter in `K_MEDIUMRAW`) and stayed.
+- Severity: minor (since W14-S08: whatever a program in `K_RAW` or `K_MEDIUMRAW` left unread became the console's input).
+- Symptom: a stray byte at the start of the first line typed after an X session; it showed only when the session ended on a key (the Enter of `exit` in st), whose release came after X had stopped reading.
+- Root cause: Linux's `KDSKBMODE` drops the terminal's unread input when the keyboard mode changes (`tty_ldisc_flush` in `vt_ioctl`); Burrow kept it, and kept it too when an exiting process's mode was undone.
+- Fix: `vt.VT` calls a `Keyboard` hook when the mode changes, by `KDSKBMODE` or at exit; `proc.SetVT` hooks it to the console terminal's new `Flush` (`kernel/vt/vt.go`, `kernel/proc/vtcalls.go`, `kernel/tty/control.go`).
+- Regression: `TestKbModeChangeFlushesInput` (`kernel/proc`); `make x11-smoke` types `exit` on the console after st's session.
+- Lesson: a mode switch is also a boundary for buffered data; check what the real kernel does with the bytes in flight, not only with the mode.
+
+### BUG-0019: ioctl requests with the top bit set never matched
+- Found: 2026-11-03, W16-S03: musl's `openpty` failed with `EINVAL` on Burrow, while the same `ptytest` binary passed on Linux.
+- Severity: major, latent since W10: every `_IOR` request (`TIOCGPTN`, `EVIOCGVERSION`, `FBIOGET_*` are `_IOR` or numbered with bit 31 set) reached the kernel as a 64-bit value with the upper half all ones.
+- Symptom: `ioctl(m, TIOCGPTN, &n)` answered `-EINVAL`; evdev's version and id requests were answered only through a fallback that masks the request, which is why Doom and Qt never showed it.
+- Root cause: musl declares `int ioctl(int, int, ...)`, and passing the `int` to the system call sign-extends it; Linux's `ioctl` takes an `unsigned int` and so reads only the low 32 bits. Burrow compared the whole register.
+- Fix: `sysIoctlFn` keeps the low 32 bits of the request before any dispatch (`kernel/proc/ttycalls.go`).
+- Regression: `TestIoctlRequestIs32Bits` (`kernel/proc`); `ptytest` in `make ports-smoke`.
+- Lesson: an argument's C type is part of the ABI; read each system call's arguments at the width Linux declares, not the register's.
+
 ### BUG-0018: /dev/input/mice stalled and misaligned TinyX's mouse handshake
 - Found: 2026-11-03, W16-S02: under `Xfbdev`, a click never reached `xhello`; with the write fixed, a left click arrived as buttons 3 and 5.
 - Severity: major for any program that talks PS/2 to `/dev/input/mice` (since W14-S02; the W14 tests wrote the handshake in one call and read it all back, so they passed).

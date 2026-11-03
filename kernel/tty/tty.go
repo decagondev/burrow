@@ -3,7 +3,9 @@
 // collects a line (echo, erase, kill, ^D), in raw mode it passes bytes on
 // at once; ISIG turns ^C, ^\ and ^Z into signals for the foreground
 // process group. Linux's termios layout and defaults, so musl's isatty,
-// tcgetattr and cfmakeraw work unchanged. Pure: tested on the host.
+// tcgetattr and cfmakeraw work unchanged. A TTY is the console's terminal
+// or the slave of a pseudo-terminal pair (pty.go, W16-S03). Pure: tested on
+// the host.
 package tty
 
 import (
@@ -39,9 +41,11 @@ const (
 	VSUSP  = 10
 	NCCS   = 19
 
-	SIGINT  = 2
-	SIGQUIT = 3
-	SIGTSTP = 20
+	SIGHUP   = 1
+	SIGINT   = 2
+	SIGQUIT  = 3
+	SIGTSTP  = 20
+	SIGWINCH = 28
 )
 
 // Termios is the kernel's struct termios (36 bytes; not glibc's).
@@ -74,6 +78,8 @@ type TTY struct {
 	readers int // blocked in ReadCancel
 	rows    uint16
 	cols    uint16
+	opost   bool // a pty slave: output is processed (ONLCR), as Linux's n_tty does
+	hung    bool // a pty slave whose master closed: reads see end of file
 
 	// Signal sends sig to process group pgrp (set by the kernel).
 	Signal func(pgrp, sig int)
@@ -87,7 +93,7 @@ func (t *TTY) notify() { close(t.changed); t.changed = make(chan struct{}) }
 
 func (t *TTY) echo(b ...byte) {
 	if t.termios.Lflag&ECHO != 0 {
-		t.out.Write(b)
+		t.out.Write(t.cook(b))
 	}
 }
 
@@ -95,6 +101,9 @@ func (t *TTY) echo(b ...byte) {
 func (t *TTY) Input(b byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.hung {
+		return
+	}
 	tm := &t.termios
 	if b == '\r' && tm.Iflag&ICRNL != 0 {
 		b = '\n'
@@ -112,10 +121,7 @@ func (t *TTY) Input(b byte) {
 		if sig != 0 {
 			t.line, t.ready = t.line[:0], t.ready[:0] // flush, as Linux does without NOFLSH
 			t.echo('^', b+'@', '\n')
-			if t.Signal != nil && t.fg != 0 {
-				fg := t.fg
-				go t.Signal(fg, sig) // never call back into proc with t.mu held
-			}
+			t.signalFG(sig)
 			t.notify()
 			return
 		}
@@ -151,7 +157,7 @@ func (t *TTY) Input(b byte) {
 		t.ready = append(t.ready, t.line...)
 		t.line = t.line[:0]
 		if tm.Lflag&ECHO != 0 || tm.Lflag&ECHONL != 0 {
-			t.out.Write([]byte{'\n'})
+			t.out.Write(t.cook([]byte{'\n'}))
 		}
 		t.notify()
 	case b >= 0x20 || b == '\t':
@@ -188,8 +194,10 @@ func (t *TTY) ReadCancel(p []byte, cancel <-chan struct{}) (int, error) {
 			t.mu.Unlock()
 			return n, nil
 		}
-		if t.eof > 0 {
-			t.eof--
+		if t.eof > 0 || t.hung {
+			if !t.hung {
+				t.eof--
+			}
 			t.mu.Unlock()
 			return 0, nil
 		}
@@ -224,7 +232,7 @@ func (t *TTY) ReadCancel(p []byte, cancel <-chan struct{}) (int, error) {
 func (t *TTY) Poll() (readable bool, changed <-chan struct{}) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return len(t.ready) > 0 || t.eof > 0, t.changed
+	return len(t.ready) > 0 || t.eof > 0 || t.hung, t.changed
 }
 
 // Waiting counts a poller waiting for input as a reader (+1, then -1),
@@ -251,38 +259,29 @@ func indexByte(b []byte, c byte) int {
 	return -1
 }
 
-// WriteCancel is output: never blocks (the console is fast enough).
-func (t *TTY) WriteCancel(p []byte, _ <-chan struct{}) (int, error) { return t.out.Write(p) }
-
-func (t *TTY) Read(p []byte) (int, error)  { return t.ReadCancel(p, nil) }
-func (t *TTY) Write(p []byte) (int, error) { return t.out.Write(p) }
-
-// Termios and SetTermios are TCGETS and TCSETS (flush: TCSETSF drops input).
-func (t *TTY) Termios() Termios { t.mu.Lock(); defer t.mu.Unlock(); return t.termios }
-
-func (t *TTY) SetTermios(tm Termios, flush bool) {
+// WriteCancel is output. The console never blocks; a pty slave waits while
+// its master's buffer is full (pty.go), and fails with EIO after a hang-up.
+func (t *TTY) WriteCancel(p []byte, cancel <-chan struct{}) (int, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	wasCanon := t.termios.Lflag&ICANON != 0
-	t.termios = tm
-	if flush {
-		t.line, t.ready = t.line[:0], t.ready[:0]
+	if t.hung {
+		t.mu.Unlock()
+		return 0, syscall.EIO
 	}
-	if wasCanon && tm.Lflag&ICANON == 0 { // to raw: the half-typed line is input now
-		t.ready = append(t.ready, t.line...)
-		t.line = t.line[:0]
+	cooked, out := t.cook(p), t.out
+	t.mu.Unlock()
+	if w, waits := out.(cancelWriter); waits {
+		if n, err := w.WriteCancel(cooked, cancel); n < len(cooked) {
+			return 0, err
+		}
+		return len(p), nil
 	}
-	t.notify()
+	out.Write(cooked)
+	return len(p), nil
 }
 
-// Foreground is the process group ^C goes to (TIOCGPGRP/TIOCSPGRP).
-func (t *TTY) Foreground() int        { t.mu.Lock(); defer t.mu.Unlock(); return t.fg }
-func (t *TTY) SetForeground(pgrp int) { t.mu.Lock(); t.fg = pgrp; t.mu.Unlock() }
+type cancelWriter interface {
+	WriteCancel(p []byte, cancel <-chan struct{}) (int, error)
+}
 
-// Size is TIOCGWINSZ.
-func (t *TTY) Size() (rows, cols uint16) { t.mu.Lock(); defer t.mu.Unlock(); return t.rows, t.cols }
-
-func (t *TTY) SetSize(rows, cols uint16) { t.mu.Lock(); t.rows, t.cols = rows, cols; t.mu.Unlock() }
-
-// Pending is FIONREAD: bytes a read would return now.
-func (t *TTY) Pending() int { t.mu.Lock(); defer t.mu.Unlock(); return len(t.ready) }
+func (t *TTY) Read(p []byte) (int, error)  { return t.ReadCancel(p, nil) }
+func (t *TTY) Write(p []byte) (int, error) { return t.WriteCancel(p, nil) }

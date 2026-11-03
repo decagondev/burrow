@@ -15,3 +15,12 @@ pixel build/screen-x11-xhello.ppm 801 601 #ffffff
 size  build/screen-x11-after.ppm 1024 768
 pixel build/screen-x11-after.ppm 10 40 #007d9c
 pixel build/screen-x11-after.ppm 500 500 #1e1e28
+# S03: st (fonts through Xft) running busybox sh after the typed line: its
+# black background, the "#" of the last prompt in st's foreground #e5e5e5,
+# the focused cursor (a solid block in #cccccc), the root weave beside it
+size  build/screen-x11-st.ppm 1024 768
+pixel build/screen-x11-st.ppm 400 300 #000000
+pixel build/screen-x11-st.ppm 3 165 #e5e5e5
+pixel build/screen-x11-st.ppm 27 163 #cccccc
+pixel build/screen-x11-st.ppm 900 600 #000000
+pixel build/screen-x11-st.ppm 901 601 #ffffff

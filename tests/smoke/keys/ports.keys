@@ -27,5 +27,10 @@ type run /bin/socknames
 key ret
 wait socknames: 
 wait burrow> 
+# W16-S03: a pseudo-terminal as st uses one (passed on the host's Linux first)
+type run /bin/ptytest
+key ret
+wait ptytest: 
+wait burrow> 
 type poweroff
 key ret

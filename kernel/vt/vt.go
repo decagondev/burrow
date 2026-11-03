@@ -51,6 +51,9 @@ type VT struct {
 	// Graphics, if set, runs when the display mode changes (true: a
 	// program draws; the console must stand aside).
 	Graphics func(graphics bool)
+	// Keyboard, if set, runs when the keyboard mode changes: the terminal
+	// drops its unread input then, as Linux's KDSKBMODE does (BUG-0020).
+	Keyboard func()
 }
 
 func New() *VT { return &VT{kb: KXlate} }
@@ -69,8 +72,13 @@ func (v *VT) SetKbMode(pid, m int) error {
 		return syscall.EINVAL
 	}
 	v.mu.Lock()
-	defer v.mu.Unlock()
+	changed := v.kb != m
 	v.kb, v.kbPID, v.e0 = m, pid, false
+	hook := v.Keyboard
+	v.mu.Unlock()
+	if changed && hook != nil {
+		hook()
+	}
 	return nil
 }
 
@@ -105,6 +113,7 @@ func (v *VT) SetVTMode(pid int, m Mode) error {
 // Release undoes every mode process pid set (its exit).
 func (v *VT) Release(pid int) {
 	v.mu.Lock()
+	keyboard := v.kbPID == pid && v.kb != KXlate
 	if v.kbPID == pid {
 		v.kb, v.kbPID, v.e0 = KXlate, 0, false
 	}
@@ -115,10 +124,13 @@ func (v *VT) Release(pid int) {
 	if v.kdPID == pid {
 		v.kd, v.kdPID = KDText, 0
 	}
-	hook := v.Graphics
+	hook, kbHook := v.Graphics, v.Keyboard
 	v.mu.Unlock()
 	if graphics && hook != nil {
 		hook(false)
+	}
+	if keyboard && kbHook != nil {
+		kbHook()
 	}
 }
 

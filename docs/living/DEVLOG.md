@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W16-S03 st on a pseudo-terminal
+
+**Did:** pseudo-terminals: a pair in `kernel/tty` over the existing line discipline, `/dev/ptmx` and `/dev/pts/N`, a controlling terminal per process, `SIGWINCH` on a new size. `ptytest` passes on Linux and on Burrow; st runs busybox `sh` under Xfbdev, a line typed through X runs in it, and its screen is checked.
+
+**Surprise:** BUG-0019, an ioctl bug as old as W10: musl hands the request over as a sign-extended `int`, so every `_IOR` request missed its case; evdev had been rescued by a mask. And the test harness again: keys typed before st's window exists go to the root window and vanish, and st's title is never set without Xlib's locale data, so the new `xfocus` finds st by its class. The full suite added BUG-0020: a key release X never read reached the console's shell after the session; Linux drops a terminal's input when the keyboard mode changes, and now Burrow does too.
+
+**Next:** W16-S04, dwm and dmenu.
+
+Links: BUG-0019, BUG-0020
+
 ## 2026-11-03 — W16-S02 Xfbdev on Burrow
 
 **Did:** TinyX's `Xfbdev` runs on Burrow from the X disk at `/opt/x11` and serves `xhello`: a window with rectangles, the core font and Xft text, a mouse click and a key, then the console comes back when the server is killed (`make x11-smoke`, now in `make test`). New in the kernel: interval timers and `SIGALRM`, `KDGKBENT` with a US keymap, `statfs`/`fstatfs`, `fadvise64`, `mremap`, and `link` answering `-EPERM`.

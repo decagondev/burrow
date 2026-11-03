@@ -3,6 +3,8 @@ package proc
 import (
 	"path"
 	"sync"
+
+	"burrow/kernel/tty"
 )
 
 // Signal numbers used before W10-S04 brings the rest.
@@ -30,6 +32,7 @@ type Process struct {
 	cwd           string
 	umask         uint32    // kept for umask(2); nothing has permissions to mask yet
 	timers        [3]itimer // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
+	ctty          *tty.TTY  // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
 
 	children   map[int]*Process // live and zombie (s.mu)
 	childEvent chan struct{}    // a child exited (capacity 1)
@@ -168,6 +171,7 @@ func (t *Thread) fork() int64 {
 	c := s.newProcess(p.Path, mem, p.fds.clone())
 	p.mu.Lock()
 	c.brkStart, c.brk, c.mmapNext, c.cwd, c.umask = p.brkStart, p.brk, p.mmapNext, p.cwd, p.umask
+	c.ctty = p.ctty
 	c.actions = p.actions // pending signals are not inherited
 	mask, fs, altSP, altSize := t.sigMask, t.fs, t.altSP, t.altSize
 	p.mu.Unlock()

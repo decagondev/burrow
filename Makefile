@@ -317,10 +317,11 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
+	$(BUILD)/user/ptytest > $(BUILD)/ptytest-linux.log  # W16-S03
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,
@@ -344,7 +345,7 @@ x11-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then \
 		$(MAKE) --no-print-directory x11-smoke-run; else echo "X11 SMOKE SKIP (make x11 busybox ports)"; fi
 x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 150 tests/smoke/keys/x11.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 240 tests/smoke/keys/x11.keys
 
 # Qt (W15-S01): `make qt` fetches qtbase 6.12.0 and the DejaVu fonts once
 # (scripts/qt.sh, sha256-pinned, ~/.cache/burrow-qt), builds Qt for the host

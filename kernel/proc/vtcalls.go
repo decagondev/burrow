@@ -42,11 +42,20 @@ const (
 )
 
 // SetVT gives the console terminal its modes (the kernel hooks them to the
-// screen and the keyboard).
+// screen and the keyboard). A keyboard mode change drops the terminal's
+// unread input, as on Linux (BUG-0020).
 func (s *System) SetVT(v *vt.VT) {
 	s.mu.Lock()
 	s.vt = v
 	s.mu.Unlock()
+	v.Keyboard = func() {
+		s.mu.Lock()
+		t := s.tty
+		s.mu.Unlock()
+		if t != nil {
+			t.Flush()
+		}
+	}
 }
 
 // releaseVT undoes the modes p set (its exit).
@@ -59,8 +68,11 @@ func (s *System) releaseVT(pid int) {
 	}
 }
 
-// ttyByPath is the console terminal opened as /dev/tty, tty0 or tty1.
-func (s *System) ttyByPath(name string) (*file, bool) {
+// ttyByPath is a terminal opened by name: the console as /dev/tty0 or
+// tty1, the caller's controlling terminal as /dev/tty (the console unless
+// TIOCSCTTY made a pty's slave it, W16-S03).
+func (p *Process) ttyByPath(name string) (*file, bool) {
+	s := p.sys
 	switch name {
 	case "dev/tty", "dev/tty0", "dev/tty1":
 	default:
@@ -69,10 +81,13 @@ func (s *System) ttyByPath(name string) (*file, bool) {
 	s.mu.Lock()
 	t := s.tty
 	s.mu.Unlock()
+	if c := p.controlling(); c != nil && name == "dev/tty" {
+		t = c
+	}
 	if t == nil {
 		return nil, false
 	}
-	f := newFile(ttyFile{t}, nil)
+	f := newFile(ttyFile{t, nil}, nil)
 	f.path = name
 	return f, true
 }

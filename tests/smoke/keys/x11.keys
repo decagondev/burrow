@@ -31,6 +31,25 @@ type q
 wait xhello: ok
 sleep 2
 screendump build/screen-x11-after.ppm
+# W16-S03: st runs busybox sh on a pseudo-terminal. The shell reports on
+# the console (/dev/tty1, which reaches the serial line while X owns the
+# screen); the line typed goes through X's keyboard into st, and the file it
+# writes is shown on the console after st and the server have gone. With no
+# window manager, keys go to the window under the pointer, so nothing may be
+# typed before st's window is up: xfocus waits for it (and focuses it).
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xfocus st-256color & /opt/x11/bin/st -e /bin/busybox sh -c 'echo st: shell up > /dev/tty1; exec /bin/busybox sh'; kill %1; wait; cat /tmp/st.txt
+key ret
+wait st: shell up
+wait xfocus: st-256color
+sleep 2
+type echo st says $((6*7)) > /tmp/st.txt; ls /opt/x11/bin; echo st: typed > /dev/tty1
+key ret
+wait st: typed
+sleep 2
+screendump build/screen-x11-st.ppm
+type exit
+key ret
+wait st says 42
 type exit
 key ret
 wait burrow>

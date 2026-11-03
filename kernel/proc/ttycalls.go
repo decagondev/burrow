@@ -18,8 +18,12 @@ func (s *System) SetTerminal(t *tty.TTY) {
 	t.Signal = func(pgrp, sig int) { s.KillGroup(pgrp, sig) }
 }
 
-// ttyFile is the terminal as an open file (/dev/tty, fds 0-2).
-type ttyFile struct{ t *tty.TTY }
+// ttyFile is a terminal as an open file: the console (/dev/tty, fds 0-2)
+// or a pseudo-terminal's slave (m is its pair; W16-S03).
+type ttyFile struct {
+	t *tty.TTY
+	m *tty.Master
+}
 
 func (f ttyFile) Read(b []byte) (int, error)  { return f.t.Read(b) }
 func (f ttyFile) Write(b []byte) (int, error) { return f.t.Write(b) }
@@ -36,8 +40,13 @@ func (f ttyFile) Poll() (int16, <-chan struct{}) {
 	}
 	return pollOut, ch
 }
-func (f ttyFile) WaitInput(delta int)        { f.t.Waiting(delta) }
-func (f ttyFile) Close() error               { return nil }
+func (f ttyFile) WaitInput(delta int) { f.t.Waiting(delta) }
+func (f ttyFile) Close() error {
+	if f.m != nil {
+		f.m.CloseSlave()
+	}
+	return nil
+}
 func (f ttyFile) Stat() (fs.FileInfo, error) { return ttyInfo{}, nil }
 
 type ttyInfo struct{}
@@ -57,7 +66,7 @@ func (s *System) stdio() *fdTable {
 	if t == nil {
 		return newFDTable(s.console)
 	}
-	f := newFile(ttyFile{t}, nil)
+	f := newFile(ttyFile{t, nil}, nil)
 	f.path, f.flags = "dev/tty", oRDWR
 	f.refs.Store(3)
 	return &fdTable{fds: map[int]fd{0: {file: f}, 1: {file: f}, 2: {file: f}}}
@@ -82,6 +91,7 @@ const (
 
 // ioctl: the terminal's requests; everything else is not a terminal.
 func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
+	a[1] = uint64(uint32(a[1])) // the request is an unsigned int: musl's int arrives sign-extended (BUG-0019)
 	f := p.fds.get(a[0])
 	if f == nil {
 		return ok(-int64(syscall.EBADF))
@@ -89,11 +99,14 @@ func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
 	if d, isD := device(f).(Ioctler); isD {
 		return ok(p.deviceIoctl(d, a[1], a[2]))
 	}
-	tf, isTTY := f.f.(ttyFile)
-	if !isTTY {
+	t, master := terminal(f)
+	if t == nil {
 		return ok(-int64(syscall.ENOTTY))
 	}
-	t, le := tf.t, binary.LittleEndian
+	if r, handled := p.ptyIoctl(t, master, a[1], a[2]); handled {
+		return ok(r)
+	}
+	le := binary.LittleEndian
 	put := func(b []byte) (int64, bool) { return ok(errno(p.mem.CopyOut(a[2], b))) }
 	switch a[1] {
 	case tcgets:
@@ -148,8 +161,9 @@ func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
 		b := make([]byte, 4)
 		le.PutUint32(b, uint32(p.SID))
 		return put(b)
-	case tiocsctty, tiocnotty:
-		return ok(0) // one terminal, everyone's controlling terminal
+	}
+	if master != nil {
+		return ok(-int64(syscall.EINVAL))
 	}
 	if r, handled := p.vtIoctl(a[1], a[2]); handled {
 		return ok(r)
@@ -208,6 +222,7 @@ func sysSetsidFn(p *Process, _ [6]uint64) (int64, bool) {
 		}
 	}
 	p.SID, p.PGID = p.PID, p.PID
+	p.ctty = nil // a new session has no controlling terminal until TIOCSCTTY
 	return ok(int64(p.PID))
 }
 

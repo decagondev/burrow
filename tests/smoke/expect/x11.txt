@@ -7,4 +7,8 @@ xhello: exposed
 xhello: button 1
 xhello: key q
 xhello: ok
+st: shell up
+xfocus: st-256color
+st: typed
+st says 42
 burrow> poweroff

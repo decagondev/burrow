@@ -93,4 +93,13 @@ socknames: rights-recv ok
 socknames: rights-ctrunc ok
 socknames: credentials ok
 socknames: ok
+burrow> run /bin/ptytest
+ptytest: winsize-onlcr ok
+ptytest: dev-tty ok
+ptytest: echo ok
+ptytest: canonical-line ok
+ptytest: sigint ok
+ptytest: exit ok
+ptytest: eio ok
+ptytest: ok
 burrow> poweroff
