@@ -35,6 +35,22 @@ type Thread struct {
 	Replies          chan int64 // one value per nu_syscall_reply
 	Regs             proc.Regs  // what nu_uthread_regs reads and writes
 	Interrupts       int        // nu_uthread_interrupt calls
+	busy             bool       // a request is outstanding (Inject .. Reply)
+	stopAfter        bool       // interrupted while busy: stop after the reply
+	lastNr           uint64     // the outstanding request's number
+}
+
+// Snapshot is a copy of a thread's state, safe to read while the
+// dispatcher works (the Replies channel is shared, not copied).
+func (f *Fake) Snapshot(tid uint64) Thread {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.threads[tid]
+	if t == nil {
+		return Thread{}
+	}
+	return Thread{AS: t.AS, RIP: t.RIP, RSP: t.RSP, FS: t.FS, Killed: t.Killed,
+		Replies: t.Replies, Regs: t.Regs, Interrupts: t.Interrupts}
 }
 
 func New() *Fake {
@@ -191,8 +207,9 @@ func (f *Fake) SetSpace(tid, as uint64) error {
 	return nil
 }
 
-// Interrupt behaves like a thread computing in ring 3: it stops at once
-// and posts an interrupt request.
+// Interrupt behaves like the nucleus: a thread computing in ring 3 stops at
+// once and posts an interrupt request; a thread waiting for an answer
+// stops right after that answer.
 func (f *Fake) Interrupt(tid uint64) error {
 	t := f.Thread(tid)
 	if t == nil {
@@ -200,6 +217,11 @@ func (f *Fake) Interrupt(tid uint64) error {
 	}
 	f.mu.Lock()
 	t.Interrupts++
+	if t.busy {
+		t.stopAfter = true
+		f.mu.Unlock()
+		return nil
+	}
 	rip := t.Regs.RIP
 	f.mu.Unlock()
 	f.Inject(proc.Request{TID: tid, Nr: proc.InterruptNr, Args: [6]uint64{rip}})
@@ -262,12 +284,34 @@ func (f *Fake) Reply(tid uint64, result int64) error {
 	if t == nil {
 		return syscall.ESRCH
 	}
-	t.Replies <- result
+	f.mu.Lock()
+	t.busy = false
+	if t.Regs.RAX != uint64(result) {
+		t.Regs.RAX = uint64(result) // the answer is RAX (for syscalls)
+	}
+	stop := t.stopAfter
+	t.stopAfter = false
+	rip := t.Regs.RIP
+	wasStop := t.lastNr == proc.InterruptNr
+	f.mu.Unlock()
+	if !wasStop { // the answer to an interrupt stop is no reply a test waits for
+		t.Replies <- result
+	}
+	if stop {
+		f.Inject(proc.Request{TID: tid, Nr: proc.InterruptNr, Args: [6]uint64{rip}})
+	}
 	return nil
 }
 
 // Inject is a user thread making a system call (or taking a fault).
-func (f *Fake) Inject(r proc.Request) { f.reqs <- r }
+func (f *Fake) Inject(r proc.Request) {
+	if t := f.Thread(r.TID); t != nil {
+		f.mu.Lock()
+		t.busy, t.lastNr = true, r.Nr
+		f.mu.Unlock()
+	}
+	f.reqs <- r
+}
 
 func (f *Fake) Wait(reqs []proc.Request) (int, error) {
 	reqs[0] = <-f.reqs

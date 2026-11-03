@@ -18,21 +18,26 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 9 | `mmap` | partial | W9 | anonymous private memory only (`-ENODEV` for files; `/dev/fb0` in W11); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
 | 11 | `munmap` | done | W9 |  |
 | 12 | `brk` | done | W9 | heap after the highest segment |
-| 13 | `rt_sigaction` | stub | W9 | returns 0; signals arrive in W10-S04 |
-| 14 | `rt_sigprocmask` | stub | W9 | returns 0 |
+| 13 | `rt_sigaction` | done | W10 | `SA_SIGINFO SA_RESTORER SA_RESTART SA_NODEFER SA_RESETHAND`; not `SA_ONSTACK` |
+| 14 | `rt_sigprocmask` | done | W10 | |
+| 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
 | 16 | `ioctl` | stub | W9 | `-ENOTTY` for everything (so musl buffers stdout and flushes at exit); TTY ioctls in W10-S05 |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
 | 32, 33 | `dup` `dup2` | done | W10 |  |
-| 35 | `nanosleep` | partial | W9 | never interrupted (no signals yet) |
+| 34 | `pause` | done | W10 | |
+| 35 | `nanosleep` | partial | W10 | `EINTR` when a signal arrives; the remaining time is not written back |
 | 39 | `getpid` | done | W9 |  |
 | 56 | `clone` | partial | W10 | only the fork shape (exit signal, `CLONE_VFORK`); `CLONE_VM`/threads: W12 (`-ENOSYS`) |
 | 57 | `fork` | partial | W10 | memory copied eagerly (copy-on-write later); descriptors share their open file descriptions |
 | 58 | `vfork` | partial | W10 | a full fork (the parent is not suspended) |
 | 59 | `execve` | partial | W10 | static ELF only (`-ENOEXEC` otherwise, no `#!` scripts yet); descriptors stay open except `FD_CLOEXEC` |
 | 60 | `exit` | partial | W9 | one thread per process, so the same as `exit_group` |
+| 62 | `kill` | done | W10 | pid > 0, 0, -1, < -1; signal 0 checks existence |
 | 61 | `wait4` | partial | W10 | pid > 0, -1, 0, < -1; `WNOHANG`; Linux status words; `rusage` is not filled |
+| 130 | `rt_sigsuspend` | done | W10 | |
+| 131 | `sigaltstack` | stub | W10 | returns 0; handlers always run on the current stack |
 | 63 | `uname` | done | W10 | `Burrow burrow 0.10 x86_64` |
 | 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`, `O_NONBLOCK` stored, not yet honoured); no locks |
 | 79 | `getcwd` | done | W10 |  |
@@ -43,6 +48,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 110 | `getppid` | done | W10 | orphans report 0 (the kernel) until init adopts them (W10-S07) |
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | partial | W9 | = pid (one thread per process) |
+| 200, 234 | `tkill` `tgkill` | done | W10 | tid = pid (one thread per process) |
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
 | 218 | `set_tid_address` | partial | W9 | returns the tid; the clear-on-exit address is ignored (no threads yet) |
 | 228 | `clock_gettime` | partial | W9 | every clock is time since the kernel started (no RTC driver) |
@@ -54,4 +60,6 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |
 
-**Faults.** An exception in ring 3 ends the process with the status a Linux shell would show for the matching signal: 139 (SIGSEGV) for page faults and general protection faults, 132 (SIGILL) for invalid opcodes, 136 (SIGFPE) for divide errors. The kernel logs `pid N (prog) killed: page fault at 0x... (rip 0x...)`. Signal delivery to handlers comes with W10.
+**Signals.** Delivered when a system call returns, or, for a process that is computing, at its next timer tick (the nucleus stops the thread with an interrupt request). Default actions: terminate (status 128 + n in the shell), ignore for `SIGCHLD SIGCONT SIGURG SIGWINCH`; the job-control stops (`SIGSTOP SIGTSTP SIGTTIN SIGTTOU`) are ignored until stopped processes exist. Blocking calls (pipe reads and writes, `wait4`, `nanosleep`, `pause`) return `EINTR`, or start again with `SA_RESTART`. `SIGCHLD` goes to the parent on every exit. `execve` resets caught signals to the default.
+
+**Faults.** An exception in ring 3 becomes `SIGSEGV`, `SIGILL` or `SIGFPE`: delivered to a handler if the process installed one (with `si_addr` set), otherwise the process ends with the status a Linux shell would show: 139 (SIGSEGV) for page faults and general protection faults, 132 (SIGILL) for invalid opcodes, 136 (SIGFPE) for divide errors. The kernel logs `pid N (prog) killed: page fault at 0x... (rip 0x...)`.

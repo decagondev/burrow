@@ -58,7 +58,7 @@ var table = map[uint64]handler{
 	sysWait4: sysWait4Fn, sysGetppid: sysGetppidFn,
 	sysGetpid: pidFn, sysGettid: pidFn, sysSetTidAddress: pidFn, // one thread: tid = pid
 	sysGetuid: zeroFn, sysGetgid: zeroFn, sysGeteuid: zeroFn, sysGetegid: zeroFn, // root
-	sysRtSigaction: zeroFn, sysRtSigprocmask: zeroFn, // accepted; signals come in W10
+
 }
 
 func (p *Process) syscall(nr uint64, a [6]uint64) (int64, bool) {
@@ -238,8 +238,7 @@ func sysNanosleepFn(p *Process, a [6]uint64) (int64, bool) {
 	if sec < 0 || nsec < 0 || nsec >= 1e9 {
 		return ok(-int64(syscall.EINVAL))
 	}
-	time.Sleep(time.Duration(sec)*time.Second + time.Duration(nsec))
-	return ok(0)
+	return ok(p.sleep(time.Duration(sec)*time.Second + time.Duration(nsec)))
 }
 
 func sysGetppidFn(p *Process, _ [6]uint64) (int64, bool) {

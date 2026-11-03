@@ -135,20 +135,17 @@ func (s *System) handle(r Request) {
 		return
 	}
 	switch {
-	case r.Nr == InterruptNr: // stopped for a signal (W10-S04): nothing to do yet
-		s.nu.Reply(r.TID, 0)
+	case r.Nr == InterruptNr: // stopped so that a pending signal can run
+		p.stopped(false, 0, sigInfo{}, 0)
 		return
 	case r.IsFault():
 		sig, what := faultSignal(r.Vector())
-		p.exit(0, sig, fmt.Sprintf("%s at %#x (rip %#x)", what, r.Args[0], r.Args[1]))
+		p.stopped(true, sig, sigInfo{signo: int32(sig), code: siKernel, addr: r.Args[0], what: what}, r.Args[1])
 		return
 	}
 	res, exited := p.syscall(r.Nr, r.Args)
-	if exited {
-		return
-	}
-	if err := s.nu.Reply(r.TID, res); err != nil {
-		s.log.Errorf("pid %d: reply: %v", p.PID, err)
+	if !exited {
+		p.finish(res, r.Nr) // a pending signal runs before the thread returns
 	}
 }
 

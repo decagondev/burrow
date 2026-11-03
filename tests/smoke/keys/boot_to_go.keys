@@ -38,6 +38,8 @@ type run /bin/forktest
 key ret
 type run /bin/fdtest
 key ret
+type run /bin/sigtest
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

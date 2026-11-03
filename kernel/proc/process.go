@@ -39,6 +39,15 @@ type Process struct {
 	reason     string
 	done       chan struct{}
 	sigWake    chan struct{} // closed when a signal is pending (W10-S04)
+
+	// signals (p.mu)
+	actions     [nSig + 1]sigaction
+	info        [nSig + 1]sigInfo
+	sigMask     uint64 // blocked
+	pending     uint64
+	suspendMask uint64 // rt_sigsuspend: the mask to return to
+	suspended   bool
+	exited      bool
 }
 
 // cancel is closed when a signal interrupts p's blocking calls (EINTR).
@@ -84,6 +93,9 @@ func (p *Process) exit(code, sig int, reason string) {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
 	}
 	p.fds.closeAll()
+	p.mu.Lock()
+	p.exited = true
+	p.mu.Unlock()
 	if reason != "" {
 		s.log.Warnf("pid %d (%s) killed: %s", p.PID, path.Base(p.Path), reason)
 	}
@@ -109,6 +121,9 @@ func (p *Process) exit(code, sig int, reason string) {
 	}
 	s.mu.Unlock()
 	close(p.done)
+	if parent != nil {
+		parent.send(sigCHLD, sigInfo{signo: sigCHLD, code: 1 /* CLD_EXITED */, pid: int32(p.PID)})
+	}
 }
 
 // fork: a copy of p (memory, descriptors, registers with RAX = 0) as its child.
@@ -125,6 +140,7 @@ func (p *Process) fork() int64 {
 	c := s.newProcess(p.Path, mem, p.fds.clone())
 	p.mu.Lock()
 	c.brkStart, c.brk, c.mmapNext, c.fs, c.cwd = p.brkStart, p.brk, p.mmapNext, p.fs, p.cwd
+	c.actions, c.sigMask = p.actions, p.sigMask // pending signals are not inherited
 	p.mu.Unlock()
 	c.PPID, c.PGID, c.SID = p.PID, p.PGID, p.SID
 	regs.RAX = 0
@@ -186,7 +202,11 @@ func (p *Process) wait4(pid int64, statusVA, options uint64) int64 {
 		case options&wNoHang != 0:
 			return 0
 		}
-		<-p.childEvent
+		select {
+		case <-p.childEvent:
+		case <-p.cancel():
+			return -int64(syscall.EINTR)
+		}
 	}
 }
 
@@ -227,6 +247,11 @@ func (p *Process) execve(pathVA, argvVA, envpVA uint64) int64 {
 	p.mu.Lock()
 	p.mem, p.Path, p.fs = im.mem, "/"+file, 0
 	p.brkStart, p.brk, p.mmapNext = im.end, im.end, mmapBase
+	for sig := range p.actions { // handlers do not survive the old program; "ignore" does
+		if p.actions[sig].handler != sigIGN {
+			p.actions[sig] = sigaction{}
+		}
+	}
 	p.mu.Unlock()
 	p.fds.closeOnExec()
 	old.Close()

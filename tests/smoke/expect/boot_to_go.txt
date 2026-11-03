@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 7 files, 3 directories
+[initrd] INFO: tarfs: 8 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -77,5 +77,11 @@ fdtest: the pipe carried 18 bytes: hello from ring 3
 fdtest: /tmp/note says: written by fdtest
 fdtest: / holds: bin dev etc mnt tmp
 fdtest: cwd is now /etc
+burrow> run /bin/sigtest
+sigtest: handler saw signal 10
+sigtest: busy child with a SIGINT handler exited with 3
+sigtest: busy child killed by signal 15
+sigtest: read returned -1 (EINTR)
+sigtest: SIGCHLD seen for every child
 burrow> poweroff
 [console] INFO: poweroff

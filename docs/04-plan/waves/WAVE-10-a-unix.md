@@ -18,7 +18,7 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S03 File descriptors and the working directory (E09.F02)
 `dup dup2 dup3 pipe pipe2 fcntl(F_DUPFD, F_GETFD/SETFD, F_GETFL/SETFL)`, `O_CLOEXEC`, `getcwd chdir fchdir`, the `*at` family relative to the cwd, `stat lstat newfstatat getdents64 access`, writable files under `/tmp` (`O_CREAT O_TRUNC O_APPEND`, `unlink`, `mkdir`), `uname`.
 
-### [ ] W10-S04 Signals (E09.F03)
+### [x] W10-S04 Signals (E09.F03)
 `rt_sigaction rt_sigprocmask rt_sigreturn kill tgkill`, default actions (terminate, ignore, stop later), Linux `rt_sigframe` with the FPU state, delivery when a call returns and asynchronously through `nu_uthread_interrupt`, `EINTR` for interrupted blocking calls, `SIGCHLD`, faults as `SIGSEGV`/`SIGILL`/`SIGFPE` to a handler if one is installed.
 
 ### [ ] W10-S05 TTY line discipline (E09.F04)
