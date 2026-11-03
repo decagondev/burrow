@@ -3,7 +3,6 @@ package proc
 import (
 	"path"
 	"sync"
-	"syscall"
 )
 
 // Signal numbers used before W10-S04 brings the rest.
@@ -195,46 +194,20 @@ const (
 // wait4(pid, status, options, rusage): pid > 0 that child, -1 any child,
 // 0 any in our group, < -1 any in group -pid. Blocks unless WNOHANG.
 func (t *Thread) wait4(pid int64, statusVA, options uint64) int64 {
-	p, s := t.p, t.p.sys
-	for {
-		s.mu.Lock()
-		var found *Process
-		any := false
-		for _, c := range p.children {
-			if pid > 0 && int64(c.PID) != pid || pid == 0 && c.PGID != p.PGID || pid < -1 && int64(c.PGID) != -pid {
-				continue
-			}
-			any = true
-			if c.zombie {
-				found = c
-				break
-			}
-		}
-		if found != nil {
-			delete(p.children, found.PID)
-			delete(s.byPID, found.PID)
-		}
-		s.mu.Unlock()
-		switch {
-		case found != nil:
-			if statusVA != 0 {
-				var b [4]byte
-				st := found.waitStatus()
-				b[0], b[1] = byte(st), byte(st>>8)
-				if err := p.mem.CopyOut(statusVA, b[:]); err != nil {
-					return errno(err)
-				}
-			}
-			return int64(found.PID)
-		case !any:
-			return -int64(syscall.ECHILD)
-		case options&wNoHang != 0:
-			return 0
-		}
-		select {
-		case <-p.childEvent:
-		case <-t.cancel():
-			return -int64(syscall.EINTR)
+	p := t.p
+	found, e := t.waitChild(func(c *Process) bool {
+		return !(pid > 0 && int64(c.PID) != pid || pid == 0 && c.PGID != p.PGID || pid < -1 && int64(c.PGID) != -pid)
+	}, options&wNoHang != 0, false)
+	if found == nil {
+		return e // -ECHILD, -EINTR, or 0 for WNOHANG
+	}
+	if statusVA != 0 {
+		var b [4]byte
+		st := found.waitStatus()
+		b[0], b[1] = byte(st), byte(st>>8)
+		if err := p.mem.CopyOut(statusVA, b[:]); err != nil {
+			return errno(err)
 		}
 	}
+	return int64(found.PID)
 }

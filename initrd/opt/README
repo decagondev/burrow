@@ -1,0 +1,3 @@
+Disks mount here. /opt/qt is the Qt data disk (label QTDATA, W15): Qt
+programs in bin/, the DejaVu fonts in fonts/, and qt.env, the environment
+the console gives every program once the disk is mounted.

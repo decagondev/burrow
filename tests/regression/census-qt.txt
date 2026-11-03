@@ -37,6 +37,11 @@ set_tid_address 218
 stat 4
 write 1
 writev 20
+# QProcess (W15-S02): the pipes, the child's descriptors, waiting for it.
+dup2 33
+pipe2 293
+rt_sigaction 13
+waitid 247
 # Not seen by strace: musl reads these through Linux's vDSO, which Burrow has not,
 # so on Burrow they are real system calls.
 clock_gettime 228 # vdso

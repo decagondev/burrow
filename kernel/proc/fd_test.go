@@ -293,3 +293,15 @@ func TestRenameFsyncChmod(t *testing.T) {
 		t.Errorf("chmod of a missing file = %d", e)
 	}
 }
+
+// BUG-0016: FIONREAD on a pipe says how many bytes wait (QProcess reads
+// that many; without it Qt read one byte of a child's output).
+func TestBUG0016PipeFIONREAD(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	r.call(p, 22, scratch) // 3 reads, 4 writes
+	r.call(p, 1, 4, r.str(p, scratch+64, "hello pipe"), 10)
+	if e := r.call(p, 16, 3, 0x541B, scratch+128); e != 0 || le.Uint32(read(p, scratch+128, 4)) != 10 {
+		t.Errorf("FIONREAD = %d, %d bytes", e, le.Uint32(read(p, scratch+128, 4)))
+	}
+}

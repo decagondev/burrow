@@ -50,6 +50,7 @@ type kernel struct {
 	procs   *proc.System
 	tty     *tty.TTY  // the terminal user programs read and write
 	input   chan byte // keyboard and serial bytes
+	env     []string  // added to every program's environment (a Qt disk's qt.env)
 	con     *console.Console
 }
 

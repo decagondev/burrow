@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15-S02 QtCore on Burrow
+
+**Did:** a Qt data disk: `build/qt-root` as FAT32 with label `QTDATA`, which the kernel mounts at `/opt/qt`, adding its `qt.env` to every program's environment. `qthello`, a 7.6 MB static-PIE Qt program, runs from that FAT mount: signals across a `QThread`, timers on the event loop (eventfd and ppoll), `QFile`, `QDir`, `QRandomGenerator`, the RTC's date, and a `QProcess` that forks and execs `/bin/echo` and reads its output. `make qt-smoke` checks it and joins `make test` (it skips without `make qt`). Burrow gained `waitid`, which QProcess reaps with.
+
+**Surprise:** BUG-0016. Every check passed on the first boot except QProcess, which got "h" from a child that wrote a whole line: Qt sizes its pipe reads with `ioctl(FIONREAD)`, Burrow's pipes answered `ENOTTY`, and Qt then reads one byte. Nothing was logged, because `ioctl` is implemented; the census counts system calls, and an ioctl request is invisible to it.
+
+**Next:** W15-S03, `qtwindow` on `/dev/fb0` through linuxfb.
+
 ## 2026-11-03 — W15-S01 Qt on Linux first
 
 **Did:** `scripts/qt.sh` (`make qt`) fetches qtbase 6.12.0, its security diff and the DejaVu fonts (all sha256-pinned), builds Qt for the host (the tools a cross build runs) and then statically for Burrow with the musl toolchain the ports already use: Widgets, linuxfb and evdev, with FreeType, HarfBuzz, PCRE2 and libpng bundled and fontconfig, udev, libinput, D-Bus, OpenGL and ICU switched off. `user/qt` has `qthello` (QtCore: moc, a queued signal across a `QThread`, timers, `QFile`) and `qtwindow` (a `QRasterWindow` with rectangles and DejaVu text), both static-PIE; both run on Linux, `qtwindow` through the offscreen platform into a PNG. The census, like W6's for Go, ran both under strace.

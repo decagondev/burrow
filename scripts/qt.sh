@@ -122,4 +122,5 @@ for app in qthello qtwindow; do
   echo "qt: $app ($(du -h "$OUT/bin/$app" | cut -f1)) -> $OUT/bin/$app"
 done
 cp "$CACHE/src/dejavu-fonts-ttf-$DEJAVU_VERSION/ttf/"{DejaVuSans.ttf,DejaVuSansMono.ttf} "$OUT/fonts/"
+cp "$ROOT/user/qt/qt.env" "$OUT/qt.env"
 echo "qt: fonts -> $OUT/fonts"

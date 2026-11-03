@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"encoding/binary"
 	"io"
 	"io/fs"
 	"sync"
@@ -150,6 +151,20 @@ func (e *pipeEnd) Poll() (int16, <-chan struct{}) {
 		rev |= pollHup
 	}
 	return rev, p.changed
+}
+
+// Ioctl: FIONREAD is the bytes buffered (BUG-0016: Qt's QProcess reads
+// that many from a child's pipe, and read one byte at a time without it).
+func (e *pipeEnd) Ioctl(req, arg uint64, _, out func(va uint64, b []byte) error) (int64, error) {
+	if req != fionread {
+		return 0, syscall.ENOTTY
+	}
+	e.p.mu.Lock()
+	n := len(e.p.buf)
+	e.p.mu.Unlock()
+	var b [4]byte
+	binary.LittleEndian.PutUint32(b[:], uint32(n))
+	return 0, out(arg, b[:])
 }
 
 func (e *pipeEnd) Stat() (fs.FileInfo, error) { return pipeInfo{}, nil }

@@ -1,0 +1,10 @@
+# Qt on Burrow (W15), typed into the Go kernel's console on go.img with the
+# Qt data disk (qt-data.img, mounted at /opt/qt). S02: QtCore from a FAT
+# mount: threads, timers, files, QProcess.
+wait burrow>
+type run /opt/qt/bin/qthello
+key ret
+wait qthello:
+wait burrow>
+type poweroff
+key ret

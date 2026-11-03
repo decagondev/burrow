@@ -27,7 +27,10 @@ run() { # label, then the command
   strace -f -qq -o "$B/census-qt-$label.strace" "$@" > "$B/census-qt-$label.out" 2>&1 ||
     { echo "QT CENSUS FAIL: $label exited with an error:"; cat "$B/census-qt-$label.out"; exit 1; }
 }
-run hello "$QT/bin/qthello"
+# The child QProcess starts is Burrow's own static echo, not the host's
+# glibc one, whose calls would say nothing about Qt.
+[ -x "$B/user/echo" ] || { echo "QT CENSUS FAIL: $B/user/echo is missing (make go-smoke builds it)"; exit 1; }
+QTHELLO_ECHO="$B/user/echo" run hello "$QT/bin/qthello"
 export QT_QPA_PLATFORM=offscreen QT_QPA_FONTDIR="$QT/fonts" XDG_RUNTIME_DIR="$B/qt-run"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 run png "$QT/bin/qtwindow" --png "$B/qtwindow.png"

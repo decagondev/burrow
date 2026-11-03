@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0016: QProcess read a child's output one byte at a time
+- Found: 2026-11-03, W15-S02: `qthello`'s QProcess check got "h" instead of "hello from a child" on Burrow; on Linux the same binary passed.
+- Severity: minor (since W10: any program that sized its reads with `FIONREAD` on a pipe got `-ENOTTY`).
+- Symptom: `QProcess::readAllStandardOutput` returned the first byte only; nothing was logged, as `ioctl` itself is implemented.
+- Root cause: `ioctl(FIONREAD)` was answered for the terminal and sockets but not pipes, which fell through to `-ENOTTY`. Qt's QProcess reads as many bytes as `FIONREAD` reports and, when it fails, one.
+- Fix: pipe ends implement `Ioctler` with `FIONREAD` (the bytes buffered).
+- Mitigation: none general: the Qt census counts system calls, not ioctl requests, so it could not see this; `qthello` now prints what QProcess got when its check fails.
+- Regression: `TestBUG0016PipeFIONREAD` in `kernel/proc/fd_test.go`; `qthello: process ok` in `tests/smoke/expect/qt.txt`.
+- Lesson: a syscall census sees `ioctl` as one call; the requests behind it are their own interface and need their own list.
+
 ### BUG-0015: A write to a pipe with no reader never raised SIGPIPE
 - Found: 2026-11-03, W14-S06: planning sockets "with EPIPE and SIGPIPE like pipes" showed that pipes had only the EPIPE half.
 - Severity: minor (since W10: a writer got `-EPIPE` and had to notice; `yes | head` style pipelines left the writer running until it checked its errors).

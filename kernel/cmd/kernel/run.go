@@ -17,7 +17,7 @@ func runProgram(k *kernel, args []string, out io.Writer) {
 		fmt.Fprintln(out, "usage: run <program> [args...]")
 		return
 	}
-	env := []string{"PATH=/bin", "HOME=/", "TERM=dumb"}
+	env := append([]string{"PATH=/bin", "HOME=/", "TERM=dumb"}, k.env...)
 	p, err := k.procs.Spawn(vfs.Clean(args[0]), args, env)
 	if err != nil {
 		fmt.Fprintf(out, "run: %s: %v\n", args[0], err)

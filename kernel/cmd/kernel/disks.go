@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
+	"strings"
 
 	"burrow/kernel/block"
 	"burrow/kernel/fs/fat"
@@ -44,8 +47,14 @@ func listDisks(out io.Writer) {
 }
 
 // homeLabel marks a FAT volume as the user's home (W13-S05): it mounts at
-// /home instead of /mnt. make run-dev attaches such a disk.
-const homeLabel = "BURROWHOME"
+// /home instead of /mnt. make run-dev attaches such a disk. qtLabel marks
+// the Qt data disk (W15-S02): it mounts at /opt/qt, and its qt.env joins
+// the environment of every program the console runs.
+const (
+	homeLabel = "BURROWHOME"
+	qtLabel   = "QTDATA"
+	qtEnvFile = "opt/qt/qt.env"
+)
 
 // mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07),
 // read-write when the disk can be written (W13-S04), at /home when its
@@ -69,14 +78,38 @@ func (k *kernel) mountData(log *klog.Logger) {
 		return
 	}
 	point := "mnt"
-	if fsys.Label == homeLabel {
+	switch fsys.Label {
+	case homeLabel:
 		point = "home"
+	case qtLabel:
+		point = "opt/qt"
 	}
 	if err := k.fs.Mount(point, fsys, "fat32"); err != nil {
 		log.Errorf("mount /%s: %v", point, err)
 		return
 	}
 	log.Infof("hdb: FAT32 volume %q mounted at /%s (%s)", fsys.Label, point, mode)
+	if point == "opt/qt" {
+		k.env = readEnv(k.fs, qtEnvFile)
+		log.Infof("%s: %d variables for every program", qtEnvFile, len(k.env))
+	}
+}
+
+// readEnv reads KEY=VALUE lines (blank lines and # comments skipped).
+func readEnv(fsys fs.FS, name string) []string {
+	data, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return nil
+	}
+	var env []string
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
+			env = append(env, line)
+		}
+	}
+	return env
 }
 
 // fatDisk is a block.Writer as the fat.Disk a writable mount needs.

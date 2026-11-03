@@ -14,7 +14,7 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + census + fat-interop + smoke + go-smoke + devices-smoke + disk-smoke + ports-smoke + mem-smoke + desk-smoke + ports-dl-smoke + dev-smoke + doom-smoke + busybox-smoke + ktest + regress (full suite)
+make test         # test-unit + census + fat-interop + smoke + go-smoke + devices-smoke + disk-smoke + ports-smoke + mem-smoke + desk-smoke + ports-dl-smoke + dev-smoke + doom-smoke + busybox-smoke + qt-smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
@@ -40,6 +40,7 @@ make ports-dl-smoke # Lua, cxxtest, tcc on go-ports.img (part of make test; skip
 make busybox      # download (once, sha256-pinned, ~/.cache/burrow-busybox) and build build/busybox
 make qt           # download (once, pinned, ~/.cache/burrow-qt) qtbase 6.12.0 + DejaVu; build host Qt, static musl Qt, user/qt into build/qt-root (long; needs make ports)
 make qt-census    # Qt programs under strace on the host vs tests/regression/census-qt.txt (kernel/proc TestCensusQt checks each call is served)
+make qt-smoke     # Qt on Burrow: go.img + qt-data.img (QTDATA, at /opt/qt; its qt.env joins every program's environment) (part of make test; skips without make qt)
 make busybox-smoke # busybox ash typed on build/go-busybox.img (part of make test; skips without build/busybox)
 # user/*.c are built with musl-gcc (musl-tools); MUSL_GCC=/path/to/musl-gcc overrides it
 make regress      # boot deliberately broken images, assert they fail loudly

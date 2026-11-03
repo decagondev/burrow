@@ -5,7 +5,7 @@ BusyBox v1.36.1
 # echo $((6*7)) from busybox
 42 from busybox
 # ls / | wc -l
-5
+6
 # seq 5 | sort -r | head -n 2
 5
 4

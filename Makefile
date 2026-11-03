@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-smoke qt-smoke-run ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -236,7 +236,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -333,6 +333,19 @@ qt: | $(BUILD)
 	scripts/qt.sh $(BUILD)/qt-root
 qt-census:
 	tests/regression/census-qt.sh $(BUILD)
+
+# The Qt data disk (W15-S02): build/qt-root as FAT32, label QTDATA, the
+# primary slave, mounted at /opt/qt (qt.env joins every program's
+# environment). qt-smoke runs on go.img with it; it skips without make qt.
+QT_DRIVE := -drive file=$(BUILD)/qt-data.img,format=raw,if=ide,index=1,media=disk
+$(BUILD)/qt-data.img: $(BUILD)/qt-root/bin/qthello user/qt/qt.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	cp user/qt/qt.env $(BUILD)/qt-root/qt.env
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label qtdata -size 64 ../$(BUILD)/qt-root
+qt-smoke:
+	@if [ -f $(BUILD)/qt-root/bin/qthello ]; then $(MAKE) --no-print-directory qt-smoke-run; \
+	else echo "QT SMOKE SKIP (make qt builds Qt)"; fi
+qt-smoke-run: $(BUILD)/go.img $(BUILD)/qt-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(QT_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/qt.txt 120 tests/smoke/keys/qt.keys
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds

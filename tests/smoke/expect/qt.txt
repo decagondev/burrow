@@ -1,0 +1,15 @@
+# Ordered markers for Qt on Burrow (W15, tests/smoke/keys/qt.keys). Append-only.
+mounted at /opt/qt
+opt/qt/qt.env: 5 variables for every program
+burrow> run /opt/qt/bin/qthello
+qthello: Qt 6.12.0
+qthello: file ok
+qthello: random ok
+qthello: clock ok
+qthello: dir ok
+qthello: process ok
+qthello: thread ok
+qthello: timer ok
+qthello: ok
+[qt] core ok
+burrow> poweroff
