@@ -23,6 +23,7 @@ type Console struct {
 	in       <-chan byte
 	commands map[string]Command
 	ed       Editor
+	unread   []byte // input handed back (Unread), read before In
 }
 
 // New makes a console with the built-in commands help and echo; the kernel
@@ -42,7 +43,16 @@ func (c *Console) Add(cmd Command) { c.commands[cmd.Name] = cmd }
 // Run serves the console until In is closed.
 func (c *Console) Run() {
 	io.WriteString(c.out, Prompt)
-	for b := range c.in {
+	for {
+		var b byte
+		if len(c.unread) > 0 {
+			b, c.unread = c.unread[0], c.unread[1:]
+		} else {
+			var open bool
+			if b, open = <-c.in; !open {
+				return
+			}
+		}
 		echo, line, done := c.ed.Feed(b)
 		c.out.Write(echo)
 		if done {
@@ -51,6 +61,11 @@ func (c *Console) Run() {
 		}
 	}
 }
+
+// Unread hands input back to the console: it is read before anything new
+// (keys typed while a program ran that the program never read). Only from
+// a command (the console's own goroutine).
+func (c *Console) Unread(b []byte) { c.unread = append(append([]byte(nil), b...), c.unread...) }
 
 // Exec runs one line: the first word names the command.
 func (c *Console) Exec(line string) {

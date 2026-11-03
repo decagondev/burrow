@@ -51,7 +51,7 @@ func ok(r int64) (int64, bool) { return r, false }
 var table = map[uint64]handler{
 	sysRead: sysReadFn, sysWrite: sysWriteFn, sysOpen: sysOpenFn, sysClose: sysCloseFn,
 	sysFstat: sysFstatFn, sysLseek: sysLseekFn, sysMmap: sysMmapFn, sysMunmap: sysMunmapFn,
-	sysBrk: sysBrkFn, sysIoctl: sysIoctlFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
+	sysBrk: sysBrkFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
 	sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
 	sysExit: sysExitFn, sysExitGroup: sysExitFn,
 	sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
@@ -178,15 +178,6 @@ func sysLseekFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(errno(err))
 	}
 	return ok(off)
-}
-
-// ioctl: no TTY until W10, so TCGETS and TIOCGWINSZ say "not a terminal"
-// (musl then buffers stdout fully and flushes at exit).
-func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
-	if p.fds.get(a[0]) == nil {
-		return ok(-int64(syscall.EBADF))
-	}
-	return ok(-int64(syscall.ENOTTY))
 }
 
 const (

@@ -8,7 +8,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 
 | Nr | Call | Status | Since | Notes |
 |---|---|---|---|---|
-| 0 | `read` | partial | W9 | files, pipes (blocking, `EINTR` with signals), devices; fds 0-2 read the console (TTY: W10-S05) |
+| 0 | `read` | done | W9 | files, pipes and the terminal (blocking, `EINTR` with signals), devices |
 | 1 | `write` | partial | W9 | console, pipes (`EPIPE`), devices, writable files under `/tmp` (written back whole on every write) |
 | 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC`; writes only where the mount is writable (`/tmp`: `-EACCES` on the read-only root) |
 | 3 | `close` | done | W9 |  |
@@ -21,7 +21,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 13 | `rt_sigaction` | done | W10 | `SA_SIGINFO SA_RESTORER SA_RESTART SA_NODEFER SA_RESETHAND`; not `SA_ONSTACK` |
 | 14 | `rt_sigprocmask` | done | W10 | |
 | 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
-| 16 | `ioctl` | stub | W9 | `-ENOTTY` for everything (so musl buffers stdout and flushes at exit); TTY ioctls in W10-S05 |
+| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; anything else `-ENOTTY` |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
@@ -45,6 +45,9 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |
 | 87 | `unlink` | done | W10 | `-EISDIR` for directories |
 | 102, 104, 107, 108 | `getuid` `getgid` `geteuid` `getegid` | partial | W9 | everyone is root (0) |
+| 109 | `setpgid` | done | W10 | self or a child in the same session |
+| 111, 121 | `getpgrp` `getpgid` | done | W10 | |
+| 112, 124 | `setsid` `getsid` | done | W10 | |
 | 110 | `getppid` | done | W10 | orphans report 0 (the kernel) until init adopts them (W10-S07) |
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | partial | W9 | = pid (one thread per process) |
@@ -59,6 +62,8 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 269, 439 | `faccessat` `faccessat2` | partial | W10 | existence only |
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |
+
+**Terminal.** fds 0-2 of a program are the console terminal (`kernel/tty`): canonical mode with echo, erase (DEL, `^H`), kill (`^U`), end of file (`^D`); `ICRNL`; raw mode through `TCSETS` (a half-typed line becomes input). `^C`, `^\` and `^Z` send `SIGINT`, `SIGQUIT` and `SIGTSTP` to the foreground process group (the console's `run` gives it the program's group). Output is not post-processed (the console already turns `\n` into `\r\n`).
 
 **Signals.** Delivered when a system call returns, or, for a process that is computing, at its next timer tick (the nucleus stops the thread with an interrupt request). Default actions: terminate (status 128 + n in the shell), ignore for `SIGCHLD SIGCONT SIGURG SIGWINCH`; the job-control stops (`SIGSTOP SIGTSTP SIGTTIN SIGTTOU`) are ignored until stopped processes exist. Blocking calls (pipe reads and writes, `wait4`, `nanosleep`, `pause`) return `EINTR`, or start again with `SA_RESTART`. `SIGCHLD` goes to the parent on every exit. `execve` resets caught signals to the default.
 

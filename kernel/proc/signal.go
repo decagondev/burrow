@@ -346,7 +346,23 @@ func (s *System) kill(from *Process, pid int64, sig int) int64 {
 	return 0
 }
 
-// Kill is the kernel's own kill (the TTY's ^C, the console).
+// KillGroup signals every process in group pgrp (the TTY's ^C). Not
+// Kill(-pgrp): for group 1 that would be kill(-1), "everyone".
+func (s *System) KillGroup(pgrp, sig int) {
+	s.mu.Lock()
+	var targets []*Process
+	for _, t := range s.byPID {
+		if !t.zombie && t.PGID == pgrp {
+			targets = append(targets, t)
+		}
+	}
+	s.mu.Unlock()
+	for _, t := range targets {
+		t.send(sig, sigInfo{signo: int32(sig), code: siKernel})
+	}
+}
+
+// Kill is the kernel's own kill (the console).
 func (s *System) Kill(pid int64, sig int) error {
 	if r := s.kill(nil, pid, sig); r < 0 {
 		return syscall.Errno(-r)

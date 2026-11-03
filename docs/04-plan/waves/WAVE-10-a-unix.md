@@ -21,7 +21,7 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S04 Signals (E09.F03)
 `rt_sigaction rt_sigprocmask rt_sigreturn kill tgkill`, default actions (terminate, ignore, stop later), Linux `rt_sigframe` with the FPU state, delivery when a call returns and asynchronously through `nu_uthread_interrupt`, `EINTR` for interrupted blocking calls, `SIGCHLD`, faults as `SIGSEGV`/`SIGILL`/`SIGFPE` to a handler if one is installed.
 
-### [ ] W10-S05 TTY line discipline (E09.F04)
+### [x] W10-S05 TTY line discipline (E09.F04)
 `kernel/tty`: canonical mode (echo, erase, kill, `^D`), `^C`/`^\` to the foreground process group, raw mode through `termios` (`TCGETS TCSETS* TIOCGWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY`), `setpgid getpgid setsid getsid`. The console's `sh` command gives the terminal to a shell until it exits.
 
 ### [ ] W10-S06 Userland: sh and tools (E09.F05)

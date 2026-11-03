@@ -40,6 +40,15 @@ type run /bin/fdtest
 key ret
 type run /bin/sigtest
 key ret
+type run /bin/ttytest
+key ret
+wait type a line
+type hello tty
+key ret
+type run /bin/spin
+key ret
+wait spin: spinning
+key ctrl-c
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

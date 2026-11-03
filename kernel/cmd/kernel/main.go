@@ -34,6 +34,7 @@ import (
 	"burrow/kernel/klog"
 	"burrow/kernel/proc"
 	"burrow/kernel/selftest"
+	"burrow/kernel/tty"
 	"burrow/kernel/vfs"
 )
 
@@ -44,6 +45,9 @@ type kernel struct {
 	modules []bootinfo.Module
 	fs      *vfs.VFS
 	procs   *proc.System
+	tty     *tty.TTY  // the terminal user programs read and write
+	input   chan byte // keyboard and serial bytes
+	con     *console.Console
 }
 
 func main() {
@@ -92,12 +96,17 @@ func main() {
 	checkBootDisk(log.With("block"))
 	k.mountData(log.With("fat"))
 
+	rows, cols := 25, 80
 	if screen := startScreen(); screen != nil {
 		out.Add(screen) // the console on serial and on screen
+		cols, rows = screen.Size()
 	}
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
+	k.tty, k.input = tty.New(out, rows, cols), input
+	k.procs.SetTerminal(k.tty)
 	go k.procs.Serve() // the one dispatcher for every user syscall (W9)
 	con := console.New(out, input)
+	k.con = con
 	addCommands(con, k)
 	log.With("console").Infof("ready: type on the keyboard or the serial line (help lists commands)")
 	con.Run()

@@ -47,7 +47,7 @@ func (c *consoleOut) Write(p []byte) (int, error) {
 
 // startScreen draws the splash and returns the on-screen console, or nil
 // when there is no framebuffer (the console then stays serial-only).
-func startScreen() io.Writer {
+func startScreen() *gfx.Console {
 	fb := bga.Screen()
 	if fb == nil {
 		return nil

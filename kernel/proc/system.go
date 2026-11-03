@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"burrow/kernel/klog"
+	"burrow/kernel/tty"
 )
 
 // System is the set of processes and the one dispatcher that serves their
@@ -25,6 +26,7 @@ type System struct {
 	byPID    map[int]*Process    // live processes and zombies
 	nextPID  int
 	reported map[uint64]bool // unknown syscall numbers already logged
+	tty      *tty.TTY        // the controlling terminal (SetTerminal), or nil
 }
 
 // NewSystem: programs are read from files; fds 0-2 are the console.
@@ -80,7 +82,7 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := s.newProcess("/"+file, im.mem, newFDTable(s.console))
+	p := s.newProcess("/"+file, im.mem, s.stdio())
 	p.brkStart, p.brk = im.end, im.end
 	p.PGID, p.SID = p.PID, p.PID
 	s.mu.Lock() // registered before it can make its first call

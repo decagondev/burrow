@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 8 files, 3 directories
+[initrd] INFO: tarfs: 10 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -83,5 +83,13 @@ sigtest: busy child with a SIGINT handler exited with 3
 sigtest: busy child killed by signal 15
 sigtest: read returned -1 (EINTR)
 sigtest: SIGCHLD seen for every child
+burrow> run /bin/ttytest
+ttytest: stdin is a terminal of 85x33; type a line
+hello tty
+ttytest: you typed: HELLO TTY
+burrow> run /bin/spin
+spin: spinning until ^C
+^C
+run: /bin/spin: killed by signal 2
 burrow> poweroff
 [console] INFO: poweroff
