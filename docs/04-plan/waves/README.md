@@ -18,6 +18,8 @@
 | W13 | A workbench | M13 | done | [WAVE-13](WAVE-13-workbench.md) |
 | W14 | Desktop groundwork | M14 | done | [WAVE-14](WAVE-14-desktop-groundwork.md) |
 | W15 | Qt on the framebuffer | M15 | done | [WAVE-15](WAVE-15-qt.md) |
+| W16 | An X11 desktop | M16 | planned | [WAVE-16](WAVE-16-x11-desktop.md) |
+| W17 | Networking | M17 | planned | [WAVE-17](WAVE-17-networking.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 
