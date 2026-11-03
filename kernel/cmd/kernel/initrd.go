@@ -25,6 +25,9 @@ func (k *kernel) mountFiles(console io.Writer) *devfs.FS {
 	dev.Register("console", devfs.WriteOnly{Writer: console}, 0o620)
 	dev.Register("random", random.Kernel, 0o666) // W14-S03: not for cryptography
 	dev.Register("urandom", random.Kernel, 0o666)
+	for _, name := range []string{"tty", "tty0", "tty1"} { // listed here; proc opens the terminal (W14-S08)
+		dev.Register(name, devfs.WriteOnly{Writer: console}, 0o620)
+	}
 	k.fs.Mount(".", mountInitrd(k.modules, k.log.With("initrd")), "tarfs")
 	k.fs.Mount("tmp", memfs.New(), "ramfs")
 	k.fs.Mount("dev", dev, "devfs")

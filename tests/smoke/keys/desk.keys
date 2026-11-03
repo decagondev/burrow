@@ -1,0 +1,59 @@
+# The M14 demo (W14-S08): the desktop groundwork on one boot. The start-up
+# calls, file mappings and sockets, the mouse, and paint, which takes the
+# screen as an X server would (KD_GRAPHICS, K_OFF), draws a stroke with a
+# drag, and gives the screen back; then paint crashes with the screen taken
+# and the kernel gives it back by itself.
+wait burrow>
+type run /bin/startup
+key ret
+wait startup: ok
+wait burrow>
+type run /bin/mmaptest /bin/sh /mnt/hello.txt
+key ret
+wait mmaptest: ok
+wait burrow>
+type run /bin/socktest
+key ret
+wait socktest: ok
+wait burrow>
+type run /bin/socknames
+key ret
+wait socknames: ok
+wait burrow>
+type run /bin/mousetest
+key ret
+wait right click ends
+mouse 100 50
+click left
+wait left down at
+click right
+wait mousetest: done
+wait burrow>
+# paint: the cursor starts at (512,384). Up to the red swatch (96,32) and
+# click (the colour comes from paint's palette process over /tmp/paint.sock);
+# down to (96,332), then drag right to (496,332).
+type run /bin/paint
+key ret
+wait paint: ready
+mouse -416 -352
+click left
+mouse 0 300
+press left
+mouse 200 0
+mouse 200 0
+release left
+sleep 1
+screendump build/screen-desk-paint.ppm
+key esc
+wait paint: 1 strokes, last colour ff0000
+wait burrow>
+sleep 1
+screendump build/screen-desk-back.ppm
+type run /bin/paint crash
+key ret
+wait paint: crashing
+wait burrow>
+sleep 1
+screendump build/screen-desk-crash.ppm
+type poweroff
+key ret

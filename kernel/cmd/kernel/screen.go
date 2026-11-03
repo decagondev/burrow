@@ -65,12 +65,14 @@ func startScreen() *gfx.Console {
 }
 
 // screenOut is the on-screen console. It stands aside while a program
-// holds /dev/fb0 (W11-S01), leaving it a black screen, and, when the last
-// one lets go, repaints the splash and starts a fresh console.
+// holds /dev/fb0 (W11-S01) or has set KD_GRAPHICS (W14-S08), leaving it a
+// black screen, and, when both let go, repaints the splash and starts a
+// fresh console.
 type screenOut struct {
-	mu   sync.Mutex
-	con  *gfx.Console
-	held bool
+	mu           sync.Mutex
+	con          *gfx.Console
+	fb, graphics bool
+	held         bool
 }
 
 func (s *screenOut) Write(p []byte) (int, error) {
@@ -82,9 +84,19 @@ func (s *screenOut) Write(p []byte) (int, error) {
 	return s.con.Write(p)
 }
 
-func (s *screenOut) hold(held bool) {
+func (s *screenOut) hold(fb bool) { s.set(func() { s.fb = fb }) }
+
+func (s *screenOut) holdGraphics(g bool) { s.set(func() { s.graphics = g }) }
+
+// set changes a reason to stand aside and acts when the result changes.
+func (s *screenOut) set(change func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	change()
+	held := s.fb || s.graphics
+	if held == s.held {
+		return
+	}
 	s.held = held
 	if fb := bga.Screen(); held && fb != nil {
 		fb.Fill(image.Rect(0, 0, fb.Width, fb.Height), gfx.RGB(0, 0, 0)) // a blank screen for the program

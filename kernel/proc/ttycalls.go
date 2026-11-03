@@ -151,6 +151,9 @@ func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
 	case tiocsctty, tiocnotty:
 		return ok(0) // one terminal, everyone's controlling terminal
 	}
+	if r, handled := p.vtIoctl(a[1], a[2]); handled {
+		return ok(r)
+	}
 	return ok(-int64(syscall.EINVAL))
 }
 

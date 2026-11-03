@@ -1,0 +1,20 @@
+# Pixels of the M14 demo (tests/smoke/keys/desk.keys). Append-only.
+# paint: the palette along the top (black, then red), the white canvas, and
+# a red 5-pixel stroke along y=332 from x=96 to x=496.
+size  build/screen-desk-paint.ppm 1024 768
+pixel build/screen-desk-paint.ppm 32 32 #000000
+pixel build/screen-desk-paint.ppm 96 32 #ff0000
+pixel build/screen-desk-paint.ppm 1000 700 #ffffff
+pixel build/screen-desk-paint.ppm 100 332 #ff0000
+pixel build/screen-desk-paint.ppm 300 334 #ff0000
+pixel build/screen-desk-paint.ppm 490 330 #ff0000
+pixel build/screen-desk-paint.ppm 300 340 #ffffff
+pixel build/screen-desk-paint.ppm 600 332 #ffffff
+# After Esc: KD_TEXT, and the console repainted its band and paper.
+size  build/screen-desk-back.ppm 1024 768
+pixel build/screen-desk-back.ppm 0 2 #007d9c
+pixel build/screen-desk-back.ppm 1022 700 #1e1e28
+# After "paint crash" died with the screen taken: the kernel gave it back.
+size  build/screen-desk-crash.ppm 1024 768
+pixel build/screen-desk-crash.ppm 0 2 #007d9c
+pixel build/screen-desk-crash.ppm 1022 700 #1e1e28

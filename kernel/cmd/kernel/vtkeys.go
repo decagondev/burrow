@@ -1,0 +1,35 @@
+//go:build burrow
+
+package main
+
+// vtkeys.go - the console terminal's keyboard mode on the way from the
+// PS/2 driver (W14-S08): every scancode still reaches evdev; in K_XLATE
+// the console translates it as before, in K_RAW and K_MEDIUMRAW the
+// terminal gets scancodes or key codes instead, in K_OFF it goes nowhere
+// else. Runs on the keyboard's IRQ goroutine: no allocation beyond what
+// vt.Key returns, never blocks. Docs: docs/04-plan/waves/WAVE-14-desktop-groundwork.md.
+
+import (
+	"sync/atomic"
+
+	"burrow/kernel/tty"
+	"burrow/kernel/vt"
+)
+
+type vtKeys struct {
+	vt    *vt.VT
+	evdev func(byte) bool         // evdev's Feed: true while a reader grabs the keyboard
+	term  atomic.Pointer[tty.TTY] // set once the terminal exists
+}
+
+// Feed is driver.Env.Scancodes: true means the console must not type it.
+func (k *vtKeys) Feed(sc byte) bool {
+	grabbed := k.evdev(sc)
+	console, raw := k.vt.Key(sc)
+	if t := k.term.Load(); t != nil {
+		for _, b := range raw {
+			t.Input(b)
+		}
+	}
+	return grabbed || !console
+}

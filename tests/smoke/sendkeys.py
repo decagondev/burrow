@@ -15,6 +15,7 @@ The keys file is a small script, one step per line ('#' comments):
                    guest that shows progress only on screen, without a race
     mouse <dx> <dy> move the PS/2 mouse (screen directions: dy > 0 is down)
     click <button>  press and release left, right or middle
+    press <button>  hold that button down (mouse steps then drag); release <button> lets go
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -137,6 +138,10 @@ def main():
                 for state in (BUTTONS[arg], 0):
                     s.sendall(f'mouse_button {state}\n'.encode())
                     time.sleep(0.1)
+            elif op in ('press', 'release'):   # hold a button across mouse steps (a drag)
+                state = BUTTONS[arg] if op == 'press' else 0
+                s.sendall(f'mouse_button {state}\n'.encode())
+                time.sleep(0.1)
             elif op == 'sleep':
                 time.sleep(float(arg))
             elif op == 'screendump':

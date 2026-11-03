@@ -11,6 +11,7 @@ import (
 
 	"burrow/kernel/klog"
 	"burrow/kernel/tty"
+	"burrow/kernel/vt"
 )
 
 // System is the set of processes and the one dispatcher that serves their
@@ -30,6 +31,7 @@ type System struct {
 	nextPID  int                // pids and tids share one number space
 	reported map[uint64]bool    // unknown syscall numbers already logged
 	tty      *tty.TTY           // the controlling terminal (SetTerminal), or nil
+	vt       *vt.VT             // its keyboard and display modes (SetVT), or nil
 	init     *Process           // pid 1 (kernel-side, no thread)
 
 	futexMu sync.Mutex

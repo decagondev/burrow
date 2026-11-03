@@ -123,14 +123,14 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 ## E14 Desktop Groundwork
 *Exit: graphical programs find the kernel interfaces they expect below a toolkit.* [W14]
-- [ ] E14.F01 As a user, I want more than 128 MiB of RAM, so that toolkits and their fonts fit.
-- [ ] E14.F02 As a user, I want a mouse (`/dev/input/event1`, `/dev/input/mice`), so that I can point and click.
-- [ ] E14.F03 As a porter, I want `select`, `getrandom`, `/dev/urandom`, `statx` and the other start-up calls, so that toolkits start without patches.
-- [ ] E14.F04 As a user, I want a real-time clock, so that files and programs see the real date.
-- [ ] E14.F05 As a porter, I want `mmap` of regular files, so that fonts map and a dynamic loader becomes possible.
-- [ ] E14.F06 As a porter, I want `AF_UNIX` sockets (pairs, names, abstract names, `SCM_RIGHTS`), so that an X server and its clients can talk.
+- [x] E14.F01 As a user, I want more than 128 MiB of RAM, so that toolkits and their fonts fit.
+- [x] E14.F02 As a user, I want a mouse (`/dev/input/event1`, `/dev/input/mice`), so that I can point and click.
+- [x] E14.F03 As a porter, I want `select`, `getrandom`, `/dev/urandom`, `statx` and the other start-up calls, so that toolkits start without patches.
+- [x] E14.F04 As a user, I want a real-time clock, so that files and programs see the real date.
+- [x] E14.F05 As a porter, I want `mmap` of regular files, so that fonts map and a dynamic loader becomes possible.
+- [x] E14.F06 As a porter, I want `AF_UNIX` sockets (pairs, names, abstract names, `SCM_RIGHTS`), so that an X server and its clients can talk.
 - [ ] E14.F08 As a porter, I want named datagram Unix sockets (`bind`, `connect` and `sendto` with an address on `SOCK_DGRAM`), so that `syslog` and other datagram clients reach their servers (W14-S07 left them `-EOPNOTSUPP`).
-- [ ] E14.F07 As a porter, I want the `KD*`/`VT_*` terminal calls, so that graphics programs can take and give back the screen.
+- [x] E14.F07 As a porter, I want the `KD*`/`VT_*` terminal calls, so that graphics programs can take and give back the screen.
 
 ## E15 Qt
 *Exit: Qt widget programs run on `/dev/fb0` with keyboard and mouse.* [W15]

@@ -112,6 +112,7 @@ func (p *Process) exit(code, sig int, reason string) {
 		}
 	}
 	s.futexDrop(p.mem)
+	s.releaseVT(p.PID) // a crashed graphics program gives the console back (W14-S08)
 	if err := p.mem.Close(); err != nil {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
 	}

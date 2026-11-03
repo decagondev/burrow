@@ -38,6 +38,7 @@ import (
 	"burrow/kernel/selftest"
 	"burrow/kernel/tty"
 	"burrow/kernel/vfs"
+	"burrow/kernel/vt"
 )
 
 // kernel is the state console commands and later subsystems share.
@@ -93,6 +94,7 @@ func main() {
 	input := make(chan byte, 256)
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
 	scancodes, mouse := registerInput(dev, k.boot)
+	keys := &vtKeys{vt: vt.New(), evdev: scancodes} // the console's modes (W14-S08)
 	driver.StartAll(&driver.Env{
 		Ports:     amd64.Ports{},
 		Ports16:   amd64.Ports{},
@@ -101,7 +103,7 @@ func main() {
 		Log:       log,
 		Input:     input,
 		Dev:       dev,
-		Scancodes: scancodes,
+		Scancodes: keys.Feed,
 		Mouse:     mouse,
 		MapMMIO:   amd64.MapMMIO,
 		SetClock:  amd64.SetRealtime,
@@ -115,6 +117,7 @@ func main() {
 		so := &screenOut{con: screen}
 		out.Add(so) // the console on serial and on screen
 		cols, rows = screen.Size()
+		keys.vt.Graphics = so.holdGraphics
 		if err := registerFB0(dev, so); err != nil {
 			log.Warnf("/dev/fb0: %v", err)
 		}
@@ -122,6 +125,8 @@ func main() {
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
 	k.tty, k.input = tty.New(out, rows, cols), input
 	k.procs.SetTerminal(k.tty)
+	k.procs.SetVT(keys.vt)
+	keys.term.Store(k.tty)
 	go k.procs.Serve() // the one dispatcher for every user syscall (W9)
 	con := console.New(out, input)
 	k.con = con

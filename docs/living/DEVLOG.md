@@ -14,6 +14,22 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14 done: desktop groundwork (M14)
+
+**Did:** the wave in eight slices: 512 MiB images and physmap above 4 GiB with an out-of-memory kill (S01, with BUG-0014: every system call took 2 ms); a PS/2 mouse as `/dev/input/event1` and `/dev/input/mice` (S02); `select`, `getrandom` and the start-up calls (S03); a real-time clock that made every date real (S04); `mmap` of files (S05); Unix socket pairs (S06, with BUG-0015: pipes never raised `SIGPIPE`), then names, `connect`/`accept` and `SCM_RIGHTS` (S07); and the console's `KD*`/`VT_*` modes (S08). The M14 demo, `make desk-smoke`, runs the test programs and `paint`: it takes the screen with `KD_GRAPHICS` and `K_OFF`, gets its colours from a forked palette process over `/tmp/paint.sock`, paints a stroke the smoke test drags with the mouse, and gives the screen back; a second `paint` crashes with the screen taken and the kernel gives it back by itself. Four test programs (`startup`, `socktest`, `socknames`, and `mmaptest` in part) run on the host's Linux before Burrow, so their checks are Linux's answers, not mine.
+
+**Surprise:** in S08, nothing: `desk-smoke` passed on its first run, pixels included. Across the wave the surprises were the two bugs and how often matching Linux exactly meant an answer I would not have guessed (`EOPNOTSUPP` for `socketpair(AF_INET)`, `SOCK_RAW` as `SOCK_DGRAM`, `EACCES` before `ECONNREFUSED`). Left for later: named datagram sockets (E14.F08), an absolute pointer so QEMU needs no grab, and a garbage collector for descriptors sent around in circles (Linux has one; Burrow accepts the leak).
+
+**Next:** W15, Qt on `/dev/fb0` (`docs/04-plan/waves/WAVE-15-qt.md`); it needs downloads (qtbase, DejaVu fonts) and `ninja-build` on the host.
+
+## 2026-11-03 — W14-S08 graphics programs take the screen
+
+**Did:** `kernel/vt` (the keyboard, display and VT modes, each undone when its process exits), the `KD*`/`VT_*` ioctls on the terminal and `/dev/tty0`/`tty1`, scancodes routed by the keyboard mode, `KD_GRAPHICS` standing the console aside like `/dev/fb0`, and the colour-map and blank ioctls on `/dev/fb0`. `paint` and `make desk-smoke` are the wave's demo.
+
+**Surprise:** none; the one change of plan was making `paint`'s colours really arrive over a Unix socket, as the roadmap promised, rather than from a table.
+
+**Next:** W15.
+
 ## 2026-11-03 — W14-S07 named sockets and descriptor passing
 
 **Did:** `socket`, `bind`, `listen`, `connect`, `accept`/`accept4`, `getsockname`, `getpeername` for Unix stream and seqpacket sockets, over path names (a socket node in `/tmp`, through a new `vfs.MakeSocket`) and abstract names (a table in the kernel), with autobind, `SO_PEERCRED`, `SO_PASSCRED` and `SO_ACCEPTCONN`. `sendmsg` and `recvmsg` carry `SCM_RIGHTS` (new descriptors for the same open files, `MSG_CTRUNC` when the buffer is short) and `SCM_CREDENTIALS`. `socknames` runs a forked client and server over both kinds of name and passes a pipe end; its 23 checks pass on the host's Linux and on Burrow.

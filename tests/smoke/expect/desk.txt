@@ -1,0 +1,21 @@
+# Ordered markers for the M14 demo (W14-S08, tests/smoke/keys/desk.keys). Append-only.
+[ps2] INFO: mouse ready on irq 12
+[rtc] INFO: wall clock 20
+burrow> run /bin/startup
+startup: ok
+burrow> run /bin/mmaptest /bin/sh /mnt/hello.txt
+mmaptest: ok
+burrow> run /bin/socktest
+socktest: ok
+burrow> run /bin/socknames
+socknames: ok
+burrow> run /bin/mousetest
+mousetest: event0 keyboard, event1 mouse
+left down at 612,434
+mousetest: saw packets on /dev/input/mice
+burrow> run /bin/paint
+paint: ready, the palette answers on /tmp/paint.sock
+paint: 1 strokes, last colour ff0000
+burrow> run /bin/paint crash
+paint: crashing with the screen taken
+burrow> poweroff
