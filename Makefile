@@ -216,7 +216,7 @@ smoke: $(BUILD)/disk.img
 # Boot the Go kernel, type into its console (tests/smoke/keys/) and check its
 # markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img $(BUILD)/data.img
-	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 30 tests/smoke/keys/boot_to_go.keys
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 60 tests/smoke/keys/boot_to_go.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

@@ -49,6 +49,23 @@ type run /bin/spin
 key ret
 wait spin: spinning
 key ctrl-c
+type sh
+key ret
+wait $ 
+type ls / | wc -l
+key ret
+type echo hi > /tmp/x; cat /tmp/x
+key ret
+type cd /etc; pwd; ls
+key ret
+type spin
+key ret
+wait spin: spinning
+key ctrl-c
+type echo $?
+key ret
+type exit
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret

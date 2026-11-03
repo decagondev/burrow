@@ -4,7 +4,8 @@
 Usage: sendkeys.py <monitor-socket> <serial-log> <keys-file> [timeout-seconds]
 
 The keys file is a small script, one step per line ('#' comments):
-    wait <text>    block until <text> appears in the serial log
+    wait <text>    block until <text> appears in the serial log after
+                   what the previous wait matched
     type <text>    press each character (letters, digits, space, - . / , = ;)
     key <name>     press one QEMU key name (ret, backspace, ctrl-u, ...)
     screendump <f> save the screen as a PPM (checked by checkscreen.py)
@@ -18,7 +19,10 @@ import time
 
 KEY_DELAY_S = 0.02            # between keys: the guest drains the 8042 per IRQ
 NAMES = {' ': 'spc', '-': 'minus', '.': 'dot', '/': 'slash', ',': 'comma',
-         '=': 'equal', ';': 'semicolon'}
+         '=': 'equal', ';': 'semicolon', "'": 'apostrophe',
+         '|': 'shift-backslash', '>': 'shift-dot', '<': 'shift-comma', '$': 'shift-4',
+         '?': 'shift-slash', '"': 'shift-apostrophe', '_': 'shift-minus', '&': 'shift-7',
+         '*': 'shift-8', '!': 'shift-1', ':': 'shift-semicolon'}
 
 
 def key_name(ch):
@@ -42,14 +46,17 @@ def connect(path, deadline):
     raise SystemExit(f'sendkeys: no monitor at {path}')
 
 
-def wait_for(log, text, deadline):
+def wait_for(log, text, deadline, cursor):
+    """Returns the log offset just past text, searching from cursor on, so
+    a wait never matches output that an earlier wait already passed."""
     while time.time() < deadline:
         if os.path.exists(log):
             with open(log, 'rb') as f:
-                if text.encode() in f.read():
-                    return
+                i = f.read().find(text.encode(), cursor)
+            if i >= 0:
+                return i + len(text)
         time.sleep(0.05)
-    raise SystemExit(f'sendkeys: {text!r} never appeared in {log}')
+    raise SystemExit(f'sendkeys: {text!r} never appeared in {log} after offset {cursor}')
 
 
 def wait_for_file(path, deadline):
@@ -73,6 +80,7 @@ def main():
         s.sendall(f'sendkey {name}\n'.encode())
         time.sleep(KEY_DELAY_S)
 
+    cursor = 0
     with open(keys) as f:
         for raw in f:
             line = raw.rstrip('\n')
@@ -80,7 +88,7 @@ def main():
                 continue
             op, _, arg = line.partition(' ')
             if op == 'wait':
-                wait_for(log, arg, deadline)
+                cursor = wait_for(log, arg, deadline, cursor)
             elif op == 'type':
                 for ch in arg:
                     press(key_name(ch))

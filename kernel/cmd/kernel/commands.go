@@ -21,6 +21,8 @@ func addCommands(con *console.Console, k *kernel) {
 	for _, cmd := range console.FileCommands(k.fs) {
 		con.Add(cmd)
 	}
+	con.Add(console.Command{Name: "sh", Help: "start the shell (/bin/sh) on this terminal; exit returns here",
+		Run: func(args []string, out io.Writer) { runProgram(k, append([]string{"/bin/sh"}, args...), out) }})
 	con.Add(console.Command{Name: "run", Help: "run <program> [args]: start a user program and wait for it",
 		Run: func(args []string, out io.Writer) { runProgram(k, args, out) }})
 	con.Add(console.Command{Name: "disks", Help: "list block devices",

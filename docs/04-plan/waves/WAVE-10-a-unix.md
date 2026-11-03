@@ -24,7 +24,7 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S05 TTY line discipline (E09.F04)
 `kernel/tty`: canonical mode (echo, erase, kill, `^D`), `^C`/`^\` to the foreground process group, raw mode through `termios` (`TCGETS TCSETS* TIOCGWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY`), `setpgid getpgid setsid getsid`. The console's `sh` command gives the terminal to a shell until it exits.
 
-### [ ] W10-S06 Userland: sh and tools (E09.F05)
+### [x] W10-S06 Userland: sh and tools (E09.F05)
 `user/sh.c` and the tools, built with musl into `/bin`; go-smoke types `sh`, then `ls / | wc -l`, `echo hi > /tmp/x; cat /tmp/x`, `spin` + `^C`, `exit`.
 
 ### [ ] W10-S07 init in Go (E09.F05)

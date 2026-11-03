@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 10 files, 3 directories
+[initrd] INFO: tarfs: 17 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -91,5 +91,20 @@ burrow> run /bin/spin
 spin: spinning until ^C
 ^C
 run: /bin/spin: killed by signal 2
+burrow> sh
+$ ls / | wc -l
+5
+$ echo hi > /tmp/x; cat /tmp/x
+hi
+$ cd /etc; pwd; ls
+/etc
+hostname
+motd
+$ spin
+spin: spinning until ^C
+^C
+$ echo $?
+130
+$ exit
 burrow> poweroff
 [console] INFO: poweroff
