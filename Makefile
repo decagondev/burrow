@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -234,7 +234,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports-dl-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -325,6 +325,43 @@ ports-dl-smoke:
 	else echo "PORTS SMOKE SKIP (make ports downloads and builds Lua, C++ and TinyCC)"; fi
 ports-dl-smoke-run: $(BUILD)/go-ports.img $(BUILD)/data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-ports.img tests/smoke/expect/ports-dl.txt 90 tests/smoke/keys/ports-dl.keys
+
+# The workbench (W13-S05): busybox (sh, vi), Lua and TinyCC on one image,
+# and a home disk that persists. $(HOME_IMG) (repository root, git-ignored)
+# is made once from workbench/ with the label BURROWHOME, which the kernel
+# mounts at /home; make never rebuilds it: delete it to start again.
+# Needs `make busybox ports` first.
+HOME_IMG    ?= burrow-home.img
+DEV_DISPLAY ?= gtk
+$(HOME_IMG):
+	cd kernel && $(GO) run ./cmd/mkfat -o $(abspath $@) -label burrowhome -size 64 ../workbench
+$(BUILD)/initrd-dev.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/ports-root/bin/lua
+	rm -rf $(BUILD)/initrd-dev-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-dev-root
+	cp $(BUILD)/busybox $(BUILD)/initrd-dev-root/bin/busybox
+	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-dev-root/
+	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-dev-root -cf $@ .
+$(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
+run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) \
+		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
+
+# Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
+# with tcc, write and rename a Lua script; power off; boot again and find
+# all of it; then fsck.fat checks the disk. Skips without busybox and ports.
+dev-smoke:
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory dev-smoke-run; \
+	else echo "DEV SMOKE SKIP (make busybox ports builds what the workbench needs)"; fi
+dev-smoke-run: $(BUILD)/go-dev.img
+	rm -f $(BUILD)/home-test.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-test.img -label burrowhome -size 64 ../workbench
+	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-1.txt 120 tests/smoke/keys/dev-1.keys
+	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-2.txt 90 tests/smoke/keys/dev-2.keys
+	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-test.img >/dev/null && echo "HOME DISK PASS (fsck.fat after two boots)"; \
+	else echo "HOME DISK SKIP (no fsck.fat)"; fi
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 busybox-smoke:

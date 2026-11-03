@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -110,6 +111,31 @@ func TestClean(t *testing.T) {
 	for in, want := range map[string]string{"/": ".", "": ".", "/etc/motd": "etc/motd", "etc//x/": "etc/x", "/../a": "a"} {
 		if got := Clean(in); got != want {
 			t.Errorf("Clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Rename stays inside one mount (EXDEV otherwise, as Linux) and never
+// moves a mount point.
+func TestRenameStaysInsideAMount(t *testing.T) {
+	v := tree(t)
+	v.WriteFile("tmp/a", []byte("a"))
+	if err := v.Rename("tmp/a", "tmp/b"); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := fs.ReadFile(v, "tmp/b"); err != nil || string(b) != "a" {
+		t.Errorf("tmp/b = %q, %v", b, err)
+	}
+	for _, c := range []struct {
+		from, to string
+		want     error
+	}{
+		{"tmp/b", "etc/b", syscall.EXDEV},
+		{"etc/motd", "etc/m2", fs.ErrPermission}, // the frozen root
+		{"tmp", "tmp2", fs.ErrPermission},        // a mount point
+	} {
+		if err := v.Rename(c.from, c.to); !errors.Is(err, c.want) {
+			t.Errorf("Rename(%s, %s) = %v, want %v", c.from, c.to, err, c.want)
 		}
 	}
 }

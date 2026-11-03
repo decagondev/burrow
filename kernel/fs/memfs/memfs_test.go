@@ -3,6 +3,7 @@ package memfs
 import (
 	"errors"
 	"io/fs"
+	"syscall"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -80,5 +81,40 @@ func TestFreeze(t *testing.T) {
 	}
 	if b, err := fs.ReadFile(f, "etc/motd"); err != nil || string(b) != "hello\n" {
 		t.Errorf("read after Freeze = %q, %v", b, err)
+	}
+}
+
+// Rename follows rename(2): it replaces a file, or an empty directory with
+// a directory, and refuses the mismatched and impossible cases.
+func TestRename(t *testing.T) {
+	f := New()
+	f.MkdirAll("a/b", 0o755, t0)
+	f.MkdirAll("full/x", 0o755, t0)
+	f.MkdirAll("empty", 0o755, t0)
+	f.WriteFile("a/one", []byte("1"), 0o644, t0)
+	f.WriteFile("two", []byte("2"), 0o644, t0)
+	for _, c := range []struct {
+		from, to string
+		want     error
+	}{
+		{"a/one", "a/b/moved", nil},     // into another directory
+		{"two", "a/b/moved", nil},       // replaces a file
+		{"a/b/moved", "a/b/moved", nil}, // to itself: nothing happens
+		{"a", "a/b/inside", syscall.EINVAL},
+		{"a/b/moved", "empty", syscall.EISDIR},
+		{"full/x", "a/b/moved", syscall.ENOTDIR},
+		{"a/b", "full", syscall.ENOTEMPTY},
+		{"nope", "x", fs.ErrNotExist},
+		{"a/b", "empty", nil}, // a directory replaces an empty one
+	} {
+		if err := f.Rename(c.from, c.to); !errors.Is(err, c.want) && (c.want != nil || err != nil) {
+			t.Errorf("Rename(%s, %s) = %v, want %v", c.from, c.to, err, c.want)
+		}
+	}
+	if b, err := fs.ReadFile(f, "empty/moved"); err != nil || string(b) != "2" {
+		t.Errorf("empty/moved = %q, %v", b, err)
+	}
+	if _, err := fs.Stat(f, "a/b"); !errors.Is(err, fs.ErrNotExist) {
+		t.Error("a/b still there after it moved")
 	}
 }

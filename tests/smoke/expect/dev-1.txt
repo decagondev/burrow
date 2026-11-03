@@ -1,0 +1,6 @@
+# Ordered markers for the workbench's first boot (W13-S05, tests/smoke/keys/dev-1.keys). Append-only.
+[fat] INFO: hdb: FAT32 volume "BURROWHOME" mounted at /home (read-write)
+'notes.txt' 1L, 24C
+fib(30) = 832040, computed on Burrow
+42
+burrow> poweroff

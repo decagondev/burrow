@@ -43,8 +43,13 @@ func listDisks(out io.Writer) {
 	}
 }
 
+// homeLabel marks a FAT volume as the user's home (W13-S05): it mounts at
+// /home instead of /mnt. make run-dev attaches such a disk.
+const homeLabel = "BURROWHOME"
+
 // mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07),
-// read-write when the disk can be written (W13-S04).
+// read-write when the disk can be written (W13-S04), at /home when its
+// label says it is the home disk (W13-S05).
 func (k *kernel) mountData(log *klog.Logger) {
 	d, ok := block.Get("hdb")
 	if !ok {
@@ -63,11 +68,15 @@ func (k *kernel) mountData(log *klog.Logger) {
 		log.Warnf("hdb: %v", err)
 		return
 	}
-	if err := k.fs.Mount("mnt", fsys, "fat32"); err != nil {
-		log.Errorf("mount /mnt: %v", err)
+	point := "mnt"
+	if fsys.Label == homeLabel {
+		point = "home"
+	}
+	if err := k.fs.Mount(point, fsys, "fat32"); err != nil {
+		log.Errorf("mount /%s: %v", point, err)
 		return
 	}
-	log.Infof("hdb: FAT32 volume %q mounted at /mnt (%s)", fsys.Label, mode)
+	log.Infof("hdb: FAT32 volume %q mounted at /%s (%s)", fsys.Label, point, mode)
 }
 
 // fatDisk is a block.Writer as the fat.Disk a writable mount needs.

@@ -1,6 +1,6 @@
 # Porting software to Burrow
 
-Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisions/ADR-0006-linux-abi-userland.md)): the Go kernel answers their Linux system calls. Porting is therefore mostly *building* (static, for x86-64 Linux) and, when a program needs a call Burrow lacks, *adding that call's Linux semantics* to `kernel/proc`. This guide is written as ports land (W10-W12); [POSIX_COVERAGE.md](../02-architecture/POSIX_COVERAGE.md) is the list of what exists.
+Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisions/ADR-0006-linux-abi-userland.md)): the Go kernel answers their Linux system calls. Porting is therefore mostly *building* (static, for x86-64 Linux) and, when a program needs a call Burrow lacks, *adding that call's Linux semantics* to `kernel/proc`. This guide is written as ports land (W10-W12); [WORKBENCH.md](WORKBENCH.md) is about using what is here; [POSIX_COVERAGE.md](../02-architecture/POSIX_COVERAGE.md) is the list of what exists.
 
 ## The recipe
 

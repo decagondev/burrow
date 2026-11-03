@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -154,6 +155,54 @@ func (f *FS) Remove(name string) error {
 		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrExist}
 	}
 	delete(p.children, base)
+	return nil
+}
+
+// Rename moves oldname to newname as rename(2) does: a file replaces a
+// file, a directory replaces an empty directory, and a directory never
+// moves into itself.
+func (f *FS) Rename(oldname, newname string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	po, bo, err := f.parent("rename", oldname)
+	if err != nil {
+		return err
+	}
+	pn, bn, err := f.parent("rename", newname)
+	if err != nil {
+		return err
+	}
+	n, ok := po.children[bo]
+	if !ok {
+		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrNotExist}
+	}
+	if oldname == newname {
+		return nil
+	}
+	if err := renameCheck(n.mode.IsDir(), oldname, newname, pn.children[bn]); err != nil {
+		return &fs.PathError{Op: "rename", Path: newname, Err: err}
+	}
+	delete(po.children, bo)
+	n.name = bn
+	pn.children[bn] = n
+	return nil
+}
+
+// renameCheck is rename(2)'s rule for moving oldname (a directory or not)
+// onto newname, where dst is whatever is there now (nil for nothing).
+func renameCheck(dir bool, oldname, newname string, dst *node) error {
+	switch {
+	case dir && strings.HasPrefix(newname, oldname+"/"):
+		return syscall.EINVAL
+	case dst == nil:
+		return nil
+	case dir && !dst.mode.IsDir():
+		return syscall.ENOTDIR
+	case !dir && dst.mode.IsDir():
+		return syscall.EISDIR
+	case dst.mode.IsDir() && len(dst.children) > 0:
+		return syscall.ENOTEMPTY
+	}
 	return nil
 }
 

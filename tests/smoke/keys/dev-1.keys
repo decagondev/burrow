@@ -1,0 +1,32 @@
+# The workbench, first boot (W13-S05): in /home, write a note with vi,
+# compile the starter C program with tcc, write a Lua script with echo,
+# rename it and run it. Everything lands on the home disk.
+# Waits avoid trailing spaces, which editors strip.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type cd /home; ls
+key ret
+wait hello.lua
+type vi notes.txt
+key ret
+sleep 2
+type i
+type saved on the first boot
+key esc
+sleep 1
+type :wq
+key ret
+wait 1L,
+type tcc -static -o hello hello.c; ./hello 30
+key ret
+wait computed on Burrow
+type echo 'print(6*7)' > answer.lua; mv answer.lua sum.lua; lua sum.lua
+key ret
+wait 42
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

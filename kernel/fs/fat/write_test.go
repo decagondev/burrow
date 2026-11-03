@@ -204,3 +204,49 @@ func TestFullVolume(t *testing.T) {
 		t.Error("a failed write left an entry behind")
 	}
 }
+
+func TestRename(t *testing.T) {
+	f, d := writable(t)
+	f.Mkdir("src", 0o755, mt)
+	f.Mkdir("src/old", 0o755, mt)
+	f.WriteFile("src/old/main.c", []byte("int main;"), 0o644, mt)
+	f.WriteFile("draft.txt", []byte("draft"), 0o644, mt)
+	for _, c := range []struct {
+		from, to string
+		want     error
+	}{
+		{"draft.txt", "src/final text.txt", nil},          // across directories, a long name
+		{"hello.txt", "src/final text.txt", nil},          // replaces a file
+		{"src/final text.txt", "SRC/FINAL TEXT.TXT", nil}, // only the case changes
+		{"src/old", "src/old/inner", syscall.EINVAL},
+		{"src/FINAL TEXT.TXT", "src/old", syscall.EISDIR},
+		{"src/old", "big.bin", syscall.ENOTDIR},
+		{"src/old", "docs", syscall.ENOTEMPTY},
+		{"nope", "x", fs.ErrNotExist},
+		{"src/old", "moved", nil}, // a directory to the root: its ".." changes
+	} {
+		if err := f.Rename(c.from, c.to); !errors.Is(err, c.want) && (c.want != nil || err != nil) {
+			t.Errorf("Rename(%s, %s) = %v, want %v", c.from, c.to, err, c.want)
+		}
+	}
+	r := remount(t, d)
+	if err := fstest.TestFS(r, "src/FINAL TEXT.TXT", "moved/main.c", "big.bin", "docs/deeper/still/here.md"); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(mustRead(t, r, "src/FINAL TEXT.TXT")); got != "Hello from FAT32\n" {
+		t.Errorf("the replaced file holds %q", got)
+	}
+	for _, gone := range []string{"draft.txt", "hello.txt", "src/old"} {
+		if _, err := fs.Stat(r, gone); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s is still there", gone)
+		}
+	}
+	dotdot := func(dirCluster uint32) uint32 { // the ".." entry of a directory
+		e := d.b[f.clusterOffset(dirCluster)+dirEntry:]
+		return uint32(le.Uint16(e[dirClusHi:]))<<16 | uint32(le.Uint16(e[dirClusLo:]))
+	}
+	moved, _ := f.lookup("moved")
+	if dotdot(moved.first) != 0 {
+		t.Errorf("moved/.. points at cluster %d, want 0 (the root)", dotdot(moved.first))
+	}
+}

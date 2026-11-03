@@ -10,7 +10,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 |---|---|---|---|---|
 | 0 | `read` | done | W9 | files, pipes and the terminal (blocking, `EINTR` with signals), devices |
 | 1 | `write` | partial | W9 | console, pipes (`EPIPE`), devices, writable files under `/tmp` (written back whole on every write) |
-| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` on a FAT32 disk since W13: `-EACCES` on the read-only root) |
+| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` or `/home` on a FAT32 disk since W13: `-EACCES` on the read-only root) |
 | 3 | `close` | done | W9 |  |
 | 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
 | 5 | `fstat` | partial | W9 | `st_mode`, `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
@@ -41,7 +41,10 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 60 | `exit` | done | W12 | ends the calling thread (clearing and waking its `clear_child_tid`); the last thread ends the process |
 | 62 | `kill` | done | W10 | pid > 0, 0, -1, < -1; signal 0 checks existence |
 | 61 | `wait4` | partial | W10 | pid > 0, -1, 0, < -1; `WNOHANG`; Linux status words; `rusage` is not filled |
+| 74, 75 | `fsync` `fdatasync` | done | W13 | nothing to wait for: a write is on the disk when `write` returns (FAT flushes each change) |
 | 76, 77 | `truncate` `ftruncate` | partial | W13 | regular files open for writing (`/tmp`); `-EINVAL` for others, `-EBADF` if not open for writing |
+| 82, 264, 316 | `rename` `renameat` `renameat2` | done | W13 | inside one mount (`-EXDEV` across mounts), rename(2)'s replace rules; `RENAME_NOREPLACE`; FAT and `/tmp` |
+| 90-94, 260, 268 | `chmod` `fchmod` `chown` `fchown` `lchown` `fchownat` `fchmodat` | stub | W13 | accepted when the file exists, change nothing (FAT and memfs keep no owners or modes) |
 | 97, 160, 302 | `getrlimit` `setrlimit` `prlimit64` | partial | W12 | fixed limits (`RLIMIT_NOFILE` 256, `RLIMIT_STACK` the stack size, others unlimited); lowering is accepted, raising past the hard limit `-EPERM` |
 | 130 | `rt_sigsuspend` | done | W10 | |
 | 131 | `sigaltstack` | done | W12 | per thread; `SA_ONSTACK` handlers run on it; not inherited by new threads |
@@ -74,6 +77,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 262 | `newfstatat` | done | W10 | `AT_EMPTY_PATH` |
 | 269, 439 | `faccessat` `faccessat2` | partial | W10 | existence only |
 | 271 | `ppoll` | partial | W10 | as `poll`; the signal mask argument is ignored |
+| 280 | `utimensat` | stub | W13 | accepted when the file exists; times are not set |
 | 284, 290 | `eventfd` `eventfd2` | done | W12 | `EFD_SEMAPHORE EFD_NONBLOCK EFD_CLOEXEC` |
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |

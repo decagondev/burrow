@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -193,6 +194,39 @@ func (v *VFS) Remove(name string) error {
 		return err
 	}
 	return wrap("remove", name, w.Remove(rel))
+}
+
+// Renamer is a writable file system that can rename (memfs, fat).
+type Renamer interface {
+	Rename(oldname, newname string) error
+}
+
+// Rename moves oldname to newname inside one mount (EXDEV across mounts,
+// as Linux); a mount point is busy.
+func (v *VFS) Rename(oldname, newname string) error {
+	for _, name := range []string{oldname, newname} {
+		for _, m := range v.children(path.Dir(name)) {
+			if m.point == name {
+				return &fs.PathError{Op: "rename", Path: name, Err: fs.ErrPermission}
+			}
+		}
+	}
+	w, from, err := v.writable("rename", oldname)
+	if err != nil {
+		return err
+	}
+	w2, to, err := v.writable("rename", newname)
+	if err != nil {
+		return err
+	}
+	if w != w2 {
+		return &fs.PathError{Op: "rename", Path: newname, Err: syscall.EXDEV}
+	}
+	r, ok := w.(Renamer)
+	if !ok {
+		return &fs.PathError{Op: "rename", Path: oldname, Err: fs.ErrPermission}
+	}
+	return wrap("rename", oldname, r.Rename(from, to))
 }
 
 // wrap reports errors with the VFS path, not the path inside the mount.

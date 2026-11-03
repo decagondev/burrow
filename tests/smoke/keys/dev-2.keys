@@ -1,0 +1,15 @@
+# The workbench, second boot on the same home disk (W13-S05): the note,
+# the compiled program and the renamed script from the first boot are
+# still there and still work.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type cd /home; cat notes.txt; ./hello 12; lua sum.lua; ls answer.lua
+key ret
+wait No such file
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

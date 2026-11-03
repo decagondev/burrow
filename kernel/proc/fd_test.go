@@ -237,3 +237,45 @@ func TestTruncate(t *testing.T) {
 		t.Errorf("ftruncate of a read-only fd = %d, want EBADF", e)
 	}
 }
+
+func TestRenameFsyncChmod(t *testing.T) {
+	r, v := vfsRig(t)
+	p := r.spawn()
+	old, nu := r.str(p, scratch, "/tmp/draft.c"), r.str(p, scratch+64, "/tmp/final.c")
+	fd := uint64(r.call(p, 2, old, 0x41, 0o644))
+	r.put(p, scratch+512, []byte("int x;"))
+	r.call(p, 1, fd, scratch+512, 6)
+	if r.call(p, 74, fd) != 0 || r.call(p, 75, fd) != 0 {
+		t.Error("fsync/fdatasync of an open file")
+	}
+	if e := r.call(p, 74, 77); e != -int64(syscall.EBADF) {
+		t.Errorf("fsync of a closed fd = %d", e)
+	}
+	if r.call(p, 82, old, nu) != 0 { // rename
+		t.Fatal("rename")
+	}
+	if b, err := fs.ReadFile(v, "tmp/final.c"); err != nil || string(b) != "int x;" {
+		t.Errorf("after rename: %q, %v", b, err)
+	}
+	if _, err := fs.Stat(v, "tmp/draft.c"); err == nil {
+		t.Error("the old name is still there")
+	}
+	other := r.str(p, scratch+128, "/tmp/other.c")
+	r.call(p, 2, other, 0x41, 0o644)
+	cwd := uint64(0xFFFFFF9C)
+	if e := r.call(p, 316, cwd, other, cwd, nu, 1); e != -int64(syscall.EEXIST) { // renameat2 NOREPLACE
+		t.Errorf("RENAME_NOREPLACE onto an existing file = %d", e)
+	}
+	if e := r.call(p, 316, cwd, other, cwd, nu, 4); e != -int64(syscall.EINVAL) {
+		t.Errorf("an unknown renameat2 flag = %d", e)
+	}
+	if e := r.call(p, 82, nu, r.str(p, scratch+192, "/etc/final.c")); e != -int64(syscall.EXDEV) {
+		t.Errorf("rename across mounts = %d, want EXDEV", e)
+	}
+	if r.call(p, 90, nu, 0o755) != 0 || r.call(p, 268, cwd, nu, 0o600, 0) != 0 || r.call(p, 280, cwd, nu, 0, 0) != 0 {
+		t.Error("chmod, fchmodat or utimensat of an existing file")
+	}
+	if e := r.call(p, 90, old, 0o755); e != -int64(syscall.ENOENT) {
+		t.Errorf("chmod of a missing file = %d", e)
+	}
+}

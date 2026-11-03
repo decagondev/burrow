@@ -18,6 +18,7 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M10: a Unix (fork, exec, pipes, signals, a TTY, a shell) | **done: `sh`, then `ls / \| wc -l` and `^C`; busybox ash** |
 | M11: DOOM (doomgeneric + Freedoom on /dev/fb0 and /dev/input/event0) | **done: `make doom doom-smoke`, 100 fps in `make doom-bench`** |
 | M12: ports (threads, a Go program, Lua, C++, a C compiler on Burrow) | **done: `gohello`, Lua, C++, `tcc` on Burrow** ([PORTING.md](docs/06-guides/PORTING.md)) |
+| M13: a workbench (vi on screen, writable FAT32, a persistent /home) | **done: `make run-dev`** ([WORKBENCH.md](docs/06-guides/WORKBENCH.md)) |
 
 ## Quick start
 
@@ -39,15 +40,20 @@ Expected `make test` tail:
 ```text
 855 checks, 0 failures
 CENSUS PASS (go1.27.3, 24 syscalls, all in the shim)
-FAT INTEROP PASS (2 files read from a mkfs.fat image)   # SKIP without dosfstools + mtools
+FAT INTEROP PASS (2 files read from a mkfs.fat image; kernel writes pass fsck.fat on 2 images)   # SKIP without dosfstools + mtools
 SMOKE PASS [boot_to_loader] (54 log lines)
 SMOKE PASS [boot_to_nucleus] (54 log lines)
 SCREEN PASS (8 checks)
 SMOKE PASS [boot_to_go] (196 log lines)
 SCREEN PASS (14 checks)
 SMOKE PASS [devices] (115 log lines)
+SMOKE PASS [disk] (106 log lines)
+DISK WRITE PASS (64 sectors at the end of build/scratch.img)
 SMOKE PASS [ports] (113 log lines)
 SMOKE PASS [ports-dl] (124 log lines)  # SKIP until make ports has built them
+SMOKE PASS [dev-1] (109 log lines)     # SKIP until make busybox ports
+SMOKE PASS [dev-2] (108 log lines)
+HOME DISK PASS (fsck.fat after two boots)
 SCREEN PASS (13 checks)                # doom: SKIP until make doom has built it
 SMOKE PASS [doom] (138 log lines)
 SMOKE PASS [busybox] (119 log lines)   # SKIP until make busybox has built it
