@@ -37,7 +37,9 @@ func (f *file) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// ReadAt reads one cluster's worth at a time.
+// ReadAt reads a run of clusters that lie in a row on the disk at once
+// (W15-S05: one disk read per 512-byte cluster made a 15 MB program take
+// 11 s to load), so a file written in one go costs one read.
 func (f *file) ReadAt(p []byte, off int64) (int, error) {
 	if off < 0 {
 		return 0, &fs.PathError{Op: "read", Path: f.e.name, Err: fs.ErrInvalid}
@@ -45,9 +47,15 @@ func (f *file) ReadAt(p []byte, off int64) (int, error) {
 	done := 0
 	cb := f.fsys.clusterBytes
 	for done < len(p) && off < f.e.size {
-		c := f.clusters[off/cb]
+		i := off / cb
+		c := f.clusters[i]
 		in := off % cb
-		n := min(int64(len(p)-done), cb-in, f.e.size-off)
+		want := min(int64(len(p)-done), f.e.size-off)
+		run := int64(1) // clusters from c on that follow each other on the disk
+		for run*cb-in < want && i+run < int64(len(f.clusters)) && f.clusters[i+run] == c+uint32(run) {
+			run++
+		}
+		n := min(want, run*cb-in)
 		if _, err := f.fsys.r.ReadAt(p[done:done+int(n)], f.fsys.dataStart+int64(c-2)*cb+in); err != nil {
 			return done, err
 		}

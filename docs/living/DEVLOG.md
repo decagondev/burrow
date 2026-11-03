@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15-S05 Qt fast enough
+
+**Did:** `qtbench`, started through a small `stopwatch` that marks the `execve`, measures the time to the first full-screen frame, a full-screen repaint, the memory used and how often an idle Qt wakes; `make qt-bench` checks them against budgets. The first numbers were fine except one: 11.6 s to the first frame, almost all of it before `main`.
+
+**Surprise:** BUG-0017, and where it was not. Reading the 15 MB program took 10.5 s; string port I/O (`rep insw` for a whole sector) changed nothing at all, and reading runs of FAT clusters at once saved only 0.4 s. The cost was per request: READ SECTORS gives one sector per data request and QEMU fetches each one separately. With READ MULTIPLE (16 sectors per request) the first frame arrives in 2.8 s, and every disk read in Burrow is about five times faster. Repaints take 11 ms, the program 6.5 MiB, and an idle Qt program never wakes.
+
+**Next:** W15-S06, `qtpad` and `make run-qt`.
+
 ## 2026-11-03 — W15-S04 keyboard and mouse into Qt widgets
 
 **Did:** `qtdemo`, a Qt widgets window (a menu bar, a line edit, an Add button, a list), driven by the PS/2 keyboard and mouse through Qt's own evdev handlers and Qt's drawn cursor. The smoke test types into the line edit, clicks Add, presses Enter for a second line, opens and closes the File menu, and quits with Ctrl+Q; serial markers and screen checks prove each step.

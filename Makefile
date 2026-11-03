@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-smoke qt-smoke-run ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-bench qt-smoke qt-smoke-run ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -341,6 +341,12 @@ QT_DRIVE := -drive file=$(BUILD)/qt-data.img,format=raw,if=ide,index=1,media=dis
 $(BUILD)/qt-data.img: $(BUILD)/qt-root/bin/qthello user/qt/qt.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/qt/qt.env $(BUILD)/qt-root/qt.env
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label qtdata -size 64 ../$(BUILD)/qt-root
+# qt-bench (W15-S05; not in make test, like doom-bench): qtbench started by
+# stopwatch on the Qt disk, and its numbers against the budgets in
+# tests/smoke/qt-budgets.py (the first frame, a repaint, memory, idle wakes).
+qt-bench: $(BUILD)/go.img $(BUILD)/qt-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(QT_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/qt-bench.txt 180 tests/smoke/keys/qt-bench.keys
+	python3 tests/smoke/qt-budgets.py $(BUILD)/smoke-qt-bench.log
 qt-smoke:
 	@if [ -f $(BUILD)/qt-root/bin/qthello ]; then $(MAKE) --no-print-directory qt-smoke-run; \
 	else echo "QT SMOKE SKIP (make qt builds Qt)"; fi

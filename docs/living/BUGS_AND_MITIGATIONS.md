@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0017: Reading a disk cost about 340 microseconds a sector
+- Found: 2026-11-03, W15-S05: `qtbench` took 11 s from `execve` to `main`; a timed `execve` spent 10.5 s of it reading the 15 MB program from the FAT disk.
+- Severity: major (since W8: every read from a data disk, Doom's WAD included, ran at about 1.4 MB/s under QEMU).
+- Symptom: start-up time grew with the size of the file read, not with anything the program did; faster port I/O changed nothing.
+- Root cause: two layers each asked for the smallest unit. FAT read one cluster per call (one sector, on a 64 MiB volume), so every 512 bytes was its own ATA command; and READ SECTORS hands over one sector per data request, which QEMU fetches from the image on its own each time. Moving the words was never the cost (`rep insw` alone changed nothing).
+- Fix: FAT's `ReadAt` reads a run of clusters that lie in a row with one call (0.4 s saved); the ATA driver turns on multiple mode at IDENTIFY and reads with READ MULTIPLE, 16 sectors per data request, each block with one `rep insw` (`drivers/ata/multiple.go`; 10.5 s down to 2.1 s). `execve` to the first Qt frame went from 11.6 s to 2.8 s.
+- Mitigation: `make qt-bench` fails above 3.5 s to the first frame (`tests/smoke/qt-budgets.py`).
+- Regression: `TestContiguousClustersReadAtOnce` (`kernel/fs/fat`), `TestIdentifyAndConformance` checks READ MULTIPLE (`kernel/drivers/ata`).
+- Lesson: time each layer before optimising one; the obvious suspect (port I/O) was innocent, and the cost was per request, twice over.
+
 ### BUG-0016: QProcess read a child's output one byte at a time
 - Found: 2026-11-03, W15-S02: `qthello`'s QProcess check got "h" instead of "hello from a child" on Burrow; on Linux the same binary passed.
 - Severity: minor (since W10: any program that sized its reads with `FIONREAD` on a pipe got `-ENOTTY`).

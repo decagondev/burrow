@@ -125,3 +125,36 @@ func TestFormatRejectsSmallImages(t *testing.T) {
 		t.Error("Format accepted 1 MiB")
 	}
 }
+
+// countingReader counts the reads that reach the disk.
+type countingReader struct {
+	r     *bytes.Reader
+	reads int
+}
+
+func (c *countingReader) ReadAt(p []byte, off int64) (int, error) {
+	c.reads++
+	return c.r.ReadAt(p, off)
+}
+
+// A file whose clusters lie in a row is read in one disk read, not one per
+// cluster (W15-S05: a 15 MB Qt program took 11 s to load, a few hundred
+// microseconds of ATA command per 512-byte cluster).
+func TestContiguousClustersReadAtOnce(t *testing.T) {
+	disk := &countingReader{r: bytes.NewReader(image(t))}
+	fsys, err := Mount(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk.reads = 0
+	data, err := fs.ReadFile(fsys, "big.bin")
+	if err != nil || len(data) != 80000 {
+		t.Fatalf("ReadFile = %d bytes, %v", len(data), err)
+	}
+	if disk.reads > 2 { // the data, and at most the Stat's directory read
+		t.Errorf("an 80000-byte contiguous file took %d disk reads", disk.reads)
+	}
+	if !bytes.Equal(data, bytes.Repeat([]byte("0123456789abcdef"), 5000)) {
+		t.Error("the bytes differ")
+	}
+}

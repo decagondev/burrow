@@ -1,0 +1,9 @@
+# qt-bench (W15-S05): qtbench started through stopwatch, which marks the
+# exec. Not in make test; make qt-bench checks the numbers against budgets.
+wait burrow>
+type run /bin/stopwatch /opt/qt/bin/qtbench
+key ret
+wait qtbench: done
+wait burrow>
+type poweroff
+key ret

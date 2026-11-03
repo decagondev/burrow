@@ -21,3 +21,7 @@ qt_import_plugins(qtwindow INCLUDE Qt6::QLinuxFbIntegrationPlugin Qt6::QOffscree
 qt_add_executable(qtdemo qtdemo.cpp)
 target_link_libraries(qtdemo PRIVATE Qt6::Widgets)
 qt_import_plugins(qtdemo INCLUDE Qt6::QLinuxFbIntegrationPlugin Qt6::QOffscreenIntegrationPlugin)
+
+qt_add_executable(qtbench qtbench.cpp)
+target_link_libraries(qtbench PRIVATE Qt6::Gui)
+qt_import_plugins(qtbench INCLUDE Qt6::QLinuxFbIntegrationPlugin Qt6::QOffscreenIntegrationPlugin)

@@ -1,0 +1,9 @@
+# Ordered markers for make qt-bench (tests/smoke/keys/qt-bench.keys). Append-only.
+burrow> run /bin/stopwatch /opt/qt/bin/qtbench
+qtbench: main-ms
+qtbench: first-frame-ms
+qtbench: repaint-ms
+qtbench: memory-mib
+qtbench: idle-wakes
+qtbench: done
+burrow> poweroff

@@ -72,6 +72,7 @@ type Disk struct {
 	ch      *Channel
 	slave   bool
 	sectors uint64
+	multi   int // sectors per data request in multiple mode; 0: READ SECTORS
 	Model   string
 }
 
@@ -134,7 +135,9 @@ func (c *Channel) Identify(slave bool) (*Disk, error) {
 	for i := range id {
 		id[i] = c.io.In16(ioBase + regData)
 	}
-	return &Disk{ch: c, slave: slave, sectors: uint64(id[60]) | uint64(id[61])<<16, Model: model(id[27:47])}, nil
+	d := &Disk{ch: c, slave: slave, sectors: uint64(id[60]) | uint64(id[61])<<16, Model: model(id[27:47])}
+	d.setMultiple(&id)
+	return d, nil
 }
 
 // model decodes the IDENTIFY model string: two characters per word, high
@@ -173,6 +176,9 @@ func (d *Disk) ReadSectors(lba uint64, buf []byte) error {
 }
 
 func (d *Disk) readChunk(lba uint64, n int, buf []byte) error {
+	if d.multi > 0 {
+		return d.readMultiple(lba, n, buf) // multiple.go (W15-S05)
+	}
 	c := d.ch
 	d.command(lba, n, cmdRead)
 	for s := 0; s < n; s++ {
@@ -180,11 +186,7 @@ func (d *Disk) readChunk(lba uint64, n int, buf []byte) error {
 		if err := c.wait(true); err != nil {
 			return err
 		}
-		sector := buf[s*SectorSize : (s+1)*SectorSize]
-		for i := 0; i < SectorSize; i += 2 {
-			w := c.io.In16(ioBase + regData)
-			sector[i], sector[i+1] = byte(w), byte(w>>8)
-		}
+		c.inData(buf[s*SectorSize : (s+1)*SectorSize])
 	}
 	return nil
 }
@@ -220,6 +222,10 @@ func (d *Disk) writeChunk(lba uint64, n int, buf []byte) error {
 			return err
 		}
 		sector := buf[s*SectorSize : (s+1)*SectorSize]
+		if str, ok := c.io.(hal.PortIOString); ok {
+			str.OutWords(ioBase+regData, sector)
+			continue
+		}
 		for i := 0; i < SectorSize; i += 2 {
 			c.io.Out16(ioBase+regData, uint16(sector[i])|uint16(sector[i+1])<<8)
 		}

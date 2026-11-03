@@ -45,3 +45,23 @@ TEXT ·outw(SB), NOSPLIT, $0-4
 	MOVW v+2(FP), AX
 	OUTW
 	RET
+
+// func insw(port uint16, dst *byte, words int)
+// Clobbers DX, DI, CX; the direction flag is cleared first.
+TEXT ·insw(SB), NOSPLIT, $0-24
+	MOVW port+0(FP), DX
+	MOVQ dst+8(FP), DI
+	MOVQ words+16(FP), CX
+	CLD
+	REP; INSW
+	RET
+
+// func outsw(port uint16, src *byte, words int)
+// Clobbers DX, SI, CX; the direction flag is cleared first.
+TEXT ·outsw(SB), NOSPLIT, $0-24
+	MOVW port+0(FP), DX
+	MOVQ src+8(FP), SI
+	MOVQ words+16(FP), CX
+	CLD
+	REP; OUTSW
+	RET

@@ -40,3 +40,13 @@ type PortIO16 interface {
 	In16(port uint16) uint16
 	Out16(port uint16, v uint16)
 }
+
+// PortIOString is string port I/O (REP INSW / REP OUTSW): many 16-bit words
+// to or from one port in a single instruction. An ATA sector is 256 words,
+// and an emulator answers one string instruction far faster than 256
+// separate ones (W15-S05: a 15 MB Qt program took 11 s to load). Optional:
+// a driver falls back to PortIO16 when its ports lack it.
+type PortIOString interface {
+	InWords(port uint16, dst []byte)  // len(dst)/2 words, little-endian
+	OutWords(port uint16, src []byte) // len(src)/2 words, little-endian
+}
