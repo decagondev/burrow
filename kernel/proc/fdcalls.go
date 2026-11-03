@@ -69,7 +69,7 @@ func sysPipe2Fn(p *Process, a [6]uint64) (int64, bool) { return ok(p.pipe2(a[0],
 func (p *Process) pipe2(fdsVA uint64, flags int) int64 {
 	r, w := newPipe()
 	rf, wf := newFile(r, nil), newFile(w, nil)
-	rf.flags, wf.flags = oRDONLY, oWRONLY
+	rf.flags, wf.flags = oRDONLY|flags&oNonblock, oWRONLY|flags&oNonblock
 	cloexec := flags&oCloexec != 0
 	rn, err := p.fds.add(rf, 0, cloexec)
 	if err != nil {

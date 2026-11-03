@@ -86,6 +86,9 @@ func sysIoctlFn(p *Process, a [6]uint64) (int64, bool) {
 	if f == nil {
 		return ok(-int64(syscall.EBADF))
 	}
+	if d, isD := device(f).(Ioctler); isD {
+		return ok(p.deviceIoctl(d, a[1], a[2]))
+	}
 	tf, isTTY := f.f.(ttyFile)
 	if !isTTY {
 		return ok(-int64(syscall.ENOTTY))

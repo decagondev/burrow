@@ -1,0 +1,14 @@
+# The device files programs use (W11), typed into the Go kernel's console:
+# fbtest paints colour bars through /dev/fb0 and keeps it open while the
+# screen is dumped; Enter lets it go and the console repaints.
+wait burrow>
+type run /bin/fbtest
+key ret
+wait fbtest: bars drawn
+screendump build/screen-devices-fb0.ppm
+key ret
+wait fbtest: done
+wait burrow>
+screendump build/screen-devices-after.ppm
+type poweroff
+key ret

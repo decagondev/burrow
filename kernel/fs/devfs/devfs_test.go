@@ -81,3 +81,31 @@ func TestDevicesBehave(t *testing.T) {
 		t.Errorf("Register over a directory = %v", err)
 	}
 }
+
+// counted counts its open handles (an Opener).
+type counted struct {
+	Null
+	opens *int
+}
+
+func (c counted) Open() (Device, error) { *c.opens++; return c, nil }
+func (c counted) Close() error          { *c.opens--; return nil }
+
+func TestOpenerGetsEachOpen(t *testing.T) {
+	d := New()
+	opens := 0
+	d.Register("fb0", counted{opens: &opens}, 0o660)
+	a, _ := d.Open("fb0")
+	b, _ := d.Open("fb0")
+	if opens != 2 {
+		t.Fatalf("%d opens, want 2", opens)
+	}
+	if _, ok := a.(interface{ Device() Device }).Device().(counted); !ok {
+		t.Error("Device() is not the handle Open returned")
+	}
+	a.Close()
+	b.Close()
+	if opens != 0 {
+		t.Errorf("%d opens after closing both", opens)
+	}
+}

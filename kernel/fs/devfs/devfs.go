@@ -18,9 +18,18 @@ import (
 )
 
 // Device is one device. Read and Write may be called from many goroutines.
+// A device may offer more (ioctls, mmap, readiness) through interfaces the
+// kernel's file layer looks for on Device() (kernel/proc).
 type Device interface {
 	io.Reader
 	io.Writer
+}
+
+// Opener is a device that wants to know about each open: Open returns the
+// handle that one open file uses (it may be d itself), and closing the file
+// closes the handle if it is an io.Closer.
+type Opener interface {
+	Open() (Device, error)
 }
 
 // FS is safe for concurrent use; drivers may register while files are open.
@@ -70,7 +79,15 @@ func (f *FS) Open(name string) (fs.File, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	if e, ok := f.devs[name]; ok {
-		return &devFile{info: info{path.Base(name), e.mode}, dev: e.dev}, nil
+		d := e.dev
+		if o, isO := d.(Opener); isO {
+			h, err := o.Open()
+			if err != nil {
+				return nil, &fs.PathError{Op: "open", Path: name, Err: err}
+			}
+			d = h
+		}
+		return &devFile{info: info{path.Base(name), e.mode}, dev: d}, nil
 	}
 	if !f.isDir(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
@@ -144,7 +161,14 @@ type devFile struct {
 func (d *devFile) Stat() (fs.FileInfo, error)  { return d.info, nil }
 func (d *devFile) Read(p []byte) (int, error)  { return d.dev.Read(p) }
 func (d *devFile) Write(p []byte) (int, error) { return d.dev.Write(p) }
-func (d *devFile) Close() error                { return nil }
+func (d *devFile) Device() Device              { return d.dev }
+
+func (d *devFile) Close() error {
+	if c, ok := d.dev.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
+}
 
 type dirFile struct {
 	info    info

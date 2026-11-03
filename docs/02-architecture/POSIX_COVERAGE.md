@@ -10,19 +10,19 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 |---|---|---|---|---|
 | 0 | `read` | done | W9 | files, pipes and the terminal (blocking, `EINTR` with signals), devices |
 | 1 | `write` | partial | W9 | console, pipes (`EPIPE`), devices, writable files under `/tmp` (written back whole on every write) |
-| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC`; writes only where the mount is writable (`/tmp`: `-EACCES` on the read-only root) |
+| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`: `-EACCES` on the read-only root) |
 | 3 | `close` | done | W9 |  |
 | 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
 | 5 | `fstat` | partial | W9 | `st_mode`, `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
 | 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |
-| 9 | `mmap` | partial | W9 | anonymous private memory only (`-ENODEV` for files; `/dev/fb0` in W11); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
+| 9 | `mmap` | partial | W9 | anonymous private memory, and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); `-ENODEV` for regular files; `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
 | 11 | `munmap` | done | W9 |  |
 | 12 | `brk` | done | W9 | heap after the highest segment |
 | 13 | `rt_sigaction` | done | W10 | `SA_SIGINFO SA_RESTORER SA_RESTART SA_NODEFER SA_RESETHAND`; not `SA_ONSTACK` |
 | 14 | `rt_sigprocmask` | done | W10 | |
 | 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
-| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; anything else `-ENOTTY` |
+| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only; anything else `-ENOTTY` |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
@@ -40,7 +40,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 130 | `rt_sigsuspend` | done | W10 | |
 | 131 | `sigaltstack` | stub | W10 | returns 0; handlers always run on the current stack |
 | 63 | `uname` | done | W10 | `Burrow burrow 0.10 x86_64` |
-| 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`, `O_NONBLOCK` stored, not yet honoured); no locks |
+| 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`; `O_NONBLOCK` gives `-EAGAIN` instead of blocking, W11); no locks |
 | 79 | `getcwd` | done | W10 |  |
 | 80, 81 | `chdir` `fchdir` | done | W10 |  |
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |

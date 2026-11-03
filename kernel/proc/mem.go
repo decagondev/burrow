@@ -20,8 +20,9 @@ type Mem struct {
 }
 
 type page struct {
-	pa   uint64
-	prot Prot
+	pa     uint64
+	prot   Prot
+	device bool // device memory (a framebuffer): never freed, shared by fork
 }
 
 func NewMem(nu Nucleus) (*Mem, error) {
@@ -48,6 +49,9 @@ func (m *Mem) MapAnon(va, n uint64, prot Prot) error {
 	defer m.mu.Unlock()
 	for p := pageDown(va); p < va+n; p += PageSize {
 		if old, ok := m.pages[p]; ok {
+			if old.device {
+				return ErrFault // device memory is never widened or replaced here
+			}
 			if old.prot|prot != old.prot { // widen: remap the same frame
 				if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
 					return err
@@ -68,7 +72,29 @@ func (m *Mem) MapAnon(va, n uint64, prot Prot) error {
 			m.nu.PageFree(pa)
 			return err
 		}
-		m.pages[p] = page{pa, prot}
+		m.pages[p] = page{pa: pa, prot: prot}
+	}
+	return nil
+}
+
+// MapDevice maps n bytes of device memory at physical pa to va, replacing
+// nothing: [va, va+n) must be free. The pages stay the device's.
+func (m *Mem) MapDevice(va, pa, n uint64, prot Prot) error {
+	if n == 0 || va%PageSize != 0 || pa%PageSize != 0 || va >= UserTop || n > UserTop-va {
+		return ErrFault
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for off := uint64(0); off < n; off += PageSize {
+		if _, taken := m.pages[va+off]; taken {
+			return ErrFault
+		}
+	}
+	if err := m.nu.Map(m.as, va, pa, n, prot); err != nil {
+		return err
+	}
+	for off := uint64(0); off < n; off += PageSize {
+		m.pages[va+off] = page{pa: pa + off, prot: prot, device: true}
 	}
 	return nil
 }
@@ -85,7 +111,9 @@ func (m *Mem) Unmap(va, n uint64) error {
 		if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
 			return err
 		}
-		m.nu.PageFree(pg.pa)
+		if !pg.device {
+			m.nu.PageFree(pg.pa)
+		}
 		delete(m.pages, p)
 	}
 	return nil
@@ -110,7 +138,7 @@ func (m *Mem) access(va uint64, n int, need Prot, each func(frame []byte, off, d
 	for done := 0; done < n; {
 		cur := va + uint64(done)
 		pg, ok := m.pages[pageDown(cur)]
-		if !ok || pg.prot&need != need || cur >= UserTop {
+		if !ok || pg.prot&need != need || pg.device || cur >= UserTop { // device memory: not through the physmap
 			return ErrFault
 		}
 		off := int(cur % PageSize)
@@ -174,6 +202,14 @@ func (m *Mem) Clone() (*Mem, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for va, pg := range m.pages {
+		if pg.device { // shared, as Linux shares MAP_SHARED memory
+			if err := c.nu.Map(c.as, va, pg.pa, PageSize, pg.prot); err != nil {
+				c.Close()
+				return nil, err
+			}
+			c.pages[va] = pg
+			continue
+		}
 		pa, err := c.nu.PageAlloc()
 		if err != nil {
 			c.Close()
@@ -185,7 +221,7 @@ func (m *Mem) Clone() (*Mem, error) {
 			c.Close()
 			return nil, err
 		}
-		c.pages[va] = page{pa, pg.prot}
+		c.pages[va] = page{pa: pa, prot: pg.prot}
 	}
 	return c, nil
 }
@@ -199,7 +235,9 @@ func (m *Mem) Close() error {
 		return err
 	}
 	for va, pg := range m.pages {
-		m.nu.PageFree(pg.pa)
+		if !pg.device {
+			m.nu.PageFree(pg.pa)
+		}
 		delete(m.pages, va)
 	}
 	return nil

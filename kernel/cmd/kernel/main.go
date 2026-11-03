@@ -98,8 +98,12 @@ func main() {
 
 	rows, cols := 25, 80
 	if screen := startScreen(); screen != nil {
-		out.Add(screen) // the console on serial and on screen
+		so := &screenOut{con: screen}
+		out.Add(so) // the console on serial and on screen
 		cols, rows = screen.Size()
+		if err := registerFB0(dev, so); err != nil {
+			log.Warnf("/dev/fb0: %v", err)
+		}
 	}
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
 	k.tty, k.input = tty.New(out, rows, cols), input

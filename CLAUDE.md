@@ -14,7 +14,7 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + census + fat-interop + smoke + go-smoke + busybox-smoke + ktest + regress (full suite)
+make test         # test-unit + census + fat-interop + smoke + go-smoke + devices-smoke + busybox-smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
@@ -24,6 +24,7 @@ make run-go       # the same image, interactive
 make census       # Go runtime syscalls on the host (strace) vs tests/regression/census-go1.27.txt
 make hostsim      # the Go console + drivers on simulated hardware (kernel/hostsim), no QEMU
 make fat-interop  # kernel/fs/fat vs fsck.fat/mkfs.fat/mtools (skips without dosfstools + mtools)
+make devices-smoke # /dev/fb0 (and /dev/input/event0) driven by user programs, pixels checked (part of make test)
 make busybox      # download (once, sha256-pinned, ~/.cache/burrow-busybox) and build build/busybox
 make busybox-smoke # busybox ash typed on build/go-busybox.img (part of make test; skips without build/busybox)
 # user/*.c are built with musl-gcc (musl-tools); MUSL_GCC=/path/to/musl-gcc overrides it

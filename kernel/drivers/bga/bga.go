@@ -64,9 +64,19 @@ func SetMode(io hal.PortIO16, w, h int) (int, error) {
 }
 
 var (
-	mu     sync.Mutex
-	screen *gfx.Framebuffer
+	mu      sync.Mutex
+	screen  *gfx.Framebuffer
+	fbPhys  uint64 // where the framebuffer is (for /dev/fb0's mmap)
+	fbPitch int
 )
+
+// Phys is the framebuffer's physical address and pitch in bytes (0 before
+// the driver started).
+func Phys() (base uint64, pitchBytes int) {
+	mu.Lock()
+	defer mu.Unlock()
+	return fbPhys, fbPitch
+}
 
 // Screen is the framebuffer once the driver started (nil before, or with
 // no BGA).
@@ -109,7 +119,7 @@ func (d *display) Start(env *driver.Env) error {
 		return err
 	}
 	mu.Lock()
-	screen = fb
+	screen, fbPhys, fbPitch = fb, base, pitch
 	mu.Unlock()
 	env.Log.Infof("%dx%dx%d linear framebuffer at %#x (pitch %d)", Width, Height, BPP, base, pitch)
 	return nil

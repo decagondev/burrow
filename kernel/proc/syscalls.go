@@ -99,9 +99,12 @@ func (p *Process) write(fd uint64, b []byte) int64 {
 		f.console.Write(b)
 		return int64(len(b))
 	}
+	if wouldBlock(f, pollOut) {
+		return -int64(syscall.EAGAIN)
+	}
 	var n int
 	var err error
-	switch w := f.f.(type) {
+	switch w := device(f).(type) {
 	case Canceller: // a pipe: may block until a reader makes room
 		n, err = w.WriteCancel(b, p.cancel())
 	case io.Writer: // a device or a writable file
@@ -147,10 +150,13 @@ func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
 	case f.console != nil:
 		return ok(0) // console input reaches processes with the TTY (W10-S05): EOF until then
 	}
+	if wouldBlock(f, pollIn) {
+		return ok(-int64(syscall.EAGAIN))
+	}
 	buf := make([]byte, min(a[2], maxIO))
 	var n int
 	var err error
-	if c, isC := f.f.(Canceller); isC {
+	if c, isC := device(f).(Canceller); isC {
 		n, err = c.ReadCancel(buf, p.cancel())
 	} else {
 		n, err = f.f.Read(buf)

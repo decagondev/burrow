@@ -20,7 +20,7 @@ First user program is 20 lines of asm doing `write` + `exit`, before musl.
 ## W10 A Unix (M10) — sliced: [WAVE-10](WAVE-10-a-unix.md)
 Stories: E09.F01-F05. Demo: busybox `sh`; `ls | wc -l`; `^C` interrupts a loop.
 
-## W11 DOOM (M11)
+## W11 DOOM (M11) — sliced: [WAVE-11](WAVE-11-doom.md)
 Stories: E10.F01-F05 (F06 stretch).
 Order: 1) build `doom` against musl and run it on a Linux VM framebuffer console (proves the backend). 2) fbdev ioctls + mmap on Burrow, test with a tiny `fbtest` program. 3) evdev from PS/2, test with `evtest`-like program. 4) Freedoom WAD in initrd. 5) Doom. 6) FPS counter and tuning.
 

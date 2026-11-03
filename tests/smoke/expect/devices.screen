@@ -1,0 +1,18 @@
+# Pixels of the device checks (tests/smoke/keys/devices.keys). Append-only.
+# While fbtest holds /dev/fb0: eight 128-pixel bars, top to bottom, and the
+# console has drawn nothing over them (the band and the prompt are gone).
+size  build/screen-devices-fb0.ppm 1024 768
+pixel build/screen-devices-fb0.ppm 0 0 #ffffff
+pixel build/screen-devices-fb0.ppm 64 97 #ffffff
+pixel build/screen-devices-fb0.ppm 192 400 #ffff00
+pixel build/screen-devices-fb0.ppm 320 400 #00ffff
+pixel build/screen-devices-fb0.ppm 448 400 #00ff00
+pixel build/screen-devices-fb0.ppm 576 400 #ff00ff
+pixel build/screen-devices-fb0.ppm 704 400 #ff0000
+pixel build/screen-devices-fb0.ppm 832 767 #0000ff
+pixel build/screen-devices-fb0.ppm 1023 767 #000000
+pixel build/screen-devices-fb0.ppm 1 700 #ffffff
+# After it closed: the console repainted its band and paper.
+size  build/screen-devices-after.ppm 1024 768
+pixel build/screen-devices-after.ppm 0 2 #007d9c
+pixel build/screen-devices-after.ppm 1022 700 #1e1e28

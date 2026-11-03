@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"burrow/kernel/drivers/bga"
+	"burrow/kernel/fbdev"
+	"burrow/kernel/fs/devfs"
 	"burrow/kernel/gfx"
 )
 
@@ -58,4 +60,39 @@ func startScreen() *gfx.Console {
 	fb.DrawText(24+7*gfx.CellW*titleScale, 18+(gfx.GlyphH-1)*titleScale-gfx.GlyphH*2,
 		"files and pixels from Go", titleInk, 2)
 	return gfx.NewConsole(fb, image.Rect(0, bandHeight, fb.Width, fb.Height), consoleText, textInk, textPaper)
+}
+
+// screenOut is the on-screen console. It stands aside while a program
+// holds /dev/fb0 (W11-S01) and, when the last one lets go, repaints the
+// splash and starts a fresh console (the program's pixels are gone).
+type screenOut struct {
+	mu   sync.Mutex
+	con  *gfx.Console
+	held bool
+}
+
+func (s *screenOut) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.held {
+		return len(p), nil // the program owns the pixels; serial still has the text
+	}
+	return s.con.Write(p)
+}
+
+func (s *screenOut) hold(held bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.held = held
+	if !held {
+		s.con = startScreen()
+	}
+}
+
+// registerFB0 makes the framebuffer /dev/fb0.
+func registerFB0(dev *devfs.FS, s *screenOut) error {
+	fb := bga.Screen()
+	base, pitch := bga.Phys()
+	mode := fbdev.Mode{Phys: base, Width: fb.Width, Height: fb.Height, PitchBytes: pitch}
+	return dev.Register("fb0", fbdev.New(mode, s.hold), 0o660)
 }

@@ -122,11 +122,11 @@ func (p *Process) scan(buf []byte) (int, []<-chan struct{}, []inputWaiter) {
 			rev = pollNval
 			if f := p.fds.get(uint64(fdn)); f != nil {
 				rev = pollIn | pollOut // files and the console never block
-				if pl, isP := f.f.(Poller); isP {
+				if pl, isP := device(f).(Poller); isP {
 					var ch <-chan struct{}
 					rev, ch = pl.Poll()
 					waits = append(waits, ch)
-					if w, isW := f.f.(inputWaiter); isW && events&pollIn != 0 {
+					if w, isW := device(f).(inputWaiter); isW && events&pollIn != 0 {
 						waiters = append(waiters, w)
 					}
 				}

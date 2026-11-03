@@ -1,0 +1,7 @@
+# Ordered markers for the device files programs use (W11,
+# tests/smoke/keys/devices.keys). Append-only.
+burrow> run /bin/fbtest
+fbtest: 1024x768, 32 bpp, red at bit 16, line_length 4096, smem_len 3145728
+fbtest: bars drawn, press Enter
+fbtest: done
+burrow> poweroff

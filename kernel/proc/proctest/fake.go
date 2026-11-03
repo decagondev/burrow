@@ -146,6 +146,14 @@ func (f *Fake) FramesInUse() int {
 	return len(f.frames)
 }
 
+// PA is the physical address va maps to in as (ok false if it is not mapped).
+func (f *Fake) PA(as, va uint64) (uint64, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	m, ok := f.spaces[as][va&^(proc.PageSize-1)]
+	return m.pa, ok
+}
+
 // Prot is how va is mapped in as (ok false if it is not).
 func (f *Fake) Prot(as, va uint64) (proc.Prot, bool) {
 	f.mu.Lock()

@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -139,9 +139,21 @@ $(BUILD)/user/%: $(BUILD)/user/%.o
 	$(LD_TARGET) -static -nostdlib -o $@ $<
 # C programs: static musl (W9-S06). Debian/Ubuntu: sudo apt install musl-tools.
 MUSL_GCC ?= musl-gcc
-$(BUILD)/user/%: user/%.c | $(BUILD)/user
+$(BUILD)/user/%: user/%.c $(BUILD)/uapi/.stamp | $(BUILD)/user
 	@command -v $(MUSL_GCC) >/dev/null || { echo "$(MUSL_GCC) not found: install musl-tools (sudo apt install musl-tools) or set MUSL_GCC=..."; exit 1; }
-	$(MUSL_GCC) -static -Os -o $@ $<
+	$(MUSL_GCC) -static -Os -isystem $(BUILD)/uapi -o $@ $<
+# Linux UAPI headers (linux/, asm/, asm-generic/) for programs that use the
+# device interfaces (fbdev, evdev, W11): links to the host's linux-libc-dev
+# (links, not copies: some names differ only in case, which a Windows-backed
+# checkout cannot hold), never glibc's own headers, so musl sees only kernel ones.
+UAPI_INCLUDE ?= /usr/include
+UAPI_ASM     ?= /usr/include/x86_64-linux-gnu/asm
+$(BUILD)/uapi/.stamp: | $(BUILD)
+	@test -f $(UAPI_INCLUDE)/linux/fb.h || { echo "no Linux UAPI headers in $(UAPI_INCLUDE): sudo apt install linux-libc-dev"; exit 1; }
+	rm -rf $(BUILD)/uapi && mkdir -p $(BUILD)/uapi
+	ln -s $(UAPI_INCLUDE)/linux $(UAPI_INCLUDE)/asm-generic $(BUILD)/uapi/
+	ln -s $(UAPI_ASM) $(BUILD)/uapi/asm
+	touch $@
 
 # The initial file tree (W8): initrd/ plus the user programs in bin/, packed
 # as ustar reproducibly (sorted names, owner 0, mtime 0, modes 644/755
@@ -196,7 +208,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -231,6 +243,11 @@ smoke: $(BUILD)/disk.img
 # markers (tests/smoke/expect/boot_to_go.txt).
 go-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/boot_to_go.txt 60 tests/smoke/keys/boot_to_go.keys
+
+# The devices programs use (W11): /dev/fb0 drawn and its pixels read back
+# (tests/smoke/expect/devices.screen), /dev/input/event0.
+devices-smoke: $(BUILD)/go.img $(BUILD)/data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/devices.txt 60 tests/smoke/keys/devices.keys
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 busybox-smoke:

@@ -216,8 +216,13 @@ func TestMemoryCalls(t *testing.T) {
 	if r.call(p, 11, addr, 8192) != 0 || p.Mem().Mapped(addr, 1) {
 		t.Error("munmap")
 	}
-	if e := r.call(p, 9, 0, 4096, 1, 0x02, 3, 0); e != -int64(syscall.ENODEV) {
-		t.Errorf("file mmap = %d", e)
+	if e := r.call(p, 9, 0, 4096, 1, 0x02, 3, 0); e != -int64(syscall.EBADF) {
+		t.Errorf("mmap of a closed fd = %d", e)
+	}
+	r.str(p, scratch, "/etc/motd")
+	fd := uint64(r.call(p, 2, scratch, 0))
+	if e := r.call(p, 9, 0, 4096, 1, 0x02, fd, 0); e != -int64(syscall.ENODEV) {
+		t.Errorf("mmap of a regular file = %d, want ENODEV (not mappable yet)", e)
 	}
 	fixed := uint64(0x2000_0000_0000)
 	if got := uint64(r.call(p, 9, fixed, 4096, 3, 0x32, ^uint64(0), 0)); got != fixed {
