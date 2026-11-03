@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -234,7 +234,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke ports-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke ports-smoke ports-dl-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -292,6 +292,25 @@ doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
 ports-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
+
+# Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
+# musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds
+# build/ports-root, a tree like the target's (/bin/lua, /bin/cxxtest,
+# /bin/tcc, a C library in /usr). It ships only on go-ports.img.
+ports: | $(BUILD)
+	scripts/ports.sh $(BUILD)/ports-root
+$(BUILD)/initrd-ports.tar: $(BUILD)/initrd.tar $(BUILD)/ports-root/bin/lua
+	rm -rf $(BUILD)/initrd-ports-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-ports-root
+	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-ports-root/
+	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-ports-root -cf $@ .
+$(BUILD)/go-ports.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-ports.tar
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-ports.tar >/dev/null
+ports-dl-smoke:
+	@if [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory ports-dl-smoke-run; \
+	else echo "PORTS SMOKE SKIP (make ports downloads and builds Lua, C++ and TinyCC)"; fi
+ports-dl-smoke-run: $(BUILD)/go-ports.img $(BUILD)/data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-ports.img tests/smoke/expect/ports-dl.txt 90 tests/smoke/keys/ports-dl.keys
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 busybox-smoke:

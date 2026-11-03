@@ -20,6 +20,17 @@ Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisio
 | Doom | `readv` (musl's `fread`), then only devices: fbdev, evdev | W11 |
 | musl pthreads | threads (`clone`, `futex`, per-thread signals), `mprotect` for thread stacks | W12 |
 | a Go program | `epoll`, `eventfd`, `sigaltstack` + `SA_ONSTACK`, `madvise`, rlimits, and demand-zero `mmap` (the runtime reserves hundreds of MiB it never touches) | W12 |
+| Lua 5.4 | nothing | W12 |
+| C++ (libstdc++: exceptions, `std::thread`) | nothing beyond the threads above | W12 |
+| TinyCC, compiling on Burrow | nothing in the kernel; its last release mislinks modern musl objects, so a newer snapshot | W12 |
+
+## Toolchains
+
+- **C:** `musl-gcc` (Debian/Ubuntu `musl-tools`) for programs in the tree; `scripts/ports.sh` uses musl.cc's `x86_64-linux-musl-cross` for C and C++ (it carries a complete musl sysroot and libstdc++).
+- **C++:** that toolchain's `x86_64-linux-musl-g++ -static`. Exceptions and threads work unchanged.
+- **Go:** the host's Go, `GOOS=linux CGO_ENABLED=0`.
+- **On Burrow:** `tcc -static` with the musl headers and `libc.a` under `/usr` (`make ports`). Use `-static`: Burrow has no dynamic loader. `tcc -run` is not available in a static `tcc`.
+- **When a ported binary crashes, run the same binary on Linux first.** A crash at the same address on both is the program's (or its toolchain's) bug; TinyCC 0.9.27 was such a case. Burrow aims to fail exactly where Linux fails.
 
 ## Things that bite
 

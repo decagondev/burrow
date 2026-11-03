@@ -14,6 +14,40 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — Wave 12 complete: ports (M12)
+
+**Did:** W12-S04..S07 on top of S01-S03's threads, epoll and Go. Downloaded, pinned and built by `make ports`, run in `make ports-dl-smoke`:
+
+```text
+burrow> run /bin/lua
+Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
+> print(_VERSION .. ' says ' .. 6*7)
+Lua 5.4 says 42
+burrow> run /bin/cxxtest
+cxxtest: exception caught: "thrown 5 frames down", 0 objects left
+cxxtest: 4 std::threads summed 1..4000: 8002000
+cxxtest: ok
+burrow> sh
+$ echo 'int main(void) { puts("typed, compiled and run on Burrow"); return 7; }' >> /tmp/t.c
+$ tcc -static -o /tmp/t /tmp/t.c; /tmp/t
+typed, compiled and run on Burrow
+$ echo status $?
+status 7
+```
+
+Lua 5.4.9, C++ through musl.cc's GCC 11 toolchain (static libstdc++), and TinyCC with a musl sysroot in `/usr` needed **no kernel change at all**: every call they make was already there. `docs/06-guides/PORTING.md` is the recipe and the record of what each port needed.
+
+**Surprises:**
+- TinyCC 0.9.27's output crashed on Burrow at a garbage address. The same binary crashed at the same address on Linux: the 2017 release mislinks objects from a 2021 GCC (`R_X86_64_PLT32` calls). Running the binary on Linux first took one command and settled whose bug it was. A development snapshot of TinyCC works.
+- `tcc -run` cannot work in a static `tcc` (on Linux either): the program's copy of libc is never initialised.
+- Our own shell expands `$?` when it reads a line, so `prog; echo $?` shows the status from before the line. The test asks on the next line; the shell keeps its simplicity.
+
+**Learned:** By the last wave, porting was building, not kernel work: four ports in a row needed nothing new. The Linux ABI decision (ADR-0006) and "implement the contract" paid for everything after W10.
+
+**Next:** all twelve waves are done. What is left is BACKLOG E12 (hardening: SMP, SMEP/SMAP/NX, UEFI, virtio, networking, real hardware), plus debts noted along the way: copy-on-write fork and a page cache for writable files.
+
+**Links:** ADR-0006, PORTING.md
+
 ## 2026-11-03 — W12-S01..S03: threads, epoll, a Go user program
 
 **Did:** processes have threads, and a stock Go program runs as a Burrow user process:

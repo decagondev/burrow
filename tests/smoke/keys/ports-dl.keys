@@ -1,0 +1,43 @@
+# The downloaded ports (W12-S04..S06) typed into the Go kernel's console:
+# the Lua REPL, C++ with exceptions and threads, and TinyCC compiling C on
+# Burrow (a shipped file, then a program typed at the shell).
+# Waits avoid trailing spaces, which editors strip.
+wait burrow>
+type run /bin/lua
+key ret
+wait Lua.org, PUC-Rio
+type print(_VERSION .. ' says ' .. 6*7)
+key ret
+type t = {} for w in ('burrow runs lua'):gmatch('%a+') do t[#t+1] = w:upper() end print(table.concat(t, '-'))
+key ret
+type print(pcall(error, 'caught in lua'))
+key ret
+key ctrl-d
+wait burrow>
+type run /bin/cxxtest
+key ret
+wait cxxtest: ok
+wait burrow>
+type run /bin/tcc -static -o /tmp/hello /usr/share/burrow/hello.c
+key ret
+wait burrow>
+type run /tmp/hello 20
+key ret
+wait fib(20)
+wait burrow>
+type sh
+key ret
+wait $
+type echo '#include <stdio.h>' > /tmp/t.c; echo 'int main(void) { puts("typed, compiled and run on Burrow"); return 7; }' >> /tmp/t.c
+key ret
+type tcc -static -o /tmp/t /tmp/t.c; /tmp/t
+key ret
+# our sh expands $? when it reads a line, so the status is asked on the next one
+type echo status $?
+key ret
+wait status 7
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

@@ -1,4 +1,4 @@
-# W12 Ports  (M12)  — status: in progress
+# W12 Ports  (M12)  — status: done
 
 Goal: bringing software to Burrow is routine. Demo: a Go program, a Lua REPL, C++ with exceptions and `std::thread`, and a C compiler running *on* Burrow. Stories: E11 ([BACKLOG.md](../BACKLOG.md)), [ADR-0006](../../03-decisions/ADR-0006-linux-abi-userland.md). The guide written along the way: [PORTING.md](../../06-guides/PORTING.md).
 
@@ -20,9 +20,17 @@ As built: `epoll.go`, `eventfd.go`, `limits.go`, host-tested; the Go runtime's p
 `user/go/`: a static `GOOS=linux` program built by the host's Go toolchain (goroutines, channels, timers, GC, `os`), run from the console.
 As built: `user/go/gohello` (its own module; every `user/go/<name>/main.go` becomes `/bin/<name>`). The runtime's first act, reserving hundreds of MiB for its page allocator, failed until user `mmap`/`brk` memory became demand-zero (`kernel/proc/area.go`): areas, filled at first touch by an answered page fault or a kernel copy. Requests that threads queued just before `exit_group` are now dropped quietly. S01-S03 are one commit: the Go runtime was the test that finished all three.
 
-### [ ] W12-S04 Lua 5.4 (E11) — needs a go-ahead to download its source
-### [ ] W12-S05 C++: exceptions and std::thread (E11) — needs a go-ahead to download a musl C++ toolchain
-### [ ] W12-S06 A C compiler on Burrow: TinyCC (E11) — needs a go-ahead to download its source
-### [~] W12-S07 docs/06-guides/PORTING.md (E11)
+### [x] W12-S04 Lua 5.4 (E11)
+Lua 5.4.9 (sha256 from lua.org), all of `src/` but `luac.c`, `-DLUA_USE_POSIX`, static: the REPL runs at the console with nothing new in the kernel.
+
+### [x] W12-S05 C++: exceptions and std::thread (E11)
+musl.cc's `x86_64-linux-musl-cross` (GCC 11.2.1, 115 MB, hash pinned here) builds `user/cxx/cxxtest.cpp` against static libstdc++: an exception unwinds five frames, `std::thread`s with a mutex and a condition variable, an exception carried between threads, containers, iostreams. Nothing new in the kernel: S01's threads were what it needed.
+
+### [x] W12-S06 A C compiler on Burrow: TinyCC (E11)
+A static musl `tcc` plus the C library it links against (the toolchain's musl headers, CRT objects and `libc.a` under `/usr`). On Burrow it compiles `/usr/share/burrow/hello.c` to `/tmp/hello`, which runs, and a program typed at `sh` with `echo` into `/tmp`. TinyCC 0.9.27, the last release, links musl objects from a modern GCC wrongly (calls through `R_X86_64_PLT32` jump to garbage, on Linux too), so the build uses the development branch at a pinned commit from the GitHub mirror of `mob`. `tcc -run` does not work in a static `tcc` on Linux either (the program's copy of libc is never initialised) and is not part of the check.
+
+### [x] W12-S07 docs/06-guides/PORTING.md (E11)
 
 Exit: **M12 demo — ports.** `make clean test` green; DEVLOG wave entry.
+
+As built: `make ports` (`scripts/ports.sh`) fetches and builds S04-S06 into `build/ports-root`, shipped on `go-ports.img`; `make ports-dl-smoke` types the session and skips without the downloads (CI skips it). S04-S07 are one commit.

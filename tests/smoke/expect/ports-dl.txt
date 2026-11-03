@@ -1,0 +1,16 @@
+# Ordered markers for the downloaded ports (W12-S04..S06, tests/smoke/keys/ports-dl.keys). Append-only.
+burrow> run /bin/lua
+Lua 5.4 says 42
+BURROW-RUNS-LUA
+false	caught in lua
+burrow> run /bin/cxxtest
+cxxtest: exception caught: "thrown 5 frames down", 0 objects left
+cxxtest: 4 std::threads summed 1..4000: 8002000
+cxxtest: rethrown on main: from a thread
+cxxtest: ok
+burrow> run /bin/tcc -static -o /tmp/hello /usr/share/burrow/hello.c
+burrow> run /tmp/hello 20
+hello from C compiled on Burrow: fib(20) = 6765
+typed, compiled and run on Burrow
+status 7
+burrow> poweroff
