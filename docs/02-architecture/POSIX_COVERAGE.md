@@ -69,13 +69,16 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | done | W12 | the main thread's tid is the pid; tids share the pid number space |
 | 200, 234 | `tkill` `tgkill` | done | W12 | a signal for one thread |
-| 202 | `futex` | partial | W12 | `WAIT WAKE WAIT_BITSET WAKE_BITSET REQUEUE CMP_REQUEUE`, timeouts, `EINTR`; private to an address space (no PI, no robust lists) |
+| 202 | `futex` | partial | W12 | `WAIT WAKE WAIT_BITSET WAKE_BITSET REQUEUE CMP_REQUEUE`, timeouts (`FUTEX_CLOCK_REALTIME` deadlines since W14), `EINTR`; private to an address space (no PI, no robust lists) |
 | 203 | `sched_setaffinity` | done | W14 | one CPU: accepted when the mask holds CPU 0, else `-EINVAL` |
 | 204 | `sched_getaffinity` | done | W12 | one CPU |
 | 213, 291 | `epoll_create` `epoll_create1` | done | W12 | `EPOLL_CLOEXEC` |
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
 | 218 | `set_tid_address` | done | W12 | the word is cleared and futex-woken when the thread exits |
-| 228 | `clock_gettime` | partial | W9 | every clock is time since the kernel started (no RTC driver) |
+| 228 | `clock_gettime` | done | W9 | since W14 `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` are wall time from the CMOS clock (`drivers/rtc`, read once at boot, taken as UTC); every other clock counts from boot; `-EINVAL` for 10 and above 11 |
+| 229 | `clock_getres` | done | W14 | 1 ns for every clock |
+| 96, 201 | `gettimeofday` `time` | done | W14 | wall time; the timezone `gettimeofday` reports is UTC |
+| 164, 227 | `settimeofday` `clock_settime` | done | W14 | `-EPERM`: nobody sets the clock |
 | 231 | `exit_group` | done | W9 |  |
 | 232, 281 | `epoll_wait` `epoll_pwait` | partial | W12 | level- and edge-triggered, `EPOLLONESHOT`, `EPOLLRDHUP`; the signal mask of `epoll_pwait` is ignored; never restarted |
 | 233 | `epoll_ctl` | done | W12 | `ADD MOD DEL` on pipes, the terminal, devices, eventfds; `-EPERM` for regular files |

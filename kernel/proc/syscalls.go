@@ -229,20 +229,6 @@ func sysLseekFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(off)
 }
 
-var bootTime = time.Now()
-
-// clock_gettime: CLOCK_REALTIME is time since boot (no RTC driver yet).
-func sysClockGettimeFn(p *Process, a [6]uint64) (int64, bool) {
-	if a[0] > 7 {
-		return ok(-int64(syscall.EINVAL))
-	}
-	d := time.Since(bootTime)
-	var ts [16]byte
-	binary.LittleEndian.PutUint64(ts[0:], uint64(d/time.Second))
-	binary.LittleEndian.PutUint64(ts[8:], uint64(d%time.Second))
-	return ok(errno(p.mem.CopyOut(a[1], ts[:])))
-}
-
 func sysNanosleepFn(t *Thread, a [6]uint64) (int64, bool) {
 	p := t.p
 	var ts [16]byte

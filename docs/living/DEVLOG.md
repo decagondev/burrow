@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S04 a real-time clock
+
+**Did:** `drivers/rtc` reads the CMOS clock at boot and hands it to the nucleus (`nu_set_realtime`), which from then on answers the realtime clocks with wall time. Putting the clock in the nucleus rather than in Go's `proc` made the Go runtime's own `time.Now` real too, so memfs, `/tmp` and FAT got real dates without a line changed in them. User programs gained `clock_getres`, `gettimeofday`, `time`, `FUTEX_CLOCK_REALTIME` deadlines, and an `-EPERM` for anyone setting the clock. The busybox and dev smoke tests boot with a fixed RTC (2030-01-02 03:04:05), so `date`, `ls -l` and the FAT dates the host reads with `mdir` can all be checked.
+
+**Surprise:** busybox's `ls -l` printed no date column at all: `FEATURE_LS_TIMESTAMPS` was off in `user/busybox.config`. Two markers on one output line cannot both match, since `smoke.sh` moves on a line after each match; the date check is one marker.
+
+**Next:** W14-S05, `mmap` of files.
+
 ## 2026-11-03 — W14-S03 select and the small start-up calls
 
 **Did:** `select` and `pselect6` over the same wait loop as `poll`; `getrandom`, `/dev/random` and `/dev/urandom` from a new `kernel/random` (ChaCha8, seeded at boot from RDRAND, or from the TSC when the CPU has none: not for cryptography); `statx`; `readlink`/`readlinkat` (nothing is a link); `sysinfo` with real RAM figures from a new nucleus call, `nu_mem_info`; `umask`; `getrusage`; `sched_getparam`, `sched_getscheduler`, `sched_setaffinity`; `membarrier`'s query. `user/startup` checks all of them, and `make ports-smoke` runs it on the host's Linux before it boots Burrow, so a check that only Burrow passes cannot get in.

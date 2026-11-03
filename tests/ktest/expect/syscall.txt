@@ -10,4 +10,5 @@
 [ktest] nu_bootinfo_mmio ok
 [ktest] madvise_returns_frames ok
 [ktest] nu_mem_info ok
+[ktest] nu_set_realtime ok
 BURROW:KTEST:OK

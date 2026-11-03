@@ -11,6 +11,10 @@
 
 void     time_init(void);              /* after lapic_init; leaves IF unchanged */
 uint64_t time_monotonic_ns(void);      /* since time_init */
+/* Wall time (W14-S04): Go reads the CMOS clock and sets it once; until then
+ * it is time since boot, as before. */
+void     time_set_realtime_ns(uint64_t unix_ns);
+uint64_t time_realtime_ns(void);
 uint64_t time_ticks(void);             /* LAPIC timer interrupts so far */
 uint64_t time_tsc_hz(void);
 void     time_busy_wait_ns(uint64_t ns);

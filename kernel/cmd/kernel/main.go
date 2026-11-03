@@ -29,6 +29,7 @@ import (
 	_ "burrow/kernel/drivers/bga"
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
+	_ "burrow/kernel/drivers/rtc"
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
@@ -103,6 +104,7 @@ func main() {
 		Scancodes: scancodes,
 		Mouse:     mouse,
 		MapMMIO:   amd64.MapMMIO,
+		SetClock:  amd64.SetRealtime,
 	})
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))

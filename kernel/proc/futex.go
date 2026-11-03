@@ -51,7 +51,11 @@ func sysFutexFn(t *Thread, a [6]uint64) (int64, bool) {
 		if bitset == 0 {
 			return ok(-int64(syscall.EINVAL))
 		}
-		timeout, e := futexTimeout(p, a[3], op == futexWaitBitset)
+		clock := uint64(clockMonotonic)
+		if a[1]&futexClockRealtime != 0 {
+			clock = clockRealtime
+		}
+		timeout, e := futexTimeout(p, a[3], op == futexWaitBitset, clock)
 		if e != 0 {
 			return ok(e)
 		}
@@ -69,8 +73,8 @@ func sysFutexFn(t *Thread, a [6]uint64) (int64, bool) {
 }
 
 // futexTimeout reads the timespec at va: relative for FUTEX_WAIT, an
-// absolute time on the boot clock for FUTEX_WAIT_BITSET. -1: none.
-func futexTimeout(p *Process, va uint64, absolute bool) (time.Duration, int64) {
+// absolute time on clock for FUTEX_WAIT_BITSET. -1: none.
+func futexTimeout(p *Process, va uint64, absolute bool, clock uint64) (time.Duration, int64) {
 	if va == 0 {
 		return -1, 0
 	}
@@ -84,7 +88,7 @@ func futexTimeout(p *Process, va uint64, absolute bool) (time.Duration, int64) {
 	}
 	d := time.Duration(sec)*time.Second + time.Duration(nsec)
 	if absolute {
-		d -= time.Since(bootTime) // clock_gettime counts from boot for every clock
+		d -= clockNow(clock)
 	}
 	return max(d, 0), 0
 }

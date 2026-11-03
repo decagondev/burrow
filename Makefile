@@ -364,19 +364,25 @@ dev-smoke:
 dev-smoke-run: $(BUILD)/go-dev.img
 	rm -f $(BUILD)/home-test.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-test.img -label burrowhome -size 64 ../workbench
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk $(FIXED_RTC)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-1.txt 120 tests/smoke/keys/dev-1.keys
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-2.txt 90 tests/smoke/keys/dev-2.keys
 	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-test.img >/dev/null && echo "HOME DISK PASS (fsck.fat after two boots)"; \
 	else echo "HOME DISK SKIP (no fsck.fat)"; fi
+	@if command -v mdir >/dev/null; then mdir -i $(BUILD)/home-test.img ::hello.c | grep -q 2030-01-02 \
+		&& echo "HOME DATES PASS (a file saved on Burrow carries the RTC's date)" \
+		|| { echo "HOME DATES FAIL: hello.c is not dated 2030-01-02"; exit 1; }; \
+	else echo "HOME DATES SKIP (no mtools)"; fi
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
+# W14-S04: a fixed wall clock, so a smoke test can check the date Burrow reads from the RTC.
+FIXED_RTC := -rtc base=2030-01-02T03:04:05
 busybox-smoke:
 	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory busybox-smoke-run; \
 	else echo "BUSYBOX SMOKE SKIP (make busybox downloads and builds it)"; fi
 busybox-smoke-run: $(BUILD)/go-busybox.img $(BUILD)/data.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 90 tests/smoke/keys/busybox.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE) $(FIXED_RTC)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/busybox.txt 90 tests/smoke/keys/busybox.keys
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

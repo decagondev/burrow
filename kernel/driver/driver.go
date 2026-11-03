@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"time"
 
 	"burrow/kernel/fs/devfs"
 	"burrow/kernel/hal"
@@ -35,6 +36,8 @@ type Env struct {
 	Dev   *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
+	// SetClock, if set, sets the wall clock (the RTC driver calls it once).
+	SetClock func(time.Time)
 }
 
 // Driver is one device driver.

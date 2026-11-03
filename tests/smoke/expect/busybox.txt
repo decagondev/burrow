@@ -20,4 +20,8 @@ burrow> run /bin/busybox vi /tmp/v.txt
 '/tmp/v.txt' 2L, 26C
 hello from vi
 second line
+burrow> run /bin/busybox date
+Wed Jan  2 03:0
+burrow> run /bin/busybox ls -l /tmp/v.txt
+Jan  2 03:0
 burrow> poweroff

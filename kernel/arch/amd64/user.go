@@ -4,6 +4,7 @@ package amd64
 
 import (
 	"syscall"
+	"time"
 	"unsafe"
 
 	"burrow/kernel/proc"
@@ -17,6 +18,7 @@ const (
 	nrPageAlloc     = 0x1014
 	nrPageFree      = 0x1015
 	nrMemInfo       = 0x1006
+	nrSetRealtime   = 0x1007
 	nrASDestroy     = 0x1016
 	nrUThreadCreate = 0x1020
 	nrSyscallWait   = 0x1021
@@ -84,6 +86,10 @@ func (Nucleus) MemInfo() (totalBytes, freeBytes uint64) {
 	raw(nrMemInfo, uintptr(unsafe.Pointer(&m[0])))
 	return m[0], m[1]
 }
+
+// SetRealtime makes t the wall time the nucleus answers CLOCK_REALTIME with
+// (the Go runtime's time.Now included).
+func SetRealtime(t time.Time) { raw(nrSetRealtime, uintptr(t.UnixNano())) }
 
 func (Nucleus) Frame(pa uint64) []byte { return PhysBytes(pa, proc.PageSize) }
 

@@ -46,5 +46,15 @@ type run /bin/busybox cat /tmp/v.txt
 key ret
 wait second line
 wait burrow>
+# W14-S04: the wall clock comes from the RTC (make busybox-smoke boots with
+# -rtc base=2030-01-02T03:04:05), and a file written in /tmp carries it.
+type run /bin/busybox date
+key ret
+wait 2030
+wait burrow>
+type run /bin/busybox ls -l /tmp/v.txt
+key ret
+wait v.txt
+wait burrow>
 type poweroff
 key ret

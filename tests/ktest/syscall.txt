@@ -9,3 +9,5 @@ nu_bootinfo_mmio
 madvise_returns_frames
 # W14-S03: memory figures for sysinfo
 nu_mem_info
+# W14-S04: wall time
+nu_set_realtime

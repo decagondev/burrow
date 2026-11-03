@@ -19,6 +19,7 @@
 #include "uspace.h"
 #include "uthread.h"
 #include "frames.h"
+#include "time.h"
 #include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
@@ -95,6 +96,9 @@ static long nu_mem_info(struct syscall_frame *f) {
     return 16;
 }
 
+/* Wall time from the CMOS clock (W14-S04): unix nanoseconds now. */
+static long nu_set_realtime(struct syscall_frame *f) { time_set_realtime_ns(SYSARG0(f)); return 0; }
+
 /* Device memory for a Go driver (a PCI BAR): uncached, NX, at physmap + pa. */
 #define MMIO_MAX_BYTES (256ull << 20)
 #define PHYS_LIMIT     (1ull << 46)
@@ -140,6 +144,7 @@ static const sys_fn g_nu_table[] = {
     [NU_bootinfo - NU_BASE] = nu_bootinfo,
     [NU_mmio_map - NU_BASE] = nu_mmio_map,
     [NU_mem_info - NU_BASE] = nu_mem_info,
+    [NU_set_realtime - NU_BASE] = nu_set_realtime,
     [NU_physmap_base - NU_BASE] = nu_physmap_base,
     [NU_debug_exit - NU_BASE] = nu_debug_exit,
     [NU_as_create - NU_BASE] = nu_as_create,

@@ -21,6 +21,7 @@
 
 static uint64_t g_tsc_hz, g_tsc0, g_ns_mult;   /* ns = (tsc_delta * g_ns_mult) >> 32 */
 static volatile uint64_t g_ticks;
+static volatile uint64_t g_realtime_base_ns;   /* wall time at monotonic 0 */
 static void (*g_tick_hook)(void);
 
 /* Count TSC cycles while PIT channel 2 counts down CALIBRATE_MS once. */
@@ -72,6 +73,9 @@ uint64_t time_monotonic_ns(void) {
     unsigned __int128 p = (unsigned __int128)(rdtsc() - g_tsc0) * g_ns_mult;   /* mul only: no libgcc */
     return (uint64_t)(p >> 32);
 }
+
+void time_set_realtime_ns(uint64_t unix_ns) { g_realtime_base_ns = unix_ns - time_monotonic_ns(); }
+uint64_t time_realtime_ns(void) { return g_realtime_base_ns + time_monotonic_ns(); }
 
 void time_busy_wait_ns(uint64_t ns) {
     uint64_t end = time_monotonic_ns() + ns;

@@ -109,6 +109,20 @@ int kt_nu_mem_info(void) {
     return 0;
 }
 
+/* W14-S04: nu_set_realtime moves CLOCK_REALTIME (and its kin) to wall
+ * time; CLOCK_MONOTONIC does not move. */
+int kt_nu_set_realtime(void) {
+    int64_t mono0[2], mono1[2], real[2], coarse[2];
+    KT_CHECK(sys3(228, 1, (long)mono0, 0) == 0);
+    const uint64_t when = 1893456000ull * 1000000000ull;   /* 2030-01-01 00:00:00 UTC */
+    KT_CHECK(sys3(0x1007, (long)when, 0, 0) == 0);
+    KT_CHECK(sys3(228, 0, (long)real, 0) == 0 && sys3(228, 5, (long)coarse, 0) == 0);
+    KT_CHECK(sys3(228, 1, (long)mono1, 0) == 0);
+    KT_CHECK(real[0] >= 1893456000 && real[0] <= 1893456001 && coarse[0] >= real[0]);
+    KT_CHECK(mono1[0] - mono0[0] <= 1);
+    return 0;
+}
+
 /* W8-S01: nu_bootinfo copies boot_info v2; nu_mmio_map maps device memory
  * at physmap + pa (the LAPIC page: its ID register reads back) and rejects
  * bad ranges instead of panicking. */

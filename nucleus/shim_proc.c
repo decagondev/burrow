@@ -93,9 +93,13 @@ long sys_arch_prctl(struct syscall_frame *f) {
     return -EINVAL;
 }
 
-/* Every clock is the monotonic one; there is no RTC driver yet (wall time = time since boot). */
+/* The realtime clocks (REALTIME, REALTIME_COARSE, REALTIME_ALARM, TAI) are
+ * wall time once Go has set it from the CMOS clock (W14-S04); every other
+ * clock is the monotonic one. */
+#define CLOCK_REALTIME_MASK ((1u << 0) | (1u << 5) | (1u << 8) | (1u << 11))
 long sys_clock_gettime(struct syscall_frame *f) {
-    uint64_t ns = time_monotonic_ns();
+    uint64_t id = SYSARG0(f);
+    uint64_t ns = id < 32 && (CLOCK_REALTIME_MASK >> id & 1) ? time_realtime_ns() : time_monotonic_ns();
     int64_t *ts = (int64_t *)SYSARG1(f);
     ts[0] = (int64_t)(ns / 1000000000ull);
     ts[1] = (int64_t)(ns % 1000000000ull);
