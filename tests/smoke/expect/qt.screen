@@ -1,0 +1,19 @@
+# Pixels of Qt on Burrow (tests/smoke/keys/qt.keys). Append-only.
+# qtwindow through linuxfb: the background, the three rectangles, and a
+# pixel inside the stem of the B of "Burrow + Qt" (DejaVu Sans by FreeType).
+size  build/screen-qt-window.ppm 1024 768
+pixel build/screen-qt-window.ppm 50 50 #202430
+pixel build/screen-qt-window.ppm 200 175 #e03030
+pixel build/screen-qt-window.ppm 450 175 #30c050
+pixel build/screen-qt-window.ppm 700 175 #3060e0
+pixel build/screen-qt-window.ppm 900 600 #202430
+pixel build/screen-qt-window.ppm 106 360 #ffffff
+pixel build/screen-qt-window.ppm 101 360 #202430
+# After it quit: the console repainted its band and paper.
+size  build/screen-qt-after.ppm 1024 768
+pixel build/screen-qt-after.ppm 0 2 #007d9c
+pixel build/screen-qt-after.ppm 1022 700 #1e1e28
+# After it aborted with the screen taken: the kernel gave the console back.
+size  build/screen-qt-crash.ppm 1024 768
+pixel build/screen-qt-crash.ppm 0 2 #007d9c
+pixel build/screen-qt-crash.ppm 1022 700 #1e1e28

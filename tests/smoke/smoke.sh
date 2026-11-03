@@ -45,12 +45,12 @@ fail() { echo "SMOKE FAIL [$NAME]: $*"; echo "---- serial log ($LOG) ----"; cat 
 [ "$STATUS" -eq 124 ] && fail "timed out after ${TIMEOUT}s"
 tr -d '\r' < "$LOG" > "$LOG.clean"
 
-if grep -qE 'PANIC|FAIL' "$LOG.clean"; then fail "panic/fail line found"; fi
+if grep -aqE 'PANIC|FAIL' "$LOG.clean"; then fail "panic/fail line found"; fi
 
 line_no=0
 while IFS= read -r want || [ -n "$want" ]; do
   [[ -z "$want" || "$want" == \#* ]] && continue
-  found=$(tail -n +"$((line_no + 1))" "$LOG.clean" | grep -nF -m1 -- "$want" | cut -d: -f1 || true)
+  found=$(tail -n +"$((line_no + 1))" "$LOG.clean" | grep -anF -m1 -- "$want" | cut -d: -f1 || true)
   [ -z "$found" ] && fail "missing (or out of order): '$want'"
   line_no=$((line_no + found))
 done < "$EXPECT"

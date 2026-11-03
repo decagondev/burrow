@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15-S03 Qt draws on /dev/fb0
+
+**Did:** `qtwindow` on Burrow through Qt's linuxfb platform: it opens `/dev/fb0`, reads the mode, maps it, paints three rectangles and a line of DejaVu Sans from FreeType, and the console returns when it quits, and when it aborts with the screen taken. `qt.screen` checks 14 pixels, one inside a glyph.
+
+**Surprise:** that Burrow needed nothing: W11's fbdev and W14's terminal modes were enough, and the pixels matched the host's offscreen PNG exactly. The only failure was the harness's: linuxfb writes its console escape sequences with a trailing NUL byte, `grep` then called the serial log a binary file, and every marker went "missing". `smoke.sh` now reads logs with `grep -a`.
+
+**Next:** W15-S04, keyboard and mouse into widgets.
+
 ## 2026-11-03 — W15-S02 QtCore on Burrow
 
 **Did:** a Qt data disk: `build/qt-root` as FAT32 with label `QTDATA`, which the kernel mounts at `/opt/qt`, adding its `qt.env` to every program's environment. `qthello`, a 7.6 MB static-PIE Qt program, runs from that FAT mount: signals across a `QThread`, timers on the event loop (eventfd and ppoll), `QFile`, `QDir`, `QRandomGenerator`, the RTC's date, and a `QProcess` that forks and execs `/bin/echo` and reads its output. `make qt-smoke` checks it and joins `make test` (it skips without `make qt`). Burrow gained `waitid`, which QProcess reaps with.

@@ -12,4 +12,9 @@ qthello: thread ok
 qthello: timer ok
 qthello: ok
 [qt] core ok
+burrow> run /opt/qt/bin/qtwindow --quit-after 4000
+qtwindow: shown 1024x768
+burrow> run /opt/qt/bin/qtwindow --crash-after 3000
+qtwindow: shown 1024x768
+qtwindow: aborting with the screen taken
 burrow> poweroff

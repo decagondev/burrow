@@ -6,5 +6,22 @@ type run /opt/qt/bin/qthello
 key ret
 wait qthello:
 wait burrow>
+# S03: qtwindow through linuxfb on /dev/fb0, DejaVu text from /opt/qt/fonts;
+# the console must come back when it quits.
+type run /opt/qt/bin/qtwindow --quit-after 4000
+key ret
+wait qtwindow: shown
+sleep 1
+screendump build/screen-qt-window.ppm
+wait burrow>
+sleep 1
+screendump build/screen-qt-after.ppm
+# killed with the screen taken (SIGABRT): the kernel gives the console back
+type run /opt/qt/bin/qtwindow --crash-after 3000
+key ret
+wait qtwindow: aborting
+wait burrow>
+sleep 1
+screendump build/screen-qt-crash.ppm
 type poweroff
 key ret

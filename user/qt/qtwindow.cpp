@@ -3,8 +3,10 @@
 // blue) and a line of DejaVu Sans text. On Burrow it draws through
 // linuxfb on /dev/fb0; on the host, with QT_QPA_PLATFORM=offscreen,
 // "--png <file>" paints the same picture into an image and saves it.
-// "--quit-after <ms>" ends it (default: run until Esc or q). Prints
-// "qtwindow: shown WxH" once painted. Docs: docs/04-plan/waves/WAVE-15-qt.md.
+// "--quit-after <ms>" ends it (default: run until Esc or q);
+// "--crash-after <ms>" aborts with the screen taken, so a test can check
+// that the kernel gives the console back. Prints "qtwindow: shown WxH"
+// once painted. Docs: docs/04-plan/waves/WAVE-15-qt.md.
 #include <QFont>
 #include <QGuiApplication>
 #include <QImage>
@@ -14,6 +16,7 @@
 #include <QScreen>
 #include <QTimer>
 #include <cstdio>
+#include <cstdlib>
 
 // paint draws the picture; tests/smoke/expect/qt*.screen samples it.
 static void paint(QPainter &p, const QSize &size) {
@@ -50,10 +53,11 @@ private:
 int main(int argc, char **argv) {
     QGuiApplication app(argc, argv);
     QString png;
-    int quitAfter = -1;
+    int quitAfter = -1, crashAfter = -1;
     for (int i = 1; i + 1 < argc; i++) {
         if (QByteArray(argv[i]) == "--png") png = argv[++i];
         else if (QByteArray(argv[i]) == "--quit-after") quitAfter = QByteArray(argv[++i]).toInt();
+        else if (QByteArray(argv[i]) == "--crash-after") crashAfter = QByteArray(argv[++i]).toInt();
     }
     QSize size = app.primaryScreen()->size();
     if (!png.isEmpty()) {
@@ -68,5 +72,11 @@ int main(int argc, char **argv) {
     Window w;
     w.showFullScreen();
     if (quitAfter >= 0) QTimer::singleShot(quitAfter, &app, &QGuiApplication::quit);
+    if (crashAfter >= 0)
+        QTimer::singleShot(crashAfter, &app, [] {
+            std::printf("qtwindow: aborting with the screen taken\n");
+            std::fflush(stdout);
+            std::abort();
+        });
     return app.exec();
 }
