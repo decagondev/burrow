@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -133,6 +133,12 @@ $(BUILD)/disk.img: $(BOOT_PARTS)
 USER_ASM  := $(wildcard user/*.asm)
 USER_C    := $(wildcard user/*.c)
 USER_BINS := $(patsubst user/%.asm,$(BUILD)/user/%,$(USER_ASM)) $(patsubst user/%.c,$(BUILD)/user/%,$(USER_C))
+# Go user programs (W12-S03): user/go/<name>/ built as static GOOS=linux
+# binaries by the host's Go toolchain (no cgo), like any Linux Go program.
+USER_GO   := $(patsubst user/go/%/main.go,$(BUILD)/user/%,$(wildcard user/go/*/main.go))
+USER_BINS += $(USER_GO)
+$(BUILD)/user/%: user/go/%/main.go user/go/go.mod | $(BUILD)/user
+	cd user/go && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -trimpath -ldflags=-s -o $(abspath $@) ./$*
 $(BUILD)/user/%.o: user/%.asm | $(BUILD)/user
 	$(NASM) -f elf64 $< -o $@
 $(BUILD)/user/%: $(BUILD)/user/%.o
@@ -228,7 +234,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke ports-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -252,6 +258,7 @@ test-c: $(BUILD)/unit_tests
 test-go:
 	cd tools && $(GO) vet ./... && $(GO) test ./...
 	cd kernel && $(GO) vet ./... && $(GO) test ./...
+	cd user/go && $(GO) vet ./...
 
 # Every expect file must pass on the same boot: older ones guard old markers.
 SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to_nucleus.txt
@@ -281,6 +288,10 @@ doom-smoke-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
 	@python3 -c 'import re,sys; m=re.search(r"\(([0-9.]+) fps\)", open(sys.argv[1], errors="replace").read()); fps=float(m.group(1)) if m else 0; print("DOOM BENCH %.1f fps (timedemo demo1)" % fps); sys.exit(fps < 20)' $(BUILD)/smoke-doom-bench.log
+
+# Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 busybox-smoke:

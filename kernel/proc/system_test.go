@@ -288,3 +288,56 @@ func TestReadv(t *testing.T) {
 		t.Errorf("readv of a bad fd = %d", e)
 	}
 }
+
+func TestMprotect(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	addr := uint64(r.call(p, 9, 0, 3*4096, 0, 0x22, ^uint64(0), 0)) // PROT_NONE
+	if p.Mem().CopyOut(addr+4096, []byte{1}) == nil {
+		t.Error("PROT_NONE memory was writable")
+	}
+	if r.call(p, 10, addr+4096, 8192, 3) != 0 {
+		t.Fatal("mprotect")
+	}
+	if err := p.Mem().CopyOut(addr+4096, []byte{1}); err != nil {
+		t.Errorf("after mprotect(RW): %v", err)
+	}
+	if pr, _ := r.nu.Prot(p.Mem().Space(), addr+4096); pr != proc.ProtWrite {
+		t.Errorf("the touched page maps with prot %v", pr)
+	}
+	if p.Mem().CopyIn(addr, make([]byte, 1)) == nil {
+		t.Error("the guard page became accessible")
+	}
+	if e := r.call(p, 10, addr+3*4096, 4096, 3); e != -int64(syscall.ENOMEM) {
+		t.Errorf("mprotect of unmapped memory = %d", e)
+	}
+	if e := r.call(p, 10, addr+1, 4096, 3); e != -int64(syscall.EINVAL) {
+		t.Errorf("unaligned mprotect = %d", e)
+	}
+}
+
+// mmap reserves; a page gets its frame at first touch, a fault the thread
+// resumes from. PROT_NONE and writes to read-only areas are SIGSEGV.
+func TestDemandZero(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	before := r.nu.FramesInUse()
+	big := uint64(r.call(p, 9, 0, 1<<40, 3, 0x22, ^uint64(0), 0)) // 1 TiB, as Go reserves
+	if int64(big) < 0 || r.nu.FramesInUse() != before {
+		t.Fatalf("mmap of 1 TiB = %d, %d frames", int64(big), r.nu.FramesInUse()-before)
+	}
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: proc.FaultBase | 14, Args: [6]uint64{big + 5000, 0x400200, 2}}) // write, not present
+	if v := r.await(p.TID()); v != 0 || r.nu.FramesInUse() != before+1 {
+		t.Fatalf("first touch: reply %d, %d new frames", v, r.nu.FramesInUse()-before)
+	}
+	if pa, ok := r.nu.PA(p.Mem().Space(), big+4096); !ok || pa == 0 {
+		t.Error("the touched page is not mapped")
+	}
+	kid := r.call(p, 57) // fork copies the areas and the backed page
+	_ = kid
+	ro := uint64(r.call(p, 9, 0, 4096, 1, 0x22, ^uint64(0), 0)) // PROT_READ
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: proc.FaultBase | 14, Args: [6]uint64{ro, 0x400200, 2}})
+	if st, why := wait(t, p); st != 139 || why == "" {
+		t.Errorf("write to a read-only area: status %d %q", st, why)
+	}
+}

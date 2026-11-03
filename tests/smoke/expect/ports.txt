@@ -1,0 +1,11 @@
+# Ordered markers for ports and threads (W12, tests/smoke/keys/ports.keys). Append-only.
+burrow> run /bin/threads
+threads: counter 80000 (want 80000)
+threads: consumer summed 1275 (want 1275)
+threads: SIGUSR1 handled by worker 7 (want 7)
+threads: ok
+burrow> run /bin/gohello
+gohello: 8 goroutines squared 1..100: 338350 (want 338350)
+gohello: 50 goroutines counted 50000 (want 50000)
+gohello: ok
+burrow> poweroff

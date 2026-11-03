@@ -3,7 +3,6 @@ package proc
 import (
 	"encoding/binary"
 	"io"
-	"path"
 	"syscall"
 	"time"
 )
@@ -52,46 +51,41 @@ type handler func(p *Process, a [6]uint64) (res int64, exited bool)
 func ok(r int64) (int64, bool) { return r, false }
 
 var table = map[uint64]handler{
-	sysRead: sysReadFn, sysWrite: sysWriteFn, sysOpen: sysOpenFn, sysClose: sysCloseFn,
+	sysOpen: sysOpenFn, sysClose: sysCloseFn,
 	sysFstat: sysFstatFn, sysLseek: sysLseekFn, sysMmap: sysMmapFn, sysMunmap: sysMunmapFn,
-	sysBrk: sysBrkFn, sysReadv: sysReadvFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
-	sysPrctl: sysPrctlFn, sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
-	sysExit: sysExitFn, sysExitGroup: sysExitFn,
-	sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
-	sysWait4: sysWait4Fn, sysGetppid: sysGetppidFn,
-	sysGetpid: pidFn, sysGettid: pidFn, sysSetTidAddress: pidFn, // one thread: tid = pid
+	sysBrk: sysBrkFn, sysPrctl: sysPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
+	sysGetppid: sysGetppidFn, sysGetpid: pidFn,
 	sysGetuid: zeroFn, sysGetgid: zeroFn, sysGeteuid: zeroFn, sysGetegid: zeroFn, // root
-
 }
 
-func (p *Process) syscall(nr uint64, a [6]uint64) (int64, bool) {
-	h, found := table[nr]
-	if !found {
-		p.sys.unknown(p, nr)
-		return ok(-int64(syscall.ENOSYS))
+// The calls that need the calling thread (thread.go has the rest).
+func init() {
+	for nr, h := range map[uint64]thandler{
+		sysRead: sysReadFn, sysWrite: sysWriteFn, sysReadv: sysReadvFn, sysWritev: sysWritevFn,
+		sysNanosleep: sysNanosleepFn, sysArchPrctl: sysArchPrctlFn,
+		sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
+		sysWait4: sysWait4Fn,
+	} {
+		ttable[nr] = h
 	}
-	return h(p, a)
 }
 
 func pidFn(p *Process, _ [6]uint64) (int64, bool) { return ok(int64(p.PID)) }
 func zeroFn(*Process, [6]uint64) (int64, bool)    { return ok(0) }
 
-func sysExitFn(p *Process, a [6]uint64) (int64, bool) {
-	p.exit(int(a[0]&0xFF), 0, "")
-	return 0, true
-}
-
 const maxIO = 1 << 20 // one read or write moves at most this much
 
-func sysWriteFn(p *Process, a [6]uint64) (int64, bool) {
+func sysWriteFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
 	buf := make([]byte, min(a[2], maxIO))
 	if err := p.mem.CopyIn(a[1], buf); err != nil {
 		return ok(errno(err))
 	}
-	return ok(p.write(a[0], buf))
+	return ok(t.write(a[0], buf))
 }
 
-func (p *Process) write(fd uint64, b []byte) int64 {
+func (t *Thread) write(fd uint64, b []byte) int64 {
+	p := t.p
 	f := p.fds.get(fd)
 	switch {
 	case f == nil || f.flags&oAccMode == oRDONLY:
@@ -107,7 +101,7 @@ func (p *Process) write(fd uint64, b []byte) int64 {
 	var err error
 	switch w := device(f).(type) {
 	case Canceller: // a pipe: may block until a reader makes room
-		n, err = w.WriteCancel(b, p.cancel())
+		n, err = w.WriteCancel(b, t.cancel())
 	case io.Writer: // a device or a writable file
 		n, err = w.Write(b)
 	default:
@@ -120,7 +114,8 @@ func (p *Process) write(fd uint64, b []byte) int64 {
 }
 
 // writev(fd, iov, iovcnt): struct iovec { void *base; size_t len; }.
-func sysWritevFn(p *Process, a [6]uint64) (int64, bool) {
+func sysWritevFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
 	if a[2] > 1024 {
 		return ok(-int64(syscall.EINVAL))
 	}
@@ -140,11 +135,12 @@ func sysWritevFn(p *Process, a [6]uint64) (int64, bool) {
 		}
 		all = append(all, b...)
 	}
-	return ok(p.write(a[0], all))
+	return ok(t.write(a[0], all))
 }
 
-func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
-	b, e := p.readFile(a[0], a[2])
+func sysReadFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
+	b, e := t.readFile(a[0], a[2])
 	if e < 0 {
 		return ok(e)
 	}
@@ -156,7 +152,8 @@ func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
 
 // readv: one read of the iovecs' total length, scattered over them (W11:
 // musl's stdio reads with it).
-func sysReadvFn(p *Process, a [6]uint64) (int64, bool) {
+func sysReadvFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
 	if a[2] > 1024 {
 		return ok(-int64(syscall.EINVAL))
 	}
@@ -171,7 +168,7 @@ func sysReadvFn(p *Process, a [6]uint64) (int64, bool) {
 	if total > maxIO {
 		total = maxIO
 	}
-	b, e := p.readFile(a[0], total)
+	b, e := t.readFile(a[0], total)
 	if e < 0 {
 		return ok(e)
 	}
@@ -188,7 +185,8 @@ func sysReadvFn(p *Process, a [6]uint64) (int64, bool) {
 }
 
 // readFile is one read(2) of at most n bytes from fd: the bytes, or -errno.
-func (p *Process) readFile(fd, n uint64) ([]byte, int64) {
+func (t *Thread) readFile(fd, n uint64) ([]byte, int64) {
+	p := t.p
 	f := p.fds.get(fd)
 	switch {
 	case f == nil || f.flags&oAccMode == oWRONLY:
@@ -203,7 +201,7 @@ func (p *Process) readFile(fd, n uint64) ([]byte, int64) {
 	var k int
 	var err error
 	if c, isC := device(f).(Canceller); isC {
-		k, err = c.ReadCancel(buf, p.cancel())
+		k, err = c.ReadCancel(buf, t.cancel())
 	} else {
 		k, err = f.f.Read(buf)
 	}
@@ -231,50 +229,6 @@ func sysLseekFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(off)
 }
 
-const (
-	archSetFS = 0x1002
-	archGetFS = 0x1003
-	prSetName = 15 // prctl options
-	prGetName = 16
-)
-
-func sysArchPrctlFn(p *Process, a [6]uint64) (int64, bool) {
-	switch a[0] {
-	case archSetFS:
-		if err := p.sys.nu.SetFS(p.tid, a[1]); err != nil {
-			return ok(errno(err))
-		}
-		p.mu.Lock()
-		p.fs = a[1]
-		p.mu.Unlock()
-		return ok(0)
-	case archGetFS:
-		p.mu.Lock()
-		fs := p.fs
-		p.mu.Unlock()
-		var b [8]byte
-		binary.LittleEndian.PutUint64(b[:], fs)
-		return ok(errno(p.mem.CopyOut(a[1], b[:])))
-	}
-	return ok(-int64(syscall.EINVAL))
-}
-
-// prctl: only the thread name. PR_SET_NAME is accepted and ignored (ps
-// shows the program path); PR_GET_NAME returns the path's base name.
-func sysPrctlFn(p *Process, a [6]uint64) (int64, bool) {
-	switch a[0] {
-	case prSetName:
-		return ok(0)
-	case prGetName:
-		p.mu.Lock()
-		name := make([]byte, 16) // TASK_COMM_LEN, NUL-padded
-		copy(name[:15], path.Base(p.Path))
-		p.mu.Unlock()
-		return ok(errno(p.mem.CopyOut(a[1], name)))
-	}
-	return ok(-int64(syscall.EINVAL))
-}
-
 var bootTime = time.Now()
 
 // clock_gettime: CLOCK_REALTIME is time since boot (no RTC driver yet).
@@ -289,7 +243,8 @@ func sysClockGettimeFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(errno(p.mem.CopyOut(a[1], ts[:])))
 }
 
-func sysNanosleepFn(p *Process, a [6]uint64) (int64, bool) {
+func sysNanosleepFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
 	var ts [16]byte
 	if err := p.mem.CopyIn(a[0], ts[:]); err != nil {
 		return ok(errno(err))
@@ -298,7 +253,7 @@ func sysNanosleepFn(p *Process, a [6]uint64) (int64, bool) {
 	if sec < 0 || nsec < 0 || nsec >= 1e9 {
 		return ok(-int64(syscall.EINVAL))
 	}
-	return ok(p.sleep(time.Duration(sec)*time.Second + time.Duration(nsec)))
+	return ok(t.sleep(time.Duration(sec)*time.Second + time.Duration(nsec)))
 }
 
 func sysGetppidFn(p *Process, _ [6]uint64) (int64, bool) {
@@ -307,24 +262,10 @@ func sysGetppidFn(p *Process, _ [6]uint64) (int64, bool) {
 	return ok(int64(p.PPID))
 }
 
-func sysForkFn(p *Process, _ [6]uint64) (int64, bool) { return ok(p.fork()) }
+func sysForkFn(t *Thread, _ [6]uint64) (int64, bool) { return ok(t.fork()) }
 
-const (
-	cloneVM    = 0x100
-	cloneVfork = 0x4000
-	exitSignal = 0xFF // low byte of clone's flags: the signal sent at exit
-)
+func sysExecveFn(t *Thread, a [6]uint64) (int64, bool) { return ok(t.execve(a[0], a[1], a[2])) }
 
-// clone: only the fork shape (no shared memory) until threads come (W12).
-func sysCloneFn(p *Process, a [6]uint64) (int64, bool) {
-	if a[0]&^(exitSignal|cloneVfork) != 0 {
-		return ok(-int64(syscall.ENOSYS))
-	}
-	return ok(p.fork())
-}
-
-func sysExecveFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.execve(a[0], a[1], a[2])) }
-
-func sysWait4Fn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.wait4(int64(int32(a[0])), a[1], a[2]))
+func sysWait4Fn(t *Thread, a [6]uint64) (int64, bool) {
+	return ok(t.wait4(int64(int32(a[0])), a[1], a[2]))
 }

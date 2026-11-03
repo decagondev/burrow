@@ -1,0 +1,12 @@
+# Ported and multi-threaded programs (W12), typed into the Go kernel's console.
+wait burrow> 
+type run /bin/threads
+key ret
+wait threads: ok
+wait burrow> 
+type run /bin/gohello
+key ret
+wait gohello: 
+wait burrow> 
+type poweroff
+key ret

@@ -1,7 +1,6 @@
 package proc
 
 import (
-	"io/fs"
 	"path"
 	"sync"
 	"syscall"
@@ -15,20 +14,20 @@ const (
 	sigCHLD = 17
 )
 
-// Process is one program: a thread in the nucleus, memory, descriptors,
+// Process is one program: its threads (thread.go), memory, descriptors,
 // and its place in the process tree.
 type Process struct {
 	PID, PPID, PGID, SID int
 	Path                 string
 	sys                  *System
 	mem                  *Mem
-	tid                  uint64
 	fds                  *fdTable
 
 	mu            sync.Mutex
+	threads       map[int]*Thread // by TID
+	main          *Thread         // the thread whose TID is the pid (tests, TID())
 	brkStart, brk uint64
 	mmapNext      uint64
-	fs            uint64
 	cwd           string
 
 	children   map[int]*Process // live and zombie (s.mu)
@@ -38,23 +37,13 @@ type Process struct {
 	termSig    int
 	reason     string
 	done       chan struct{}
-	sigWake    chan struct{} // closed when a signal is pending (W10-S04)
 
-	// signals (p.mu)
-	actions     [nSig + 1]sigaction
-	info        [nSig + 1]sigInfo
-	sigMask     uint64 // blocked
-	pending     uint64
-	suspendMask uint64 // rt_sigsuspend: the mask to return to
-	suspended   bool
-	exited      bool
-}
-
-// cancel is closed when a signal interrupts p's blocking calls (EINTR).
-func (p *Process) cancel() <-chan struct{} {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.sigWake
+	// signals (p.mu): actions are shared by the threads; pending here are
+	// process-directed (kill), thread-directed ones are on the Thread
+	actions [nSig + 1]sigaction
+	info    [nSig + 1]sigInfo
+	pending uint64
+	exited  bool
 }
 
 // Wait blocks until the process has exited and returns a shell's view of
@@ -82,29 +71,55 @@ func (p *Process) waitStatus() uint64 {
 // Mem is the process's memory (tests use it to stage syscall arguments).
 func (p *Process) Mem() *Mem { return p.mem }
 
-// TID is the nucleus thread.
-func (p *Process) TID() uint64 { return p.tid }
+// TID is the main thread's nucleus thread (0 once it has gone).
+func (p *Process) TID() uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.main == nil {
+		return 0
+	}
+	return p.main.nt
+}
 
-// exit ends the process: thread, memory, descriptors. It stays a zombie
-// until its parent reaps it (init reaps at once); its children go to init.
+// exit ends the process: every thread, memory, descriptors. It stays a
+// zombie until its parent reaps it (init reaps at once); its children go
+// to init.
 func (p *Process) exit(code, sig int, reason string) {
 	s := p.sys
-	if err := s.nu.Kill(p.tid); err != nil {
-		s.log.Errorf("pid %d: kill: %v", p.PID, err)
+	p.mu.Lock()
+	if p.exited { // two threads ending the process at once: the first wins
+		p.mu.Unlock()
+		return
 	}
+	p.exited = true
+	threads := make([]*Thread, 0, len(p.threads))
+	for _, t := range p.threads {
+		t.exited = true
+		threads = append(threads, t)
+	}
+	p.threads = map[int]*Thread{}
+	p.mu.Unlock()
+	s.mu.Lock()
+	for _, t := range threads {
+		delete(s.byTID, t.nt)
+		s.gone[t.nt] = true
+	}
+	s.mu.Unlock()
+	for _, t := range threads {
+		if err := s.nu.Kill(t.nt); err != nil {
+			s.log.Errorf("pid %d tid %d: kill: %v", p.PID, t.TID, err)
+		}
+	}
+	s.futexDrop(p.mem)
 	if err := p.mem.Close(); err != nil {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
 	}
 	p.fds.closeAll()
-	p.mu.Lock()
-	p.exited = true
-	p.mu.Unlock()
 	if reason != "" {
 		s.log.Warnf("pid %d (%s) killed: %s", p.PID, path.Base(p.Path), reason)
 	}
 	s.mu.Lock()
 	p.exitCode, p.termSig, p.reason = code, sig, reason
-	delete(s.byTID, p.tid)
 	adopted := false
 	for pid, c := range p.children {
 		c.PPID = 1
@@ -135,11 +150,12 @@ func (p *Process) exit(code, sig int, reason string) {
 	}
 }
 
-// fork: a copy of p (memory, descriptors, registers with RAX = 0) as its child.
-func (p *Process) fork() int64 {
-	s := p.sys
+// fork: a copy of p (memory, descriptors, and the calling thread's
+// registers with RAX = 0) as its child, with one thread.
+func (t *Thread) fork() int64 {
+	p, s := t.p, t.p.sys
 	var regs Regs
-	if err := s.nu.Regs(p.tid, &regs, false); err != nil {
+	if err := s.nu.Regs(t.nt, &regs, false); err != nil {
 		return errno(err)
 	}
 	mem, err := p.mem.Clone()
@@ -148,8 +164,9 @@ func (p *Process) fork() int64 {
 	}
 	c := s.newProcess(p.Path, mem, p.fds.clone())
 	p.mu.Lock()
-	c.brkStart, c.brk, c.mmapNext, c.fs, c.cwd = p.brkStart, p.brk, p.mmapNext, p.fs, p.cwd
-	c.actions, c.sigMask = p.actions, p.sigMask // pending signals are not inherited
+	c.brkStart, c.brk, c.mmapNext, c.cwd = p.brkStart, p.brk, p.mmapNext, p.cwd
+	c.actions = p.actions // pending signals are not inherited
+	mask, fs, altSP, altSize := t.sigMask, t.fs, t.altSP, t.altSize
 	p.mu.Unlock()
 	c.PPID, c.PGID, c.SID = p.PID, p.PGID, p.SID
 	regs.RAX = 0
@@ -161,7 +178,8 @@ func (p *Process) fork() int64 {
 		c.fds.closeAll()
 		return errno(err)
 	}
-	s.register(c, tid)
+	ct := s.register(c, tid)
+	ct.sigMask, ct.fs, ct.altSP, ct.altSize = mask, fs, altSP, altSize
 	p.children[c.PID] = c
 	return int64(c.PID)
 }
@@ -174,8 +192,8 @@ const (
 
 // wait4(pid, status, options, rusage): pid > 0 that child, -1 any child,
 // 0 any in our group, < -1 any in group -pid. Blocks unless WNOHANG.
-func (p *Process) wait4(pid int64, statusVA, options uint64) int64 {
-	s := p.sys
+func (t *Thread) wait4(pid int64, statusVA, options uint64) int64 {
+	p, s := t.p, t.p.sys
 	for {
 		s.mu.Lock()
 		var found *Process
@@ -213,83 +231,8 @@ func (p *Process) wait4(pid int64, statusVA, options uint64) int64 {
 		}
 		select {
 		case <-p.childEvent:
-		case <-p.cancel():
+		case <-t.cancel():
 			return -int64(syscall.EINTR)
 		}
 	}
-}
-
-// execve: a new program in place of this one (same pid, descriptors stay
-// open). Everything that can fail happens before the old image goes.
-func (p *Process) execve(pathVA, argvVA, envpVA uint64) int64 {
-	s := p.sys
-	name, err := p.mem.CString(pathVA, 4096)
-	if err != nil {
-		return errno(err)
-	}
-	argv, err := p.strings(argvVA)
-	if err != nil {
-		return errno(err)
-	}
-	envp, err := p.strings(envpVA)
-	if err != nil {
-		return errno(err)
-	}
-	file := p.resolve(name)
-	data, err := fs.ReadFile(s.files, file)
-	if err != nil {
-		return errno(err)
-	}
-	im, err := s.prepare("/"+file, data, argv, envp)
-	if err != nil {
-		return -int64(syscall.ENOEXEC)
-	}
-	if err := s.nu.SetSpace(p.tid, im.mem.Space()); err != nil {
-		im.mem.Close()
-		return errno(err)
-	}
-	fresh := FreshRegs(im.entry, im.sp)
-	if err := s.nu.Regs(p.tid, &fresh, true); err != nil {
-		s.log.Errorf("pid %d: execve registers: %v", p.PID, err)
-	}
-	old := p.mem
-	p.mu.Lock()
-	p.mem, p.Path, p.fs = im.mem, "/"+file, 0
-	p.brkStart, p.brk, p.mmapNext = im.end, im.end, mmapBase
-	for sig := range p.actions { // handlers do not survive the old program; "ignore" does
-		if p.actions[sig].handler != sigIGN {
-			p.actions[sig] = sigaction{}
-		}
-	}
-	p.mu.Unlock()
-	p.fds.closeOnExec()
-	old.Close()
-	return 0 // RAX of the new program's first instruction
-}
-
-// strings reads a NULL-terminated array of string pointers (argv, envp).
-func (p *Process) strings(va uint64) ([]string, error) {
-	var out []string
-	total := 0
-	for i := 0; va != 0 && i < maxExecArgs; i++ {
-		var b [8]byte
-		if err := p.mem.CopyIn(va+uint64(8*i), b[:]); err != nil {
-			return nil, err
-		}
-		ptr := uint64(b[0]) | uint64(b[1])<<8 | uint64(b[2])<<16 | uint64(b[3])<<24 |
-			uint64(b[4])<<32 | uint64(b[5])<<40 | uint64(b[6])<<48 | uint64(b[7])<<56
-		if ptr == 0 {
-			return out, nil
-		}
-		str, err := p.mem.CString(ptr, maxExecSize-total)
-		if err != nil {
-			return nil, syscall.E2BIG
-		}
-		total += len(str) + 1
-		out = append(out, str)
-	}
-	if va == 0 {
-		return nil, nil
-	}
-	return nil, syscall.E2BIG
 }

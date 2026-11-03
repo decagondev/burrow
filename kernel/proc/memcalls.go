@@ -14,7 +14,7 @@ func sysBrkFn(p *Process, a [6]uint64) (int64, bool) {
 	oldTop, newTop := pageUp(p.brk), pageUp(want)
 	switch {
 	case newTop > oldTop:
-		if err := p.mem.MapAnon(oldTop, newTop-oldTop, ProtWrite); err != nil {
+		if err := p.mem.Reserve(oldTop, newTop-oldTop, ProtWrite, false); err != nil {
 			return ok(int64(p.brk))
 		}
 	case newTop < oldTop:
@@ -30,7 +30,7 @@ const (
 	mapShared   = 0x01
 	mapFixed    = 0x10
 	mapAnon     = 0x20
-	mmapMaxSize = 1 << 30
+	mmapMaxSize = 1 << 46 // reservations are free (area.go): the Go runtime asks for hundreds of MiB
 )
 
 // mmap: anonymous private memory (W9) and device memory with MAP_SHARED
@@ -55,7 +55,7 @@ func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 	if e != 0 {
 		return ok(e)
 	}
-	if err := p.mem.MapAnon(addr, n, pr); err != nil {
+	if err := p.mem.Reserve(addr, n, pr, prot&7 == 0); err != nil {
 		return ok(-int64(syscall.ENOMEM))
 	}
 	return ok(int64(addr))
@@ -80,6 +80,31 @@ func (p *Process) pickAddr(addr, n uint64, fixed bool) (uint64, int64) {
 	p.mmapNext += n + PageSize // one unmapped guard page between mappings
 	return addr, 0
 }
+
+// mprotect: new protection for mapped memory (musl opens a thread's stack
+// with it). PROT_NONE makes untouched pages inaccessible; touched ones stay
+// readable.
+func sysMprotectFn(p *Process, a [6]uint64) (int64, bool) {
+	if a[0]%PageSize != 0 {
+		return ok(-int64(syscall.EINVAL))
+	}
+	var pr Prot
+	if a[2]&protWrite != 0 {
+		pr |= ProtWrite
+	}
+	if a[2]&protExec != 0 {
+		pr |= ProtExec
+	}
+	switch err := p.mem.Protect(a[0], pageUp(a[1]), pr, a[2]&7 == 0); {
+	case err == errNotMapped:
+		return ok(-int64(syscall.ENOMEM))
+	case err != nil:
+		return ok(-int64(syscall.EINVAL))
+	}
+	return ok(0)
+}
+
+func init() { table[10] = sysMprotectFn }
 
 func sysMunmapFn(p *Process, a [6]uint64) (int64, bool) {
 	if a[0]%PageSize != 0 || a[0] >= UserTop || a[1] == 0 {

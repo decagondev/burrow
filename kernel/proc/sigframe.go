@@ -46,17 +46,36 @@ type sigInfo struct {
 	what        string // faults: for the log ("page fault")
 }
 
-// pushFrame writes the frame for a handler of signal sig below r.RSP and
-// returns the registers the handler starts with.
-func (p *Process) pushFrame(r Regs, sig int, act sigaction, oldMask uint64, info sigInfo) (Regs, error) {
-	fx := (r.RSP - redZone - fxSize) &^ 63
+// altStack is a thread's sigaltstack (size 0: none).
+type altStack struct{ sp, size uint64 }
+
+func (a altStack) holds(rsp uint64) bool { return a.size != 0 && rsp >= a.sp && rsp < a.sp+a.size }
+
+// pushFrame writes the frame for a handler of signal sig below r.RSP (or,
+// with SA_ONSTACK and an alternate stack the thread is not already on, at
+// its top) and returns the registers the handler starts with.
+func (p *Process) pushFrame(r Regs, sig int, act sigaction, oldMask uint64, info sigInfo, alt altStack) (Regs, error) {
+	top := r.RSP - redZone
+	if act.flags&saOnstack != 0 && alt.size != 0 && !alt.holds(r.RSP) {
+		top = alt.sp + alt.size
+	}
+	fx := (top - fxSize) &^ 63
 	sp := ((fx - frameSize) &^ 15) - 8 // as if a call pushed the return address
+	if alt.size != 0 && alt.holds(top-1) && sp < alt.sp {
+		return r, ErrFault // the alternate stack is too small: Linux kills the thread too
+	}
 	if err := p.mem.CopyOut(fx, r.FX[:]); err != nil {
 		return r, err
 	}
 	f := make([]byte, frameSize)
 	le := binary.LittleEndian
 	le.PutUint64(f[0:], act.restorer)
+	uc := f[ucOffset:] // uc_stack: the alternate stack, as sigaltstack would report it
+	le.PutUint64(uc[16:], alt.sp)
+	if alt.size == 0 {
+		le.PutUint32(uc[24:], ssDisable)
+	}
+	le.PutUint64(uc[32:], alt.size)
 	mc := f[ucOffset+ucMcontext:]
 	for i, reg := range scRegs(&r) {
 		le.PutUint64(mc[8*i:], *reg)

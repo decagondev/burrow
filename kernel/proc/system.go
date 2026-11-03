@@ -22,12 +22,16 @@ type System struct {
 	log     *klog.Logger
 
 	mu       sync.Mutex
-	byTID    map[uint64]*Process // live processes, by their (one) thread
-	byPID    map[int]*Process    // live processes and zombies
-	nextPID  int
-	reported map[uint64]bool // unknown syscall numbers already logged
-	tty      *tty.TTY        // the controlling terminal (SetTerminal), or nil
-	init     *Process        // pid 1 (kernel-side, no thread)
+	byTID    map[uint64]*Thread // live threads, by nucleus thread
+	gone     map[uint64]bool    // threads ended while a request of theirs may still be queued
+	byPID    map[int]*Process   // live processes and zombies
+	nextPID  int                // pids and tids share one number space
+	reported map[uint64]bool    // unknown syscall numbers already logged
+	tty      *tty.TTY           // the controlling terminal (SetTerminal), or nil
+	init     *Process           // pid 1 (kernel-side, no thread)
+
+	futexMu sync.Mutex
+	futexes map[futexKey][]*futexWaiter // futex.go
 }
 
 // NewSystem: programs are read from files; fds 0-2 are the console.
@@ -35,7 +39,8 @@ type System struct {
 // and reaps every child of its own as soon as it exits.
 func NewSystem(nu Nucleus, files fs.FS, console io.Writer, log *klog.Logger) *System {
 	s := &System{nu: nu, files: files, console: console, log: log,
-		byTID: map[uint64]*Process{}, byPID: map[int]*Process{}, nextPID: 1, reported: map[uint64]bool{}}
+		byTID: map[uint64]*Thread{}, gone: map[uint64]bool{}, byPID: map[int]*Process{}, nextPID: 1, reported: map[uint64]bool{},
+		futexes: map[futexKey][]*futexWaiter{}}
 	s.init = s.newProcess("init", nil, &fdTable{fds: map[int]fd{}})
 	s.init.PGID, s.init.SID = 1, 1
 	s.byPID[1] = s.init
@@ -149,20 +154,24 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 }
 
 func (s *System) newProcess(file string, mem *Mem, fds *fdTable) *Process {
-	s.mu.Lock()
-	pid := s.nextPID
-	s.nextPID++
-	s.mu.Unlock()
-	return &Process{PID: pid, Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
+	return &Process{PID: s.newID(), Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
 		cwd: "/", children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{}),
-		sigWake: make(chan struct{})}
+		threads: map[int]*Thread{}}
 }
 
-// register publishes p with its thread (s.mu held).
-func (s *System) register(p *Process, tid uint64) {
-	p.tid = tid
-	s.byTID[tid] = p
+// newID hands out the next pid or tid.
+func (s *System) newID() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := s.nextPID
+	s.nextPID++
+	return id
+}
+
+// register publishes p with its main thread, nucleus thread nt (s.mu held).
+func (s *System) register(p *Process, nt uint64) *Thread {
 	s.byPID[p.PID] = p
+	return p.addThread(nt, p.PID)
 }
 
 // Serve runs the dispatcher until the nucleus refuses to wait.
@@ -181,27 +190,41 @@ func (s *System) Serve() error {
 
 func (s *System) handle(r Request) {
 	s.mu.Lock()
-	p := s.byTID[r.TID]
+	t, late := s.byTID[r.TID], s.gone[r.TID]
 	s.mu.Unlock()
-	if p == nil {
+	if t == nil && late { // asked just before its process ended (exit_group): drop it
+		s.nu.Kill(r.TID)
+		return
+	}
+	if t == nil {
 		s.log.Errorf("request from unknown thread %d (nr %#x)", r.TID, r.Nr)
 		s.nu.Kill(r.TID)
 		return
 	}
 	switch {
 	case r.Nr == InterruptNr: // stopped so that a pending signal can run
-		p.stopped(false, 0, sigInfo{}, 0)
+		t.stopped(false, 0, sigInfo{}, 0)
+		return
+	case r.IsFault() && r.Vector() == 14 && r.Args[2]&pfPresent == 0 &&
+		t.p.mem.FaultIn(r.Args[0], r.Args[2]&pfWrite != 0):
+		s.nu.Reply(t.nt, 0) // a first touch of demand-zero memory: resume
 		return
 	case r.IsFault():
 		sig, what := faultSignal(r.Vector())
-		p.stopped(true, sig, sigInfo{signo: int32(sig), code: siKernel, addr: r.Args[0], what: what}, r.Args[1])
+		t.stopped(true, sig, sigInfo{signo: int32(sig), code: siKernel, addr: r.Args[0], what: what}, r.Args[1])
 		return
 	}
-	res, exited := p.syscall(r.Nr, r.Args)
+	res, exited := t.syscall(r.Nr, r.Args)
 	if !exited {
-		p.finish(res, r.Nr) // a pending signal runs before the thread returns
+		t.finish(res, r.Nr) // a pending signal runs before the thread returns
 	}
 }
+
+// Page fault error code bits (args[2] of a #PF request).
+const (
+	pfPresent = 1 << 0 // the page was there: a protection fault
+	pfWrite   = 1 << 1
+)
 
 // faultSignal maps an exception vector to the signal Linux would deliver.
 func faultSignal(vector uint64) (int, string) {

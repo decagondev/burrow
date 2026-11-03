@@ -14,6 +14,39 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W12-S01..S03: threads, epoll, a Go user program
+
+**Did:** processes have threads, and a stock Go program runs as a Burrow user process:
+
+```text
+burrow> run /bin/threads
+threads: counter 80000 (want 80000)
+threads: consumer summed 1275 (want 1275)
+threads: SIGUSR1 handled by worker 7 (want 7)
+threads: ok
+burrow> run /bin/gohello
+gohello: go1.27.3 on linux/amd64, pid 10
+gohello: 8 goroutines squared 1..100: 338350 (want 338350)
+gohello: 50 goroutines counted 50000 (want 50000)
+gohello: timers: slept and ticked for 76ms
+gohello: GC: 9 cycles, 25 MiB allocated in all
+gohello: ok
+```
+
+All policy, no nucleus change: the nucleus already ran many ring-3 threads per address space. `kernel/proc` gained a `Thread` (TID, signal mask and pending set, EINTR channel, TLS, sigaltstack, `clear_child_tid`), thread-shaped `clone`, `exit` vs `exit_group`, futexes as goroutines on channels, per-thread and process-directed signals with `SA_ONSTACK`, `epoll` and `eventfd` over the `Poller` interface from W10, `mprotect`, `madvise`, rlimits, and demand-zero `mmap`/`brk`.
+
+**Surprises:**
+- The Go runtime's first act failed: "failed to reserve page summary memory". It reserves hundreds of MiB it never touches, and Burrow backed every mmapped page at once. The fix is the user-space twin of BUG-0012: areas filled on first touch, through the resumable faults W10 built for copy-on-write.
+- musl's `pthread_create` maps a thread stack `PROT_NONE` and opens it with `mprotect`, which did not exist.
+- Making every handler take a thread would have touched 70 functions. A second table for the 25 calls that need the caller kept the change honest and small.
+- A thread's request queued just before `exit_group` showed up as "request from unknown thread". Dropping it is right; logging an error was not.
+
+**Learned:** The Go runtime is the best conformance test Burrow has: one program exercises threads, futexes, tgkill, alternate signal stacks, epoll, eventfd and lazy memory, and it fails loudly and precisely when any of them is wrong.
+
+**Next:** W12-S04..S07: Lua, C++ with exceptions and `std::thread`, TinyCC on Burrow (each needs a download), and the porting guide.
+
+**Links:** BUG-0009, BUG-0012, ADR-0006
+
 ## 2026-11-03 — Wave 11 complete: DOOM (M11)
 
 **Did:** W11-S01..S06. An unmodified static musl build of doomgeneric runs on Burrow and plays Freedoom: Phase 1:

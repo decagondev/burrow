@@ -1,10 +1,17 @@
 package proc
 
+// signal.go - delivering signals (W10-S04, threads since W12-S01). A
+// process-directed signal (kill) is pending on the process and taken by the
+// first thread that does not block it; a thread-directed one (tgkill) is
+// pending on that thread. A thread takes a signal when a request of its
+// finishes or when an interrupt stop arrives, and runs the handler on its
+// own stack or, with SA_ONSTACK, its alternate stack. The system calls are
+// in sigcalls.go. Docs: POSIX_COVERAGE.md (Signals).
+
 import (
-	"encoding/binary"
 	"fmt"
+	"sort"
 	"syscall"
-	"time"
 )
 
 // Signals (Linux x86-64 numbers).
@@ -31,12 +38,14 @@ const (
 	sigIGN = 1
 
 	saSiginfo   = 4
+	saOnstack   = 0x08000000
 	saRestorer  = 0x04000000
 	saRestart   = 0x10000000
 	saNodefer   = 0x40000000
 	saResethand = 0x80000000
 
 	siUser   = 0 // si_code: sent by kill
+	siTkill  = -6
 	siKernel = 0x80
 
 	unblockable = 1<<(sigKILL-1) | 1<<(sigSTOP-1)
@@ -67,52 +76,79 @@ func sigName(sig int) string {
 	return fmt.Sprintf("signal %d", sig)
 }
 
-// send makes sig pending for p and wakes it: blocking calls return EINTR,
-// and a thread computing in ring 3 stops at its next tick (Interrupt).
-func (p *Process) send(sig int, info sigInfo) {
-	if p.tid == 0 { // init (kernel-side) takes no signals
-		return
-	}
-	p.mu.Lock()
-	if p.exited || sig < 1 || sig > nSig {
-		p.mu.Unlock()
-		return
-	}
+// discarded: sig would be dropped on arrival (p.mu held).
+func (p *Process) discarded(sig int) bool {
 	act := p.actions[sig]
-	if sig != sigKILL && (act.handler == sigIGN || act.handler == sigDFL && ignoredByDefault(sig)) {
-		p.mu.Unlock()
-		return // discarded, never pending
+	return sig != sigKILL && (act.handler == sigIGN || act.handler == sigDFL && ignoredByDefault(sig))
+}
+
+// send makes sig pending for p and wakes the first thread (by TID) that
+// does not block it: its blocking call returns EINTR, or, computing in
+// ring 3, it stops at its next tick (Interrupt).
+func (p *Process) send(sig int, info sigInfo) {
+	p.mu.Lock()
+	if p.exited || sig < 1 || sig > nSig || len(p.threads) == 0 || p.discarded(sig) {
+		p.mu.Unlock() // init (no threads) takes no signals
+		return
 	}
 	p.pending |= bit(sig)
 	p.info[sig] = info
-	deliverable := p.pending&^p.sigMask != 0 || sig == sigKILL
+	tids := make([]int, 0, len(p.threads))
+	for tid := range p.threads {
+		tids = append(tids, tid)
+	}
+	sort.Ints(tids)
+	var target *Thread
+	for _, tid := range tids {
+		if t := p.threads[tid]; !t.exited && (t.sigMask&bit(sig) == 0 || sig == sigKILL) {
+			target = t
+			break
+		}
+	}
+	if target != nil {
+		target.wakeLocked()
+	}
+	p.mu.Unlock()
+	if target != nil {
+		p.sys.nu.Interrupt(target.nt)
+	}
+}
+
+// send makes sig pending for t alone (tgkill).
+func (t *Thread) send(sig int, info sigInfo) {
+	p := t.p
+	p.mu.Lock()
+	if p.exited || t.exited || sig < 1 || sig > nSig || p.discarded(sig) {
+		p.mu.Unlock()
+		return
+	}
+	t.pending |= bit(sig)
+	t.info[sig] = info
+	deliverable := t.sigMask&bit(sig) == 0 || sig == sigKILL
 	if deliverable {
-		p.wakeLocked()
+		t.wakeLocked()
 	}
 	p.mu.Unlock()
 	if deliverable {
-		p.sys.nu.Interrupt(p.tid)
+		p.sys.nu.Interrupt(t.nt)
 	}
 }
 
-// wakeLocked closes sigWake once (p.mu held); takeSignal makes a new one.
-func (p *Process) wakeLocked() {
-	select {
-	case <-p.sigWake:
-	default:
-		close(p.sigWake)
-	}
+// deliverableLocked: a signal t could take now (p.mu held).
+func (t *Thread) deliverableLocked() bool {
+	return (t.pending|t.p.pending)&^(t.sigMask&^unblockable) != 0
 }
 
-// takeSignal removes the lowest deliverable pending signal (0 if none).
-func (p *Process) takeSignal() (int, sigaction, sigInfo) {
+// takeSignal removes the lowest signal t can take, its own first (0 if none).
+func (t *Thread) takeSignal() (int, sigaction, sigInfo) {
+	p := t.p
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	ready := p.pending &^ (p.sigMask &^ unblockable)
+	ready := (t.pending | p.pending) &^ (t.sigMask &^ unblockable)
 	if ready == 0 {
 		select { // nothing left: blocking calls may block again
-		case <-p.sigWake:
-			p.sigWake = make(chan struct{})
+		case <-t.sigWake:
+			t.sigWake = make(chan struct{})
 		default:
 		}
 		return 0, sigaction{}, sigInfo{}
@@ -121,31 +157,38 @@ func (p *Process) takeSignal() (int, sigaction, sigInfo) {
 	for ready&bit(sig) == 0 {
 		sig++
 	}
-	p.pending &^= bit(sig)
-	return sig, p.actions[sig], p.info[sig]
+	info := p.info[sig]
+	if t.pending&bit(sig) != 0 {
+		t.pending &^= bit(sig)
+		info = t.info[sig]
+	} else {
+		p.pending &^= bit(sig)
+	}
+	return sig, p.actions[sig], info
 }
 
 // neverRestarted are the calls Linux fails with EINTR after a handler even
-// with SA_RESTART (signal(7)): poll, ppoll, pause, nanosleep, rt_sigsuspend.
-var neverRestarted = map[uint64]bool{7: true, 271: true, 34: true, 35: true, 130: true}
+// with SA_RESTART (signal(7)): poll, ppoll, pause, nanosleep, rt_sigsuspend,
+// epoll_wait, epoll_pwait. (FUTEX_WAIT is restarted.)
+var neverRestarted = map[uint64]bool{7: true, 271: true, 34: true, 35: true, 130: true, 232: true, 281: true}
 
 // finish answers a system call: before the thread returns to ring 3, a
 // pending signal runs its handler (or its default action) first.
-func (p *Process) finish(res int64, nr uint64) {
-	s := p.sys
-	sig, act, info := p.takeSignal()
+func (t *Thread) finish(res int64, nr uint64) {
+	p, s := t.p, t.p.sys
+	sig, act, info := t.takeSignal()
 	if sig == 0 {
 		p.mu.Lock()
-		if p.suspended { // nothing was delivered after all: put the mask back
-			p.sigMask, p.suspended = p.suspendMask, false
+		if t.suspended { // nothing was delivered after all: put the mask back
+			t.sigMask, t.suspended = t.suspendMask, false
 		}
 		p.mu.Unlock()
-		s.nu.Reply(p.tid, res)
+		s.nu.Reply(t.nt, res)
 		return
 	}
 	var r Regs
-	if err := s.nu.Regs(p.tid, &r, false); err != nil {
-		s.nu.Reply(p.tid, res)
+	if err := s.nu.Regs(t.nt, &r, false); err != nil {
+		s.nu.Reply(t.nt, res)
 		return
 	}
 	r.RAX = uint64(res)
@@ -153,283 +196,75 @@ func (p *Process) finish(res int64, nr uint64) {
 		r.RIP -= 2 // back onto the SYSCALL instruction: the call runs again
 		r.RAX = nr
 	}
-	if p.deliver(sig, act, info, &r) {
-		s.nu.Reply(p.tid, int64(r.RAX))
+	if t.deliver(sig, act, info, &r) {
+		s.nu.Reply(t.nt, int64(r.RAX))
 	}
 }
 
 // deliver runs sig's handler from registers r (written back to the
 // thread), or its default action. false: the process is gone.
-func (p *Process) deliver(sig int, act sigaction, info sigInfo, r *Regs) bool {
+func (t *Thread) deliver(sig int, act sigaction, info sigInfo, r *Regs) bool {
+	p := t.p
 	switch {
 	case act.handler == sigIGN || act.handler == sigDFL && ignoredByDefault(sig):
-		return p.resume(r)
+		return t.resume(r)
 	case act.handler == sigDFL || sig == sigKILL:
 		p.exit(0, sig, "")
 		return false
 	}
 	p.mu.Lock()
-	old := p.sigMask
-	if p.suspended { // rt_sigsuspend: the handler returns to the mask before the call
-		old, p.suspended = p.suspendMask, false
+	old := t.sigMask
+	if t.suspended { // rt_sigsuspend: the handler returns to the mask before the call
+		old, t.suspended = t.suspendMask, false
 	}
 	if act.flags&saNodefer == 0 {
-		p.sigMask |= bit(sig)
+		t.sigMask |= bit(sig)
 	}
-	p.sigMask |= act.mask &^ unblockable
+	t.sigMask |= act.mask &^ unblockable
 	if act.flags&saResethand != 0 {
 		p.actions[sig] = sigaction{}
 	}
+	alt := altStack{t.altSP, t.altSize}
 	p.mu.Unlock()
-	h, err := p.pushFrame(*r, sig, act, old, info)
+	h, err := p.pushFrame(*r, sig, act, old, info, alt)
 	if err != nil { // no room on the stack: as Linux, the process dies
 		p.exit(0, sigSEGV, "no stack for a signal frame")
 		return false
 	}
 	*r = h
-	return p.resume(r)
+	return t.resume(r)
 }
 
-func (p *Process) resume(r *Regs) bool {
-	if err := p.sys.nu.Regs(p.tid, r, true); err != nil {
-		p.sys.log.Errorf("pid %d: registers: %v", p.PID, err)
+func (t *Thread) resume(r *Regs) bool {
+	if err := t.p.sys.nu.Regs(t.nt, r, true); err != nil {
+		t.p.sys.log.Errorf("pid %d tid %d: registers: %v", t.p.PID, t.TID, err)
 	}
 	return true
 }
 
 // stopped answers an interrupt or fault stop: deliver what is pending.
-func (p *Process) stopped(fault bool, sig int, info sigInfo, rip uint64) {
-	s := p.sys
+func (t *Thread) stopped(fault bool, sig int, info sigInfo, rip uint64) {
+	p, s := t.p, t.p.sys
 	if fault {
 		p.mu.Lock()
-		act, blocked := p.actions[sig], p.sigMask&bit(sig) != 0
+		act, blocked := p.actions[sig], t.sigMask&bit(sig) != 0
 		p.mu.Unlock()
 		if act.handler == sigDFL || act.handler == sigIGN || blocked { // a fault cannot be ignored
 			p.exit(0, sig, fmt.Sprintf("%s at %#x (rip %#x)", info.what, info.addr, rip))
 			return
 		}
 		var r Regs
-		if s.nu.Regs(p.tid, &r, false) == nil && p.deliver(sig, act, info, &r) {
-			s.nu.Reply(p.tid, 0)
+		if s.nu.Regs(t.nt, &r, false) == nil && t.deliver(sig, act, info, &r) {
+			s.nu.Reply(t.nt, 0)
 		}
 		return
 	}
-	sig, act, si := p.takeSignal()
+	sig, act, si := t.takeSignal()
 	if sig != 0 {
 		var r Regs
-		if s.nu.Regs(p.tid, &r, false) != nil || !p.deliver(sig, act, si, &r) {
+		if s.nu.Regs(t.nt, &r, false) != nil || !t.deliver(sig, act, si, &r) {
 			return
 		}
 	}
-	s.nu.Reply(p.tid, 0)
-}
-
-// ---- system calls ----
-
-func sysRtSigactionFn(p *Process, a [6]uint64) (int64, bool) {
-	sig := int(a[0])
-	if sig < 1 || sig > nSig || a[3] != 8 || a[1] != 0 && (sig == sigKILL || sig == sigSTOP) {
-		return ok(-int64(syscall.EINVAL))
-	}
-	var b [32]byte
-	if a[1] != 0 {
-		if err := p.mem.CopyIn(a[1], b[:]); err != nil {
-			return ok(errno(err))
-		}
-	}
-	p.mu.Lock()
-	old := p.actions[sig]
-	if a[1] != 0 {
-		le := binary.LittleEndian
-		p.actions[sig] = sigaction{le.Uint64(b[0:]), le.Uint64(b[8:]), le.Uint64(b[16:]), le.Uint64(b[24:])}
-		if p.actions[sig].handler == sigIGN || p.actions[sig].handler == sigDFL && ignoredByDefault(sig) {
-			p.pending &^= bit(sig) // POSIX: setting "ignore" discards it
-		}
-	}
-	p.mu.Unlock()
-	if a[2] != 0 {
-		le := binary.LittleEndian
-		le.PutUint64(b[0:], old.handler)
-		le.PutUint64(b[8:], old.flags)
-		le.PutUint64(b[16:], old.restorer)
-		le.PutUint64(b[24:], old.mask)
-		return ok(errno(p.mem.CopyOut(a[2], b[:])))
-	}
-	return ok(0)
-}
-
-func sysRtSigprocmaskFn(p *Process, a [6]uint64) (int64, bool) {
-	var b [8]byte
-	var set uint64
-	if a[1] != 0 {
-		if err := p.mem.CopyIn(a[1], b[:]); err != nil {
-			return ok(errno(err))
-		}
-		set = binary.LittleEndian.Uint64(b[:]) &^ unblockable
-	}
-	p.mu.Lock()
-	old := p.sigMask
-	if a[1] != 0 {
-		switch a[0] {
-		case 0: // SIG_BLOCK
-			p.sigMask |= set
-		case 1: // SIG_UNBLOCK
-			p.sigMask &^= set
-		case 2: // SIG_SETMASK
-			p.sigMask = set
-		default:
-			p.mu.Unlock()
-			return ok(-int64(syscall.EINVAL))
-		}
-		if p.pending&^p.sigMask != 0 {
-			p.wakeLocked() // an unblocked pending signal is delivered on return
-		}
-	}
-	p.mu.Unlock()
-	if a[2] != 0 {
-		binary.LittleEndian.PutUint64(b[:], old)
-		return ok(errno(p.mem.CopyOut(a[2], b[:])))
-	}
-	return ok(0)
-}
-
-// rt_sigreturn: back to the context the handler interrupted.
-func sysRtSigreturnFn(p *Process, _ [6]uint64) (int64, bool) {
-	var r Regs
-	if err := p.sys.nu.Regs(p.tid, &r, false); err != nil {
-		return ok(errno(err))
-	}
-	restored, mask, err := p.popFrame(r)
-	if err != nil || restored.RIP >= UserTop || restored.RSP >= UserTop {
-		p.exit(0, sigSEGV, "bad signal frame")
-		return 0, true
-	}
-	p.mu.Lock()
-	p.sigMask = mask &^ unblockable
-	p.mu.Unlock()
-	if err := p.sys.nu.Regs(p.tid, &restored, true); err != nil {
-		return ok(errno(err))
-	}
-	return ok(int64(restored.RAX)) // the reply puts the interrupted RAX back
-}
-
-// kill(pid, sig): pid > 0 one process, 0 our group, -1 everyone else,
-// < -1 group -pid. sig 0 only checks that the target exists.
-func sysKillFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.sys.kill(p, int64(int32(a[0])), int(a[1])))
-}
-
-func (s *System) kill(from *Process, pid int64, sig int) int64 {
-	if sig < 0 || sig > nSig {
-		return -int64(syscall.EINVAL)
-	}
-	s.mu.Lock()
-	var targets []*Process
-	for _, t := range s.byPID {
-		if t.zombie {
-			continue
-		}
-		switch {
-		case pid > 0 && int64(t.PID) == pid,
-			pid == 0 && from != nil && t.PGID == from.PGID,
-			pid == -1 && t != from && t.PID != 1,
-			pid < -1 && int64(t.PGID) == -pid:
-			targets = append(targets, t)
-		}
-	}
-	s.mu.Unlock()
-	if len(targets) == 0 {
-		return -int64(syscall.ESRCH)
-	}
-	sender := int32(0)
-	if from != nil {
-		sender = int32(from.PID)
-	}
-	for _, t := range targets {
-		if sig != 0 {
-			t.send(sig, sigInfo{signo: int32(sig), code: siUser, pid: sender})
-		}
-	}
-	return 0
-}
-
-// KillGroup signals every process in group pgrp (the TTY's ^C). Not
-// Kill(-pgrp): for group 1 that would be kill(-1), "everyone".
-func (s *System) KillGroup(pgrp, sig int) {
-	s.mu.Lock()
-	var targets []*Process
-	for _, t := range s.byPID {
-		if !t.zombie && t.PGID == pgrp {
-			targets = append(targets, t)
-		}
-	}
-	s.mu.Unlock()
-	for _, t := range targets {
-		t.send(sig, sigInfo{signo: int32(sig), code: siKernel})
-	}
-}
-
-// Kill is the kernel's own kill (the console).
-func (s *System) Kill(pid int64, sig int) error {
-	if r := s.kill(nil, pid, sig); r < 0 {
-		return syscall.Errno(-r)
-	}
-	return nil
-}
-
-func sysTgkillFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.sys.kill(p, int64(int32(a[1])), int(a[2]))) // tid = pid: one thread each
-}
-
-func sysTkillFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.sys.kill(p, int64(int32(a[0])), int(a[1])))
-}
-
-// rt_sigsuspend: wait with a temporary mask until a signal is delivered.
-func sysRtSigsuspendFn(p *Process, a [6]uint64) (int64, bool) {
-	var b [8]byte
-	if err := p.mem.CopyIn(a[0], b[:]); err != nil {
-		return ok(errno(err))
-	}
-	p.mu.Lock()
-	old := p.sigMask
-	p.sigMask = binary.LittleEndian.Uint64(b[:]) &^ unblockable
-	if p.pending&^p.sigMask != 0 {
-		p.wakeLocked()
-	}
-	p.suspendMask, p.suspended = old, true // finish puts it in the frame
-	wake := p.sigWake
-	p.mu.Unlock()
-	<-wake
-	return ok(-int64(syscall.EINTR))
-}
-
-// pause: like sigsuspend with the current mask.
-func sysPauseFn(p *Process, _ [6]uint64) (int64, bool) {
-	<-p.cancel()
-	return ok(-int64(syscall.EINTR))
-}
-
-// nanosleep, interruptible.
-func (p *Process) sleep(d time.Duration) int64 {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return 0
-	case <-p.cancel():
-		return -int64(syscall.EINTR)
-	}
-}
-
-func sysSigaltstackFn(*Process, [6]uint64) (int64, bool) { return ok(0) } // no alternate stacks yet
-
-// Linux numbers of the signal calls.
-func init() {
-	for nr, h := range map[uint64]handler{
-		13: sysRtSigactionFn, 14: sysRtSigprocmaskFn, 15: sysRtSigreturnFn, 34: sysPauseFn,
-		62: sysKillFn, 130: sysRtSigsuspendFn, 131: sysSigaltstackFn, 200: sysTkillFn, 234: sysTgkillFn,
-	} {
-		table[nr] = h
-	}
+	s.nu.Reply(t.nt, 0)
 }

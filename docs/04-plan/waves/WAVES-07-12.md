@@ -24,5 +24,5 @@ Stories: E09.F01-F05. Demo: busybox `sh`; `ls | wc -l`; `^C` interrupts a loop.
 Stories: E10.F01-F05 (F06 stretch).
 Order: 1) build `doom` against musl and run it on a Linux VM framebuffer console (proves the backend). 2) fbdev ioctls + mmap on Burrow, test with a tiny `fbtest` program. 3) evdev from PS/2, test with `evtest`-like program. 4) Freedoom WAD in initrd. 5) Doom. 6) FPS counter and tuning.
 
-## W12 Ports (M12)
+## W12 Ports (M12) — sliced: [WAVE-12](WAVE-12-ports.md)
 Stories: E11. Order by difficulty: Lua → C++ hello → C++ exceptions/threads → Go user program → a compiler on Burrow. Write `docs/06-guides/PORTING.md` as you go.

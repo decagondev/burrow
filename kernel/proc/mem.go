@@ -10,13 +10,15 @@ import (
 // ErrFault is EFAULT: an address the process has no (suitable) page at.
 var ErrFault = errors.New("proc: bad user address")
 
-// Mem is one process's memory: an address space in the nucleus plus the
-// frames proc allocated for it, page by page. Safe for concurrent use.
+// Mem is one process's memory: an address space in the nucleus, the
+// frames proc allocated for it page by page, and the areas whose pages get
+// frames when first touched (area.go). Safe for concurrent use.
 type Mem struct {
 	mu    sync.Mutex
 	nu    Nucleus
 	as    uint64
 	pages map[uint64]page // page-aligned va -> its frame
+	areas []area          // sorted, disjoint
 }
 
 type page struct {
@@ -39,8 +41,9 @@ func (m *Mem) Space() uint64 { return m.as }
 func pageDown(v uint64) uint64 { return v &^ (PageSize - 1) }
 func pageUp(v uint64) uint64   { return (v + PageSize - 1) &^ (PageSize - 1) }
 
-// MapAnon backs [va, va+n) with fresh zeroed pages. Pages already there
-// keep their contents and get prot added (segments may share a page).
+// MapAnon backs [va, va+n) with fresh zeroed pages now (ELF segments, the
+// first stack). Pages already there keep their contents and get prot added
+// (segments may share a page). mmap and brk use Reserve instead.
 func (m *Mem) MapAnon(va, n uint64, prot Prot) error {
 	if n == 0 || va >= UserTop || n > UserTop-va {
 		return ErrFault
@@ -99,10 +102,12 @@ func (m *Mem) MapDevice(va, pa, n uint64, prot Prot) error {
 	return nil
 }
 
-// Unmap removes and frees the pages in [va, va+n) (absent ones are skipped).
+// Unmap removes the areas and frees the pages in [va, va+n) (absent ones
+// are skipped).
 func (m *Mem) Unmap(va, n uint64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.cutAreas(pageDown(va), pageUp(va+n))
 	for p := pageDown(va); p < va+n && p < UserTop; p += PageSize {
 		pg, ok := m.pages[p]
 		if !ok {
@@ -119,13 +124,15 @@ func (m *Mem) Unmap(va, n uint64) error {
 	return nil
 }
 
-// Mapped reports whether every page of [va, va+n) is present.
+// Mapped reports whether every page of [va, va+n) is backed or reserved.
 func (m *Mem) Mapped(va, n uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for p := pageDown(va); p < va+n; p += PageSize {
 		if _, ok := m.pages[p]; !ok {
-			return false
+			if _, inArea := m.areaAt(p); !inArea {
+				return false
+			}
 		}
 	}
 	return true
@@ -138,6 +145,17 @@ func (m *Mem) access(va uint64, n int, need Prot, each func(frame []byte, off, d
 	for done := 0; done < n; {
 		cur := va + uint64(done)
 		pg, ok := m.pages[pageDown(cur)]
+		if !ok && cur < UserTop { // first touch of an area page: back it now
+			a, inArea := m.areaAt(cur)
+			if !inArea || a.none || a.prot&need != need {
+				return ErrFault
+			}
+			var err error
+			if pg, err = m.fillLocked(pageDown(cur), a); err != nil {
+				return err
+			}
+			ok = true
+		}
 		if !ok || pg.prot&need != need || pg.device || cur >= UserTop { // device memory: not through the physmap
 			return ErrFault
 		}
@@ -201,6 +219,7 @@ func (m *Mem) Clone() (*Mem, error) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	c.areas = append([]area(nil), m.areas...)
 	for va, pg := range m.pages {
 		if pg.device { // shared, as Linux shares MAP_SHARED memory
 			if err := c.nu.Map(c.as, va, pg.pa, PageSize, pg.prot); err != nil {
@@ -240,5 +259,6 @@ func (m *Mem) Close() error {
 		}
 		delete(m.pages, va)
 	}
+	m.areas = nil
 	return nil
 }

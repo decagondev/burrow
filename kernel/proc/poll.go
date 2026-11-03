@@ -34,20 +34,21 @@ type Poller interface {
 type inputWaiter interface{ WaitInput(delta int) }
 
 func init() {
-	table[7] = sysPollFn
-	table[271] = sysPpollFn
+	ttable[7] = sysPollFn
+	ttable[271] = sysPpollFn
 }
 
-func sysPollFn(p *Process, a [6]uint64) (int64, bool) {
+func sysPollFn(t *Thread, a [6]uint64) (int64, bool) {
 	timeout := time.Duration(-1) // negative ms: wait forever
 	if ms := int32(a[2]); ms >= 0 {
 		timeout = time.Duration(ms) * time.Millisecond
 	}
-	return ok(p.poll(a[0], a[1], timeout))
+	return ok(t.poll(a[0], a[1], timeout))
 }
 
 // ppoll: like poll with a timespec; the signal mask argument is ignored.
-func sysPpollFn(p *Process, a [6]uint64) (int64, bool) {
+func sysPpollFn(t *Thread, a [6]uint64) (int64, bool) {
+	p := t.p
 	timeout := time.Duration(-1)
 	if a[2] != 0 {
 		var ts [16]byte
@@ -60,12 +61,13 @@ func sysPpollFn(p *Process, a [6]uint64) (int64, bool) {
 		}
 		timeout = time.Duration(sec)*time.Second + time.Duration(nsec)
 	}
-	return ok(p.poll(a[0], a[1], timeout))
+	return ok(t.poll(a[0], a[1], timeout))
 }
 
 // poll waits until one of the n pollfds at va is ready, the timeout passes
 // (negative: never) or a signal arrives (EINTR); it returns how many are ready.
-func (p *Process) poll(va, n uint64, timeout time.Duration) int64 {
+func (t *Thread) poll(va, n uint64, timeout time.Duration) int64 {
+	p := t.p
 	if n > maxFDs {
 		return -int64(syscall.EINVAL)
 	}
@@ -85,7 +87,7 @@ func (p *Process) poll(va, n uint64, timeout time.Duration) int64 {
 			return p.pollDone(va, buf, ready)
 		}
 		cases := []reflect.SelectCase{
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(p.cancel())},
+			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.cancel())},
 			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(deadline)},
 		}
 		for _, ch := range waits {
