@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -328,6 +328,11 @@ hostsim:
 GO_DISPLAY ?= none
 run-go: $(BUILD)/go.img $(BUILD)/data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+
+# Doom, interactive (W11): needs `make doom` first. At burrow> type
+#   run /bin/doom -iwad /mnt/freedoom1.wad
+run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
