@@ -68,6 +68,8 @@ func (p *Process) openAt(dirfd, nameVA uint64, flags int) int64 {
 		return -int64(syscall.EISDIR)
 	case exists && !info.IsDir() && flags&oDirectory != 0:
 		return -int64(syscall.ENOTDIR)
+	case exists && info.Mode().Type() == fs.ModeSocket:
+		return -int64(syscall.ENXIO) // a socket node is reached with connect, not open
 	case flags&oAccMode == oRDONLY && exists, exists && info.Mode()&fs.ModeDevice != 0:
 		if f, err = fsys.Open(name); err != nil { // a device opened for writing writes to it
 			return errno(err)

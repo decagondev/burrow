@@ -198,6 +198,8 @@ func direntType(m fs.FileMode) byte {
 		return 2 // DT_CHR
 	case m&fs.ModeNamedPipe != 0:
 		return 1 // DT_FIFO
+	case m&fs.ModeSocket != 0:
+		return 12 // DT_SOCK
 	case m.IsRegular():
 		return 8 // DT_REG
 	}

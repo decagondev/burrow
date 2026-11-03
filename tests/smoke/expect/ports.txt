@@ -68,4 +68,29 @@ socktest: enotsock ok
 socktest: raw-is-dgram ok
 socktest: inet-pair ok
 socktest: ok
+burrow> run /bin/socknames
+socknames: path-bind ok
+socknames: path-accept ok
+socknames: path-talk ok
+socknames: path-client ok
+socknames: path-inuse ok
+socknames: path-node ok
+socknames: path-open ok
+socknames: path-refused ok
+socknames: path-unlinked ok
+socknames: path-file ok
+socknames: abstract-bind ok
+socknames: abstract-accept ok
+socknames: abstract-talk ok
+socknames: abstract-client ok
+socknames: abstract-inuse ok
+socknames: abstract-gone ok
+socknames: autobind ok
+socknames: listen-unbound ok
+socknames: accept-unlistened ok
+socknames: rights-send ok
+socknames: rights-recv ok
+socknames: rights-ctrunc ok
+socknames: credentials ok
+socknames: ok
 burrow> poweroff

@@ -105,6 +105,22 @@ func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Ti
 	return nil
 }
 
+// MakeSocket creates a socket node (W14-S07): it holds no data; the
+// kernel's table of bound names says which socket it stands for.
+func (f *FS) MakeSocket(name string, mtime time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, base, err := f.parent("bind", name)
+	if err != nil {
+		return err
+	}
+	if _, ok := p.children[base]; ok {
+		return &fs.PathError{Op: "bind", Path: name, Err: fs.ErrExist}
+	}
+	p.children[base] = &node{name: base, mode: fs.ModeSocket | 0o755, modTime: mtime}
+	return nil
+}
+
 // Mkdir creates one directory; MkdirAll creates every missing one on the way.
 func (f *FS) Mkdir(name string, mode fs.FileMode, mtime time.Time) error {
 	f.mu.Lock()

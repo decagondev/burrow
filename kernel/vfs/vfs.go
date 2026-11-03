@@ -165,6 +165,23 @@ func (v *VFS) writable(op, name string) (Writable, string, error) {
 	return w, rel, nil
 }
 
+// MakeSocket creates a socket node (a bound Unix socket's name, W14-S07)
+// on a file system that can hold one; elsewhere (FAT, as Linux's vfat)
+// it is a permission error.
+func (v *VFS) MakeSocket(name string) error {
+	w, rel, err := v.writable("bind", name)
+	if err != nil {
+		return err
+	}
+	m, ok := w.(interface {
+		MakeSocket(name string, mtime time.Time) error
+	})
+	if !ok {
+		return &fs.PathError{Op: "bind", Path: name, Err: fs.ErrPermission}
+	}
+	return wrap("bind", name, m.MakeSocket(rel, v.now()))
+}
+
 // WriteFile creates or replaces a file.
 func (v *VFS) WriteFile(name string, data []byte) error {
 	w, rel, err := v.writable("write", name)

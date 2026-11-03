@@ -10,7 +10,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 |---|---|---|---|---|
 | 0 | `read` | done | W9 | files, pipes and the terminal (blocking, `EINTR` with signals), devices |
 | 1 | `write` | partial | W9 | console, pipes and sockets (`EPIPE` and, since W14, `SIGPIPE`: BUG-0015), devices, writable files under `/tmp` (written back whole on every write) |
-| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` or `/home` on a FAT32 disk since W13: `-EACCES` on the read-only root) |
+| 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` or `/home` on a FAT32 disk since W13: `-EACCES` on the read-only root); a socket node is `-ENXIO` (W14) |
 | 3 | `close` | done | W9 |  |
 | 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
 | 5 | `fstat` | partial | W9 | `st_mode` (`S_IFSOCK` for sockets since W14), `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
@@ -35,11 +35,17 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 34 | `pause` | done | W10 | |
 | 35 | `nanosleep` | partial | W10 | `EINTR` when a signal arrives; the remaining time is not written back |
 | 39 | `getpid` | done | W9 |  |
-| 44, 45 | `sendto` `recvfrom` | partial | W14 | Unix socket pairs (`kernel/proc/sockcalls.go`); `MSG_PEEK MSG_DONTWAIT MSG_WAITALL MSG_TRUNC MSG_NOSIGNAL`; a destination address is `-EISCONN` (names are W14-S07); the peer address reads as unnamed |
-| 46, 47 | `sendmsg` `recvmsg` | partial | W14 | as `sendto`/`recvfrom` over an iovec list; `msg_flags` reports `MSG_TRUNC`; control messages are `-EOPNOTSUPP` until W14-S07 |
+| 41 | `socket` | partial | W14 | `AF_UNIX` only (`kernel/proc/socknames.go`), the same types and flags as `socketpair`; other families `-EAFNOSUPPORT` (there is no network) |
+| 42 | `connect` | partial | W14 | stream and seqpacket, to a path or an abstract name; completes at once (the server end waits in the listener's queue), waits while the queue is full (`-EAGAIN` non-blocking); `-ENOENT` for no node, `-ECONNREFUSED` for a node nobody listens on or a regular file, `-EPROTOTYPE` across types, `-EISCONN`; datagram sockets `-EOPNOTSUPP` |
+| 43, 288 | `accept` `accept4` | done | W14 | `SOCK_NONBLOCK SOCK_CLOEXEC` for the new socket; the client's address (usually unnamed); `-EINVAL` on a socket that is not listening |
+| 44, 45 | `sendto` `recvfrom` | partial | W14 | Unix sockets (`kernel/proc/sockcalls.go`); `MSG_PEEK MSG_DONTWAIT MSG_WAITALL MSG_TRUNC MSG_NOSIGNAL`; a destination address is `-EISCONN` on a connected socket and `-EOPNOTSUPP` otherwise (no named datagram sockets); `recvfrom` gives the peer's name and drops passed descriptors |
+| 46, 47 | `sendmsg` `recvmsg` | done | W14 | as `sendto`/`recvfrom` over an iovec list (`sockmsg.go`); `SCM_RIGHTS` (up to 253 descriptors; the receiver gets new descriptors for the same open file descriptions, `MSG_CMSG_CLOEXEC`; what does not fit is closed and `MSG_CTRUNC` set; a stream read stops at the next write that carried descriptors), `SCM_CREDENTIALS` accepted from senders and given to receivers with `SO_PASSCRED` (the writer's pid, uid 0, gid 0); `msg_flags` reports `MSG_TRUNC` |
+| 49 | `bind` | partial | W14 | a path makes a socket node in a writable mount (`-EADDRINUSE` while anything is at the path; FAT cannot hold one: `-EPERM`, as Linux's vfat); an abstract name (a leading NUL) lives in the system's table; a bare family autobinds a 5-hex-digit abstract name; datagram sockets `-EOPNOTSUPP` |
+| 50 | `listen` | done | W14 | backlog up to 4096 (a queue holds backlog + 1, as Linux's); `-EINVAL` when unbound |
+| 51, 52 | `getsockname` `getpeername` | done | W14 | lengths as Linux gives them (2 for unnamed, a path with its NUL, an abstract name without one); `-ENOTCONN` |
 | 48 | `shutdown` | done | W14 | `SHUT_RD SHUT_WR SHUT_RDWR`, with Linux's peer semantics (end of file, `EPIPE`); `-ENOTSOCK` |
 | 53 | `socketpair` | done | W14 | `AF_UNIX` `SOCK_STREAM SOCK_DGRAM SOCK_SEQPACKET` (`SOCK_RAW` is a datagram pair, as on Linux), `SOCK_NONBLOCK SOCK_CLOEXEC`; boundaries kept for datagram and seqpacket; readiness for `poll`, `select` and epoll with `POLLRDHUP`; `FIONREAD`; `AF_INET`/`AF_INET6` are `-EOPNOTSUPP`, other families `-EAFNOSUPPORT` |
-| 54, 55 | `setsockopt` `getsockopt` | partial | W14 | `SOL_SOCKET`: `SO_TYPE SO_ERROR SO_SNDBUF SO_RCVBUF` read, the buffer sizes set (doubled and clamped as Linux does); others `-ENOPROTOOPT` |
+| 54, 55 | `setsockopt` `getsockopt` | partial | W14 | `SOL_SOCKET`: `SO_TYPE SO_ERROR SO_SNDBUF SO_RCVBUF SO_PASSCRED SO_ACCEPTCONN SO_PEERCRED` (the peer's pid when it connected or listened, uid 0, gid 0) read; the buffer sizes (doubled and clamped as Linux does) and `SO_PASSCRED` set; others `-ENOPROTOOPT` |
 | 56 | `clone` | partial | W12 | threads (`CLONE_VM`, `CLONE_FS`, `CLONE_FILES`, `CLONE_SIGHAND` and `CLONE_THREAD` together; `SETTLS PARENT_SETTID CHILD_SETTID CHILD_CLEARTID`) and the fork shape; `CLONE_VM` without `CLONE_THREAD` (vfork, posix_spawn) copies like fork |
 | 57 | `fork` | partial | W10 | memory copied eagerly (copy-on-write later); descriptors share their open file descriptions |
 | 58 | `vfork` | partial | W10 | a full fork (the parent is not suspended) |

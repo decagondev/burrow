@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S07 named sockets and descriptor passing
+
+**Did:** `socket`, `bind`, `listen`, `connect`, `accept`/`accept4`, `getsockname`, `getpeername` for Unix stream and seqpacket sockets, over path names (a socket node in `/tmp`, through a new `vfs.MakeSocket`) and abstract names (a table in the kernel), with autobind, `SO_PEERCRED`, `SO_PASSCRED` and `SO_ACCEPTCONN`. `sendmsg` and `recvmsg` carry `SCM_RIGHTS` (new descriptors for the same open files, `MSG_CTRUNC` when the buffer is short) and `SCM_CREDENTIALS`. `socknames` runs a forked client and server over both kinds of name and passes a pipe end; its 23 checks pass on the host's Linux and on Burrow.
+
+**Surprise:** on the first Burrow boot only `credentials` failed: a plain `write` on a socket queued its bytes with sender pid 0, because the file layer's `WriteCancel` does not know who is writing. `Thread.write` now hands sockets the caller's pid. On Linux the same program first failed `path-file`: connecting to `/etc/hostname` as a normal user is `EACCES` (Linux checks write permission before the socket type), so the check uses a file of its own. Named datagram sockets were left out (`-EOPNOTSUPP`, backlog E14.F08).
+
+**Next:** W14-S08, graphics programs take the screen (`KD*`/`VT_*`).
+
 ## 2026-11-03 — W14-S06 Unix socket pairs
 
 **Did:** `socketpair(AF_UNIX)` for stream, datagram and seqpacket sockets, with `send`/`recv`, `sendmsg`/`recvmsg`, `shutdown`, the `MSG_` flags, `SO_TYPE`/`SO_ERROR`/the buffer sizes, `FIONREAD` and `S_IFSOCK`. Each end is a `Canceller` and a `Poller`, the same shape as a pipe end, so read/write, non-blocking mode, `EINTR`, poll, select and epoll worked without a line changed in them. `socktest` makes 29 checks; `make ports-smoke` runs it on the host's Linux and then on Burrow, and it passed on Burrow's first boot.

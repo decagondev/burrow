@@ -22,5 +22,10 @@ type run /bin/socktest
 key ret
 wait socktest: 
 wait burrow> 
+# W14-S07: named sockets, connections and descriptor passing
+type run /bin/socknames
+key ret
+wait socknames: 
+wait burrow> 
 type poweroff
 key ret

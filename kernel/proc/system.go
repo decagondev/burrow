@@ -21,6 +21,7 @@ type System struct {
 	files   fs.FS
 	console io.Writer
 	log     *klog.Logger
+	names   sockNames // bound Unix socket names (socknames.go)
 
 	mu       sync.Mutex
 	byTID    map[uint64]*Thread // live threads, by nucleus thread

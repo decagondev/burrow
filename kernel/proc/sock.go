@@ -1,19 +1,20 @@
 package proc
 
-// sock.go - Unix domain sockets (W14-S06): a connected pair of ends, each
-// with a receive queue the other end writes into. Stream sockets are a
-// byte stream like a pipe in each direction; datagram and seqpacket
-// sockets keep message boundaries. Shutdown follows Linux's two bits per
-// end: shutting down one side's sending marks the peer's receiving, and a
-// close marks both of the peer's. Never holds the pair's lock while
-// blocked. Names, listening and descriptor passing are W14-S07.
-// Docs: docs/02-architecture/POSIX_COVERAGE.md.
+// sock.go - Unix domain sockets (W14-S06, S07): an end is an fs.File; once
+// connected (socketpair, or connect and accept, socknames.go) it shares a
+// sockPair with its peer and has a receive queue the peer writes into.
+// Stream sockets are a byte stream like a pipe in each direction; datagram
+// and seqpacket sockets keep message boundaries. Queued chunks carry the
+// descriptors passed with them (SCM_RIGHTS) and the sender's pid.
+// Shutdown follows Linux's two bits per end: shutting down one side's
+// sending marks the peer's receiving, and a close marks both of the
+// peer's. Never holds a lock while blocked; lock order is e.mu, then the
+// pair's. Docs: docs/02-architecture/POSIX_COVERAGE.md.
 
 import (
-	"io/fs"
 	"sync"
+	"sync/atomic"
 	"syscall"
-	"time"
 )
 
 const (
@@ -31,131 +32,182 @@ const (
 	pollRdhup = 0x2000
 )
 
-// sockPair is what the two ends share: one lock, one change channel.
+// sockPair is what two connected ends share: one lock, one change channel.
 type sockPair struct {
 	mu      sync.Mutex
-	typ     int
 	end     [2]*sockEnd
 	changed chan struct{} // closed and replaced on every change
 }
 
-// sockEnd is one end, an fs.File so a descriptor can hold it.
+// chunk is one write: its bytes, the descriptors passed with it (given
+// out with its first byte), and the sender's pid.
+type chunk struct {
+	data []byte
+	fds  []*file
+	pid  int32
+}
+
+// sockEnd is one socket. Before it is connected only e.mu guards it.
 type sockEnd struct {
-	pair   *sockPair
-	side   int      // 0 or 1; the peer is side ^ 1
-	queue  [][]byte // received, not yet read: messages (stream: chunks)
-	queued int      // bytes in queue
-	shut   int      // shutRcv, shutSnd
+	sp  atomic.Pointer[sockPair] // nil until connected
+	typ int
+	sys *System // the name table (socknames.go)
+
+	mu       sync.Mutex
+	name     string // bound: a path, "\x00..." (abstract) or "" (unnamed)
+	peerName string
+	peerPID  int32 // SO_PEERCRED
+	passcred bool
+	lis      *listenQ // listening
+
+	// Guarded by the pair's lock once connected.
+	side   int
+	queue  []chunk
+	queued int
+	shut   int // shutRcv, shutSnd
 	closed bool
 	err    syscall.Errno // pending error (SO_ERROR), reported once
 	sndbuf int
 	rcvbuf int
 }
 
-func newSockPair(typ int) (*sockEnd, *sockEnd) {
-	sp := &sockPair{typ: typ, changed: make(chan struct{})}
-	for i := range sp.end {
-		sp.end[i] = &sockEnd{pair: sp, side: i, sndbuf: sockBufDefault, rcvbuf: sockBufDefault}
-	}
-	return sp.end[0], sp.end[1]
+func newSockEnd(typ int, sys *System) *sockEnd {
+	return &sockEnd{typ: typ, sys: sys, sndbuf: sockBufDefault, rcvbuf: sockBufDefault}
 }
 
-func (e *sockEnd) peer() *sockEnd { return e.pair.end[e.side^1] }
+// join connects a and b (neither connected yet) as one pair.
+func join(a, b *sockEnd) {
+	sp := &sockPair{end: [2]*sockEnd{a, b}, changed: make(chan struct{})}
+	a.side, b.side = 0, 1
+	a.sp.Store(sp)
+	b.sp.Store(sp)
+}
 
-// notify wakes every waiter (pair.mu held).
+func newSockPair(typ int, sys *System, pid int32) (*sockEnd, *sockEnd) {
+	a, b := newSockEnd(typ, sys), newSockEnd(typ, sys)
+	a.peerPID, b.peerPID = pid, pid
+	join(a, b)
+	return a, b
+}
+
+func (e *sockEnd) pair() *sockPair { return e.sp.Load() }
+func (e *sockEnd) peer() *sockEnd  { return e.pair().end[e.side^1] }
+func (e *sockEnd) stream() bool    { return e.typ == sockStream }
+
+// notify wakes every waiter (sp.mu held).
 func (sp *sockPair) notify() {
 	close(sp.changed)
 	sp.changed = make(chan struct{})
 }
 
-func (e *sockEnd) stream() bool { return e.pair.typ == sockStream }
+func unrefAll(fds []*file) {
+	for _, f := range fds {
+		f.unref()
+	}
+}
 
 // recv takes up to len(b) bytes (peek: leaves them queued). A datagram or
 // seqpacket read takes one message; full is its whole length (more than n
-// when b was too short; the rest is gone). With
+// when b was too short; the rest is gone). fds are the descriptors that
+// came with what was read (the caller owns them); pid is the sender. With
 // nothing queued it waits, unless block is false (EAGAIN); after the
 // peer's sending side is shut it returns 0. waitAll keeps a stream read
 // going until b is full.
-func (e *sockEnd) recv(b []byte, peek, block, waitAll bool, cancel <-chan struct{}) (n, full int, err error) {
-	sp := e.pair
+func (e *sockEnd) recv(b []byte, peek, block, waitAll bool, cancel <-chan struct{}) (n, full int, fds []*file, pid int32, err error) {
+	sp := e.pair()
 	for {
 		sp.mu.Lock()
 		if e.err != 0 && n == 0 {
 			err, e.err = e.err, 0
 			sp.mu.Unlock()
-			return 0, 0, err
+			return 0, 0, nil, 0, err
 		}
-		if len(e.queue) > 0 && len(b) > n {
-			k, whole := e.take(b[n:], peek)
-			n, full = n+k, n+whole
+		if len(e.queue) > 0 && len(b) > n && (n == 0 || e.queue[0].fds == nil) {
+			if n == 0 {
+				pid = e.queue[0].pid
+			}
+			k, whole, got := e.take(b[n:], peek)
+			n, full, fds = n+k, n+whole, append(fds, got...)
 			sp.notify()
-			if !e.stream() || !waitAll || n == len(b) || peek {
+			if !e.stream() || !waitAll || n == len(b) || peek || got != nil {
 				sp.mu.Unlock()
-				return n, full, nil
+				return n, full, fds, pid, nil
 			}
 		}
-		if len(e.queue) == 0 && e.shut&shutRcv != 0 || len(b) == 0 || n > 0 && !waitAll {
+		// Nothing more to take now. A waitAll read held up by a chunk that
+		// carries descriptors returns what it has.
+		if len(e.queue) == 0 && e.shut&shutRcv != 0 || len(b) == 0 || n > 0 && (!waitAll || len(e.queue) > 0) {
 			sp.mu.Unlock()
-			return n, n, nil
+			return n, n, fds, pid, nil
 		}
 		ch := sp.changed
 		sp.mu.Unlock()
 		if !block {
 			if n > 0 {
-				return n, n, nil
+				return n, n, fds, pid, nil
 			}
-			return 0, 0, syscall.EAGAIN
+			return 0, 0, nil, 0, syscall.EAGAIN
 		}
 		select {
 		case <-ch:
 		case <-cancel:
 			if n > 0 {
-				return n, n, nil
+				return n, n, fds, pid, nil
 			}
-			return 0, 0, syscall.EINTR
+			return 0, 0, nil, 0, syscall.EINTR
 		}
 	}
 }
 
-// take copies from the queue into b (pair.mu held): the bytes copied and
-// the length of what they came from (a whole message; for a stream, the same).
-func (e *sockEnd) take(b []byte, peek bool) (int, int) {
+// take copies from the queue into b (sp.mu held): the bytes copied, the
+// length of what they came from (a whole message; for a stream, the
+// same), and the descriptors that rode on it. A stream read stops before
+// a later chunk that carries descriptors, as Linux's does.
+func (e *sockEnd) take(b []byte, peek bool) (int, int, []*file) {
 	if !e.stream() {
 		m := e.queue[0]
-		n := copy(b, m)
-		if !peek {
-			e.queue, e.queued = e.queue[1:], e.queued-len(m)
+		n := copy(b, m.data)
+		if peek {
+			return n, len(m.data), nil
 		}
-		return n, len(m)
+		e.queue, e.queued = e.queue[1:], e.queued-len(m.data)
+		return n, len(m.data), m.fds
 	}
 	n := 0
 	for i := 0; i < len(e.queue) && n < len(b); i++ {
-		n += copy(b[n:], e.queue[i])
+		if i > 0 && e.queue[i].fds != nil {
+			break
+		}
+		n += copy(b[n:], e.queue[i].data)
 	}
 	if peek {
-		return n, n
+		return n, n, nil
 	}
+	fds := e.queue[0].fds
+	e.queue[0].fds = nil
 	e.queued -= n
 	for left := n; left > 0; {
-		if k := len(e.queue[0]); k <= left {
+		if k := len(e.queue[0].data); k <= left {
 			e.queue, left = e.queue[1:], left-k
 		} else {
-			e.queue[0], left = e.queue[0][left:], 0
+			e.queue[0].data, left = e.queue[0].data[left:], 0
 		}
 	}
-	return n, n
+	return n, n, fds
 }
 
-// send queues b at the peer: a stream writes all of it, waiting for room
-// (a part, if a wait is cut short); a datagram goes whole or not at all.
-func (e *sockEnd) send(b []byte, block bool, cancel <-chan struct{}) (int, error) {
-	sp := e.pair
+// send queues b, with fds on its first chunk, at the peer: a stream writes
+// all of it, waiting for room (a part, if a wait is cut short); a datagram
+// goes whole or not at all. send owns fds: what it does not queue it drops.
+func (e *sockEnd) send(b []byte, fds []*file, pid int32, block bool, cancel <-chan struct{}) (int, error) {
+	defer func() { unrefAll(fds) }()
 	if e.stream() && len(b) == 0 {
 		return 0, nil
 	}
 	if !e.stream() && len(b) > e.sndbuf-32 {
 		return 0, syscall.EMSGSIZE
 	}
+	sp := e.pair()
 	done := 0
 	for done < len(b) || len(b) == 0 && done == 0 {
 		sp.mu.Lock()
@@ -174,9 +226,10 @@ func (e *sockEnd) send(b []byte, block bool, cancel <-chan struct{}) (int, error
 			if e.stream() {
 				n = min(room, n)
 			}
-			p.queue = append(p.queue, append([]byte(nil), b[done:done+n]...))
+			p.queue = append(p.queue, chunk{append([]byte(nil), b[done:done+n]...), fds, pid})
 			p.queued += n
 			done += n
+			fds = nil
 			sp.notify()
 			sp.mu.Unlock()
 			if len(b) == 0 {
@@ -204,91 +257,3 @@ func partial(done int, err error) (int, error) {
 	}
 	return 0, err
 }
-
-// shutdown(how): SHUT_RD 0, SHUT_WR 1, SHUT_RDWR 2.
-func (e *sockEnd) shutdown(how int) {
-	sp := e.pair
-	sp.mu.Lock()
-	defer sp.mu.Unlock()
-	p := e.peer()
-	if how != 1 { // reading
-		e.shut |= shutRcv
-		p.shut |= shutSnd
-	}
-	if how != 0 { // writing
-		e.shut |= shutSnd
-		p.shut |= shutRcv
-	}
-	sp.notify()
-}
-
-func (e *sockEnd) ReadCancel(b []byte, cancel <-chan struct{}) (int, error) {
-	n, _, err := e.recv(b, false, true, false, cancel)
-	return n, err
-}
-
-func (e *sockEnd) WriteCancel(b []byte, cancel <-chan struct{}) (int, error) {
-	return e.send(b, true, cancel)
-}
-
-func (e *sockEnd) Read(b []byte) (int, error)  { return e.ReadCancel(b, nil) }
-func (e *sockEnd) Write(b []byte) (int, error) { return e.WriteCancel(b, nil) }
-
-// Close: a stream or seqpacket peer sees both its sides shut (end of file,
-// EPIPE), and ECONNRESET if this end still held unread data.
-func (e *sockEnd) Close() error {
-	sp := e.pair
-	sp.mu.Lock()
-	defer sp.mu.Unlock()
-	if e.closed {
-		return nil
-	}
-	e.closed = true
-	if p := e.peer(); sp.typ != sockDgram {
-		p.shut = shutRcv | shutSnd
-		if e.queued > 0 {
-			p.err = syscall.ECONNRESET
-		}
-	}
-	e.queue, e.queued = nil, 0
-	sp.notify()
-	return nil
-}
-
-// Poll: readable with data, at end of file or with an error; writable
-// when a write would not wait; RDHUP once the peer stopped sending, HUP
-// once both sides are shut (Linux's unix_poll).
-func (e *sockEnd) Poll() (int16, <-chan struct{}) {
-	sp := e.pair
-	sp.mu.Lock()
-	defer sp.mu.Unlock()
-	var rev int16
-	if len(e.queue) > 0 || e.shut&shutRcv != 0 {
-		rev |= pollIn
-	}
-	if e.shut&shutRcv != 0 {
-		rev |= pollRdhup
-	}
-	if e.shut == shutRcv|shutSnd {
-		rev |= pollHup
-	}
-	if e.err != 0 {
-		rev |= pollErr
-	}
-	if e.shut&shutSnd != 0 || e.peer().closed || e.sndbuf-e.peer().queued > 0 && e.stream() ||
-		!e.stream() && e.peer().queued < e.sndbuf {
-		rev |= pollOut
-	}
-	return rev, sp.changed
-}
-
-func (e *sockEnd) Stat() (fs.FileInfo, error) { return sockInfo{}, nil }
-
-type sockInfo struct{}
-
-func (sockInfo) Name() string       { return "socket" }
-func (sockInfo) Size() int64        { return 0 }
-func (sockInfo) Mode() fs.FileMode  { return fs.ModeSocket | 0o777 }
-func (sockInfo) ModTime() time.Time { return time.Time{} }
-func (sockInfo) IsDir() bool        { return false }
-func (sockInfo) Sys() any           { return nil }

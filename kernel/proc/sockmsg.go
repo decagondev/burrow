@@ -1,13 +1,25 @@
 package proc
 
-// sockmsg.go - sendmsg and recvmsg (struct msghdr; no control messages
-// until W14-S07), the SOL_SOCKET options and FIONREAD for sockets
-// (W14-S06). Never keeps a msghdr's pointers past the call.
-// Docs: docs/02-architecture/POSIX_COVERAGE.md.
+// sockmsg.go - sendmsg and recvmsg (W14-S06) with control messages
+// (W14-S07): SCM_RIGHTS passes descriptors (the receiver gets new ones for
+// the same open file descriptions; MSG_CTRUNC when its buffer is short,
+// the ones that did not fit are closed), SCM_CREDENTIALS is accepted from
+// a sender and given to a receiver that set SO_PASSCRED. Never keeps a
+// msghdr's pointers past the call. Docs: POSIX_COVERAGE.md.
 
 import (
 	"encoding/binary"
 	"syscall"
+)
+
+const (
+	scmRights      = 1
+	scmCredentials = 2
+	scmMaxFD       = 253 // SCM_MAX_FD
+	cmsgHdrBytes   = 16  // struct cmsghdr {size_t len; int level, type;}
+	ucredBytes     = 12
+	msgCtrunc      = 0x8
+	msgCmsgCloexec = 0x40000000
 )
 
 // msghdr: name @0, namelen u32 @8, iov @16, iovlen @24, control @32,
@@ -44,14 +56,58 @@ func (p *Process) iovecs(va, n uint64) ([][2]uint64, int64) {
 	return out, 0
 }
 
+func cmsgAlign(n uint64) uint64 { return (n + 7) &^ 7 }
+
+// controlFDs reads a sender's control messages: the descriptors of its
+// SCM_RIGHTS (referenced; the caller owns them), or -errno.
+func (p *Process) controlFDs(va, n uint64) ([]*file, int64) {
+	if n == 0 {
+		return nil, 0
+	}
+	if n > 4096 {
+		return nil, -int64(syscall.ENOBUFS)
+	}
+	b := make([]byte, n)
+	if err := p.mem.CopyIn(va, b); err != nil {
+		return nil, errno(err)
+	}
+	le := binary.LittleEndian
+	var fds []*file
+	for o := uint64(0); o+cmsgHdrBytes <= n; {
+		l, level, typ := le.Uint64(b[o:]), le.Uint32(b[o+8:]), le.Uint32(b[o+12:])
+		if l < cmsgHdrBytes || l > n-o || level != solSocket {
+			unrefAll(fds)
+			return nil, -int64(syscall.EINVAL)
+		}
+		switch {
+		case typ == scmRights:
+			for i := o + cmsgHdrBytes; i+4 <= o+l; i += 4 {
+				f := p.fds.get(uint64(le.Uint32(b[i:])))
+				if f == nil || len(fds) == scmMaxFD {
+					unrefAll(fds)
+					if f == nil {
+						return nil, -int64(syscall.EBADF)
+					}
+					return nil, -int64(syscall.EINVAL)
+				}
+				fds = append(fds, f.ref())
+			}
+		case typ == scmCredentials && l == cmsgHdrBytes+ucredBytes:
+			// everyone is root: any credentials may be claimed; the receiver sees the sender's pid
+		default:
+			unrefAll(fds)
+			return nil, -int64(syscall.EINVAL)
+		}
+		o += cmsgAlign(l)
+	}
+	return fds, 0
+}
+
 func sysSendmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 	p := t.p
 	h, _, e := p.readMsghdr(a[1])
 	if e < 0 {
 		return ok(e)
-	}
-	if h.controllen != 0 {
-		return ok(-int64(syscall.EOPNOTSUPP)) // SCM_RIGHTS and SCM_CREDENTIALS are W14-S07
 	}
 	iov, e := p.iovecs(h.iov, h.iovlen)
 	if e < 0 {
@@ -65,7 +121,11 @@ func sysSendmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 		}
 		all = append(all, b...)
 	}
-	return ok(t.sendBytes(a[0], all, a[2], h.name))
+	fds, e := p.controlFDs(h.control, h.controllen)
+	if e < 0 {
+		return ok(e)
+	}
+	return ok(t.sendBytes(a[0], all, fds, a[2], h.name))
 }
 
 func sysRecvmsgFn(t *Thread, a [6]uint64) (int64, bool) {
@@ -82,133 +142,96 @@ func sysRecvmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 	for _, v := range iov {
 		total += v[1]
 	}
-	b, full, e := t.recvBytes(a[0], total, a[2])
+	r, e := t.recvBytes(a[0], total, a[2])
 	if e < 0 {
 		return ok(e)
 	}
-	n := len(b)
+	b := r.b
 	for _, v := range iov {
 		k := min(uint64(len(b)), v[1])
 		if err := p.mem.CopyOut(v[0], b[:k]); err != nil {
+			unrefAll(r.fds)
 			return ok(errno(err))
 		}
 		b = b[k:]
 	}
 	le := binary.LittleEndian
-	if h.name != 0 {
-		if int32(h.namelen) >= 2 {
-			if err := p.mem.CopyOut(h.name, []byte{afUnix, 0}); err != nil {
-				return ok(errno(err))
-			}
-		}
-		le.PutUint32(raw[8:], 2)
-	}
-	le.PutUint64(raw[40:], 0) // no control messages
 	flags := uint32(0)
-	if full > n {
-		flags = msgTrunc
+	if r.full > len(r.b) {
+		flags |= msgTrunc
 	}
+	ctl, ctrunc := p.controlOut(a[0], r, h.controllen, a[2]&msgCmsgCloexec != 0)
+	if ctrunc {
+		flags |= msgCtrunc
+	}
+	if err := p.mem.CopyOut(h.control, ctl); err != nil && len(ctl) > 0 {
+		return ok(errno(err))
+	}
+	if h.name != 0 { // msg_namelen is the room in, the length out, as accept's
+		if e := p.putPeerName(a[0], h.name, a[1]+8); e < 0 {
+			return ok(e)
+		}
+	}
+	le.PutUint64(raw[40:], uint64(len(ctl)))
 	le.PutUint32(raw[48:], flags)
-	if err := p.mem.CopyOut(a[1], raw); err != nil {
+	if err := p.mem.CopyOut(a[1]+40, raw[40:]); err != nil {
 		return ok(errno(err))
 	}
 	if a[2]&msgTrunc != 0 {
-		return ok(int64(full))
+		return ok(int64(r.full))
 	}
-	return ok(int64(n))
+	return ok(int64(len(r.b)))
 }
 
-// getsockopt(fd, level, name, value, int *len).
-func sysGetsockoptFn(p *Process, a [6]uint64) (int64, bool) {
-	s, _, e := p.socket(a[0])
-	if e < 0 {
-		return ok(e)
+// controlOut builds recvmsg's control messages for r in at most room
+// bytes: SCM_CREDENTIALS for a receiver with SO_PASSCRED, then SCM_RIGHTS
+// with new descriptors. What does not fit is dropped (its descriptors
+// closed) and ctrunc is set.
+func (p *Process) controlOut(fd uint64, r received, room uint64, cloexec bool) (out []byte, ctrunc bool) {
+	s, _, _ := p.socket(fd)
+	s.mu.Lock()
+	pass := s.passcred
+	s.mu.Unlock()
+	le := binary.LittleEndian
+	put := func(typ uint32, data []byte) bool {
+		l := cmsgHdrBytes + uint64(len(data))
+		if uint64(len(out))+l > room {
+			return false
+		}
+		h := make([]byte, cmsgHdrBytes)
+		le.PutUint64(h, l)
+		le.PutUint32(h[8:], solSocket)
+		le.PutUint32(h[12:], typ)
+		out = append(append(out, h...), data...)
+		if pad := cmsgAlign(l) - l; uint64(len(out))+pad <= room {
+			out = append(out, make([]byte, pad)...)
+		}
+		return true
 	}
-	var l [4]byte
-	if err := p.mem.CopyIn(a[4], l[:]); err != nil {
-		return ok(errno(err))
+	if pass && !put(scmCredentials, ucred(r.pid)) {
+		ctrunc = true
 	}
-	n := int32(binary.LittleEndian.Uint32(l[:]))
-	if n < 0 {
-		return ok(-int64(syscall.EINVAL))
+	fit := 0
+	if used := uint64(len(out)); room > used+cmsgHdrBytes {
+		fit = min(int((room-used-cmsgHdrBytes)/4), len(r.fds))
 	}
-	v, e := s.option(a[1], a[2])
-	if e < 0 {
-		return ok(e)
+	var nums []byte
+	for i, f := range r.fds {
+		if i >= fit {
+			f.unref()
+			ctrunc = true
+			continue
+		}
+		n, err := p.fds.add(f, 0, cloexec)
+		if err != nil {
+			f.unref()
+			ctrunc = true
+			continue
+		}
+		nums = le.AppendUint32(nums, uint32(n))
 	}
-	var out [4]byte
-	binary.LittleEndian.PutUint32(out[:], uint32(v))
-	if err := p.mem.CopyOut(a[3], out[:min(n, 4)]); err != nil {
-		return ok(errno(err))
+	if len(nums) > 0 {
+		put(scmRights, nums)
 	}
-	binary.LittleEndian.PutUint32(l[:], uint32(min(n, 4)))
-	return ok(errno(p.mem.CopyOut(a[4], l[:])))
-}
-
-func (e *sockEnd) option(level, name uint64) (int32, int64) {
-	sp := e.pair
-	sp.mu.Lock()
-	defer sp.mu.Unlock()
-	if level != solSocket {
-		return 0, -int64(syscall.ENOPROTOOPT)
-	}
-	switch name {
-	case soType:
-		return int32(sp.typ), 0
-	case soError:
-		v := int32(e.err)
-		e.err = 0
-		return v, 0
-	case soSndbuf:
-		return int32(e.sndbuf), 0
-	case soRcvbuf:
-		return int32(e.rcvbuf), 0
-	}
-	return 0, -int64(syscall.ENOPROTOOPT)
-}
-
-// setsockopt(fd, level, name, value, len): the buffer sizes, kept as Linux
-// keeps them (doubled, within its limits).
-func sysSetsockoptFn(p *Process, a [6]uint64) (int64, bool) {
-	s, _, e := p.socket(a[0])
-	switch {
-	case e < 0:
-		return ok(e)
-	case a[1] != solSocket || a[2] != soSndbuf && a[2] != soRcvbuf:
-		return ok(-int64(syscall.ENOPROTOOPT))
-	case a[4] < 4:
-		return ok(-int64(syscall.EINVAL))
-	}
-	var b [4]byte
-	if err := p.mem.CopyIn(a[3], b[:]); err != nil {
-		return ok(errno(err))
-	}
-	v := int(min(binary.LittleEndian.Uint32(b[:]), sockBufMax))
-	v = max(2*v, sockBufMin)
-	s.pair.mu.Lock()
-	if a[2] == soSndbuf {
-		s.sndbuf = v
-	} else {
-		s.rcvbuf = v
-	}
-	s.pair.notify()
-	s.pair.mu.Unlock()
-	return ok(0)
-}
-
-// Ioctl: FIONREAD is the bytes a read would get (a stream's queue, the
-// next datagram).
-func (e *sockEnd) Ioctl(req, arg uint64, _, out func(va uint64, b []byte) error) (int64, error) {
-	if req != fionread {
-		return 0, syscall.ENOTTY
-	}
-	e.pair.mu.Lock()
-	n := e.queued
-	if !e.stream() && len(e.queue) > 0 {
-		n = len(e.queue[0])
-	}
-	e.pair.mu.Unlock()
-	var b [4]byte
-	binary.LittleEndian.PutUint32(b[:], uint32(n))
-	return 0, out(arg, b[:])
+	return out, ctrunc
 }
