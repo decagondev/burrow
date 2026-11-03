@@ -14,6 +14,22 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W15 done: Qt on the framebuffer (M15)
+
+**Did:** the wave in six slices. Qt 6.12 built static for musl, with a census of its system calls on Linux (S01); QtCore on Burrow from a FAT disk at `/opt/qt`, which needed `waitid` and `FIONREAD` on pipes (S02, BUG-0016); Qt painting on `/dev/fb0` through linuxfb (S03) and Qt widgets driven by the keyboard and mouse through evdev (S04), both with no kernel change; budgets for start-up, repaint, memory and idling, which found disk reads five times too slow everywhere (S05, BUG-0017); and `qtpad`, an editor for `/home`, with the ATA driver's second channel so the home and Qt disks can be attached together (S06). The M15 demo is in `make qt-smoke`: qtpad adds a line to `/home/hello.c`, saves, quits, `tcc` builds the file, and a second boot finds the line.
+
+**Surprise:** how much of it was already there. Qt asked for 37 distinct system calls and Burrow had 36; the pixels and the input needed no kernel change at all, because W11's fbdev and W14's evdev, mouse and terminal modes speak Linux closely enough. The work went into the test harness (NUL bytes in logs, QEMU's small mouse queue, widget coordinates) and into a disk path that had been slow since W8 without anyone timing it.
+
+**Next:** E16 (an X server, dwm, GTK) or E12 (hardening); see BACKLOG.md.
+
+## 2026-11-03 — W15-S06 qtpad and make run-qt
+
+**Did:** the ATA driver's secondary channel (`hdc`, `hdd`) and mounting every data disk by its label; `qtpad`, a Qt editor (line numbers, C and Lua colouring, save through `QSaveFile`, find, save as); `make run-qt`; and `qtpad-smoke` in `make qt-smoke`: edit `/home/hello.c`, save, quit, build with `tcc`, reboot, still there, `fsck.fat` clean.
+
+**Surprise:** writing the secondary channel's probe showed that its port wrapper had hidden S05's `rep insw` all along; with it the first Qt frame came in 1.8 s instead of 2.8 s, and BUG-0017's entry now says so. Five static Qt programs are 82 MB, which filled the 64 MiB Qt disk.
+
+**Next:** see the wave entry above.
+
 ## 2026-11-03 — W15-S05 Qt fast enough
 
 **Did:** `qtbench`, started through a small `stopwatch` that marks the `execve`, measures the time to the first full-screen frame, a full-screen repaint, the memory used and how often an idle Qt wakes; `make qt-bench` checks them against budgets. The first numbers were fine except one: 11.6 s to the first frame, almost all of it before `main`.

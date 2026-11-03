@@ -15,14 +15,13 @@ import (
 	"sync"
 
 	"burrow/kernel/block"
-	"burrow/kernel/driver"
 	"burrow/kernel/hal"
 )
 
 const (
 	SectorSize = 512
 
-	ioBase  uint16 = 0x1F0
+	ioBase  uint16 = 0x1F0 // the primary channel; the secondary is 0x170, 0x376 (probe.go)
 	ctlBase uint16 = 0x3F6
 
 	regData    = 0 // 16-bit
@@ -61,11 +60,15 @@ type Ports interface {
 
 // Channel is one IDE channel; its two drives share the registers.
 type Channel struct {
-	mu sync.Mutex
-	io Ports
+	mu        sync.Mutex
+	io        Ports
+	base, ctl uint16 // command block and control register
 }
 
-func NewChannel(io Ports) *Channel { return &Channel{io: io} }
+// NewChannel is the primary channel; NewChannelAt any other.
+func NewChannel(io Ports) *Channel { return NewChannelAt(io, ioBase, ctlBase) }
+
+func NewChannelAt(io Ports, base, ctl uint16) *Channel { return &Channel{io: io, base: base, ctl: ctl} }
 
 // Disk is one drive on a channel.
 type Disk struct {
@@ -78,13 +81,13 @@ type Disk struct {
 
 var errTimeout = errors.New("ata: drive did not answer")
 
-func (c *Channel) status() uint8 { return c.io.In8(ioBase + regStatus) }
+func (c *Channel) status() uint8 { return c.io.In8(c.base + regStatus) }
 
 // settle reads the alternate status 4 times: the 400 ns a drive needs
 // after a select or a command before its status means anything.
 func (c *Channel) settle() {
 	for i := 0; i < 4; i++ {
-		c.io.In8(ctlBase)
+		c.io.In8(c.ctl)
 	}
 }
 
@@ -96,7 +99,7 @@ func (c *Channel) wait(data bool) error {
 		case st&stBusy != 0:
 			continue
 		case st&(stErr|stDF) != 0:
-			return fmt.Errorf("ata: status %#x, error %#x", st, c.io.In8(ioBase+1))
+			return fmt.Errorf("ata: status %#x, error %#x", st, c.io.In8(c.base+1))
 		case !data || st&stDRQ != 0:
 			return nil
 		}
@@ -108,24 +111,24 @@ func (c *Channel) wait(data bool) error {
 func (c *Channel) Identify(slave bool) (*Disk, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.io.Out8(ctlBase, ctlNoIRQ)
+	c.io.Out8(c.ctl, ctlNoIRQ)
 	sel := uint8(0xA0)
 	if slave {
 		sel |= driveSlave
 	}
-	c.io.Out8(ioBase+regDrive, sel)
+	c.io.Out8(c.base+regDrive, sel)
 	c.settle()
 	for _, r := range []uint16{regCount, regLBA0, regLBA1, regLBA2} {
-		c.io.Out8(ioBase+r, 0)
+		c.io.Out8(c.base+r, 0)
 	}
-	c.io.Out8(ioBase+regCommand, cmdIdentify)
+	c.io.Out8(c.base+regCommand, cmdIdentify)
 	c.settle()
 	if c.status() == 0 {
 		return nil, errors.New("ata: no drive")
 	}
 	for i := 0; i < pollLimit && c.status()&stBusy != 0; i++ {
 	}
-	if c.io.In8(ioBase+regLBA1) != 0 || c.io.In8(ioBase+regLBA2) != 0 {
+	if c.io.In8(c.base+regLBA1) != 0 || c.io.In8(c.base+regLBA2) != 0 {
 		return nil, errors.New("ata: not an ATA disk (ATAPI?)")
 	}
 	if err := c.wait(true); err != nil {
@@ -133,7 +136,7 @@ func (c *Channel) Identify(slave bool) (*Disk, error) {
 	}
 	var id [256]uint16
 	for i := range id {
-		id[i] = c.io.In16(ioBase + regData)
+		id[i] = c.io.In16(c.base + regData)
 	}
 	d := &Disk{ch: c, slave: slave, sectors: uint64(id[60]) | uint64(id[61])<<16, Model: model(id[27:47])}
 	d.setMultiple(&id)
@@ -223,11 +226,11 @@ func (d *Disk) writeChunk(lba uint64, n int, buf []byte) error {
 		}
 		sector := buf[s*SectorSize : (s+1)*SectorSize]
 		if str, ok := c.io.(hal.PortIOString); ok {
-			str.OutWords(ioBase+regData, sector)
+			str.OutWords(c.base+regData, sector)
 			continue
 		}
 		for i := 0; i < SectorSize; i += 2 {
-			c.io.Out16(ioBase+regData, uint16(sector[i])|uint16(sector[i+1])<<8)
+			c.io.Out16(c.base+regData, uint16(sector[i])|uint16(sector[i+1])<<8)
 		}
 	}
 	c.settle()
@@ -254,45 +257,11 @@ func (d *Disk) command(lba uint64, n int, cmd uint8) {
 	if d.slave {
 		sel |= driveSlave
 	}
-	c.io.Out8(ioBase+regDrive, sel)
+	c.io.Out8(c.base+regDrive, sel)
 	c.settle()
-	c.io.Out8(ioBase+regCount, uint8(n)) // 256 wraps to 0, which means 256
-	c.io.Out8(ioBase+regLBA0, uint8(lba))
-	c.io.Out8(ioBase+regLBA1, uint8(lba>>8))
-	c.io.Out8(ioBase+regLBA2, uint8(lba>>16))
-	c.io.Out8(ioBase+regCommand, cmd)
-}
-
-func init() { driver.Register(&controller{}) }
-
-type controller struct{}
-
-func (*controller) Name() string { return "ata" }
-
-// Probe: a floating bus (no controller) reads 0xFF.
-func (*controller) Probe(env *driver.Env) bool {
-	return env.Ports16 != nil && env.Ports.In8(ioBase+regStatus) != 0xFF
-}
-
-type ports struct {
-	hal.PortIO
-	hal.PortIO16
-}
-
-func (*controller) Start(env *driver.Env) error {
-	ch := NewChannel(ports{env.Ports, env.Ports16})
-	found := 0
-	for i, name := range []string{"hda", "hdb"} {
-		d, err := ch.Identify(i == 1)
-		if err != nil {
-			continue
-		}
-		block.Register(name, d)
-		env.Log.Infof("%s: %q, %d sectors (%d KiB)", name, d.Model, d.sectors, d.sectors/2)
-		found++
-	}
-	if found == 0 {
-		return errors.New("no disks on the primary channel")
-	}
-	return nil
+	c.io.Out8(c.base+regCount, uint8(n)) // 256 wraps to 0, which means 256
+	c.io.Out8(c.base+regLBA0, uint8(lba))
+	c.io.Out8(c.base+regLBA1, uint8(lba>>8))
+	c.io.Out8(c.base+regLBA2, uint8(lba>>16))
+	c.io.Out8(c.base+regCommand, cmd)
 }

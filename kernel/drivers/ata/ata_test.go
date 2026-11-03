@@ -228,3 +228,35 @@ func TestStringIO(t *testing.T) {
 	blocktest.Run(t, d, master)
 	blocktest.RunWriter(t, d)
 }
+
+// shifted answers at the secondary channel's ports with the fake behind
+// the primary's (W15-S06: hdc and hdd).
+type shifted struct{ f *fakeChannel }
+
+func (s shifted) port(p uint16) uint16 {
+	switch {
+	case p == secondaryCtl:
+		return ctlBase
+	case p >= secondaryBase && p < secondaryBase+8:
+		return p - secondaryBase + ioBase
+	}
+	return 0 // nothing answers there
+}
+
+func (s shifted) In8(p uint16) uint8       { return s.f.In8(s.port(p)) }
+func (s shifted) Out8(p uint16, v uint8)   { s.f.Out8(s.port(p), v) }
+func (s shifted) In16(p uint16) uint16     { return s.f.In16(s.port(p)) }
+func (s shifted) Out16(p uint16, v uint16) { s.f.Out16(s.port(p), v) }
+
+func TestSecondaryChannel(t *testing.T) {
+	f := &fakeChannel{models: [2]string{"QEMU HARDDISK", ""}}
+	f.disks[0] = blocktest.Pattern(40, SectorSize)
+	d, err := NewChannelAt(shifted{f}, secondaryBase, secondaryCtl).Identify(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocktest.Run(t, d, f.disks[0])
+	if _, err := NewChannel(shifted{f}).Identify(false); err == nil {
+		t.Error("the primary channel's ports found the secondary's disk")
+	}
+}

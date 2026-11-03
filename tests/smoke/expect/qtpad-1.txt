@@ -1,0 +1,12 @@
+# Ordered markers for qtpad's first boot (tests/smoke/keys/qtpad-1.keys). Append-only.
+[ata] INFO: hdc: "QEMU HARDDISK"
+hdb: FAT32 volume "BURROWHOME" mounted at /home
+hdc: FAT32 volume "QTDATA" mounted at /opt/qt
+burrow> run /opt/qt/bin/qtpad /home/hello.c
+qtpad: opened /home/hello.c
+qtpad: saved /home/hello.c
+qtpad: quit
+burrow> run /bin/busybox sh
+// edited in qtpad on burrow
+computed on Burrow
+burrow> poweroff

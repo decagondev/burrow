@@ -52,11 +52,11 @@ func (d *Disk) readMultiple(lba uint64, n int, buf []byte) error {
 // ports can, else a word at a time.
 func (c *Channel) inData(b []byte) {
 	if str, ok := c.io.(hal.PortIOString); ok {
-		str.InWords(ioBase+regData, b)
+		str.InWords(c.base+regData, b)
 		return
 	}
 	for i := 0; i < len(b); i += 2 {
-		w := c.io.In16(ioBase + regData)
+		w := c.io.In16(c.base + regData)
 		b[i], b[i+1] = byte(w), byte(w>>8)
 	}
 }

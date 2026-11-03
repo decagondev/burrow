@@ -1,0 +1,8 @@
+# Pixels of qtpad editing /home/hello.c (tests/smoke/keys/qtpad-1.keys, W15-S06). Append-only.
+# The line-number gutter, the white page, a red keyword (the int of line 6)
+# and the grey comment line typed in this boot (line 17).
+size  build/screen-qtpad.ppm 1024 768
+pixel build/screen-qtpad.ppm 5 500 #eeeeee
+pixel build/screen-qtpad.ppm 600 600 #ffffff
+pixel build/screen-qtpad.ppm 45 119 #cf222e
+pixel build/screen-qtpad.ppm 48 346 #6a737d

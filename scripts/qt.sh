@@ -117,7 +117,7 @@ cmake -S "$ROOT/user/qt" -B "$CACHE/build/apps" -G Ninja -DCMAKE_BUILD_TYPE=Rele
   { tail -40 "$CACHE/build/apps.log"; exit 1; }
 cmake --build "$CACHE/build/apps" >> "$CACHE/build/apps.log" 2>&1 || { tail -40 "$CACHE/build/apps.log"; exit 1; }
 mkdir -p "$OUT/bin" "$OUT/fonts"
-for app in qthello qtwindow qtdemo qtbench; do
+for app in qthello qtwindow qtdemo qtbench qtpad; do
   "$CROSS/bin/x86_64-linux-musl-strip" -o "$OUT/bin/$app" "$CACHE/build/apps/$app"
   echo "qt: $app ($(du -h "$OUT/bin/$app" | cut -f1)) -> $OUT/bin/$app"
 done

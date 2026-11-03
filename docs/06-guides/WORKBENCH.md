@@ -38,3 +38,12 @@ poweroff                 end the session; /home is already on the disk
 - **Compile with `tcc -static`:** Burrow has no dynamic loader. `tcc -run` is not available (it needs a dynamic `tcc`).
 - **Typing.** The screen console is a VT100 subset (enough for `vi` and the shell); the terminal you started QEMU from shows the same session on the serial line, and you can type in either.
 - **Outside Burrow,** the home disk is an ordinary FAT32 image: `mtype -i burrow-home.img ::/hello.c` reads a file, `mcopy -i burrow-home.img file.c ::/` puts one in (with QEMU stopped), and `fsck.fat -n burrow-home.img` checks it.
+
+## Qt: qtpad (W15)
+
+```sh
+make qt          # once: downloads (pinned) and builds Qt for Burrow (a long build) and the Qt programs
+make run-qt      # run-dev's window and home disk, plus the Qt disk at /opt/qt
+```
+
+At `burrow>`, `run /opt/qt/bin/qtpad /home/hello.c` opens the file in a Qt editor drawn straight on the framebuffer: line numbers, C and Lua colouring, DejaVu Sans Mono. **Ctrl+S** saves (to a new file, then renamed over the old one, so a crash never leaves half a file), **Ctrl+Shift+S** saves under another name, **Ctrl+F** finds and **F3** finds the next, **Ctrl+Q** quits (press it twice to leave unsaved changes behind). Click into the QEMU window first so it takes the mouse; Ctrl+Alt+G lets go. Back at the console, `run /bin/busybox sh`, `cd /home` and `tcc -static -o hello hello.c` builds what you saved. The Qt programs, fonts and the environment Qt needs (`qt.env`, added to every program's environment) are on `build/qt-data.img`, rebuilt by `make`; nothing of yours is kept there.

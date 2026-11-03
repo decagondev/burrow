@@ -1,0 +1,8 @@
+# Ordered markers for qtpad's second boot (tests/smoke/keys/qtpad-2.keys). Append-only.
+burrow> run /bin/busybox sh
+// EDITED IN QTPAD ON BURROW
+computed on Burrow
+burrow> run /opt/qt/bin/qtpad /home/hello.c
+qtpad: opened /home/hello.c
+qtpad: quit
+burrow> poweroff

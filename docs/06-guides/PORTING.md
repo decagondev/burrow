@@ -39,3 +39,28 @@ Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisio
 - **Headers from two worlds.** `<linux/input.h>` and Doom's `doomkeys.h` both define `KEY_ENTER` (BUG-0004): capture one before including the other.
 - **A Windows-backed checkout** cannot hold files whose names differ only in case (the Linux UAPI headers have such pairs): link to such trees instead of copying them.
 - **Smoke waits** match the serial log, which also holds the echo of what was typed: wait for output the command line does not contain.
+
+## Qt (W15)
+
+Qt widget programs run on Burrow with no X server: Qt's `linuxfb` platform draws on `/dev/fb0` and its own evdev handlers read the keyboard and mouse. `scripts/qt.sh` (`make qt`) builds qtbase 6.12.0 twice: for the host, because a Qt cross build runs the host's `moc`, `rcc` and `uic` (`-qt-host-path`), and statically for Burrow with musl.cc's GCC 11.2.1. The Burrow configure line, beyond `-static -release -nomake examples -nomake tests`:
+
+```
+-qpa linuxfb -no-opengl -no-feature-vulkan -no-xcb -no-dbus -no-glib -no-icu -no-fontconfig
+-no-feature-sql -no-openssl -no-libjpeg -no-libinput -no-libudev -no-feature-inotify
+-no-tslib -no-mtdev -no-xkbcommon -no-feature-gtk3
+-qt-zlib -qt-libpng -qt-freetype -qt-harfbuzz -qt-pcre
+```
+
+Off, and why: OpenGL and Vulkan (no GPU), xcb and GTK (no X server), D-Bus and GLib (no session bus or GLib event loop), ICU (Qt's own Unicode tables are enough), fontconfig (fonts are named by directory instead), libinput, libudev, tslib, mtdev and xkbcommon (Qt's built-in evdev handlers and keymap need none of them), inotify (Burrow has none: `QFileSystemWatcher` falls back to polling), SQL, OpenSSL and JPEG (not needed yet). Every library Qt does use is bundled, so the cross build never looks at the host's; `PKG_CONFIG_LIBDIR=/nonexistent` makes sure. Programs build with Qt's own `lib/cmake/Qt6/qt.toolchain.cmake`, and a static program links only the platform plugins its CMake file names (`qt_import_plugins`: linuxfb, and offscreen for host checks).
+
+The environment Qt finds its devices and fonts in, instead of udev and fontconfig (`user/qt/qt.env`, on the Qt disk; the kernel adds it to every program's environment):
+
+```
+QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0
+QT_QPA_EVDEV_KEYBOARD_PARAMETERS=/dev/input/event0:grab=1
+QT_QPA_EVDEV_MOUSE_PARAMETERS=/dev/input/event1
+QT_QPA_FONTDIR=/opt/qt/fonts
+XDG_RUNTIME_DIR=/tmp
+```
+
+What Qt needed from Burrow that nothing else had: `waitid` (QProcess) and `FIONREAD` on pipes (BUG-0016); the census of its system calls on Linux (`make qt-census`, `tests/regression/census-qt.txt`) found everything else already there, but a census counts calls, not ioctl requests. Qt is LGPLv3/GPL: a static program must come with what lets you relink it, which here is Qt's pinned source download and `scripts/qt.sh`.

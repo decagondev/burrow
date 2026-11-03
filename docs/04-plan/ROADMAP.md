@@ -19,7 +19,7 @@
 | M12 | Ports | Lua REPL, C++ hello with exceptions, Go user program | W12 |
 | M13 | A workbench | edit, save and build code inside Burrow; files survive a reboot | W13 |
 | M14 | Desktop groundwork | a mouse-driven paint program whose colour arrives over a Unix socket (done: `make desk-smoke`) | W14 |
-| M15 | Qt | a Qt text editor on `/dev/fb0` edits and saves a file in `/home` | W15 |
+| M15 | Qt | a Qt text editor on `/dev/fb0` edits and saves a file in `/home` (done: `make qt-smoke`) | W15 |
 
 ```mermaid
 flowchart TB
@@ -43,16 +43,15 @@ flowchart TB
     classDef done fill:#2e7d32,color:#fff;
     classDef next fill:#f9a825,color:#000;
     classDef later fill:#e6eaee,color:#333,stroke-dasharray: 4 3;
-    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14 done;
-    class W15 next;
-    class X later;
+    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15 done;
+    class X next;
 ```
 
 Green = done, yellow = next, grey = planned.
 
 ## Critical path and risk
 
-The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); next is Qt on `/dev/fb0` (W15), and an X server (E16) after it. See [RISKS.md](../living/RISKS.md).
+The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; next are an X server, dwm and GTK (E16), and hardening (E12). See [RISKS.md](../living/RISKS.md).
 
 ## Rough effort (part-time, one person)
 

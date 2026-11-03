@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-bench qt-smoke qt-smoke-run ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -340,7 +340,7 @@ qt-census:
 QT_DRIVE := -drive file=$(BUILD)/qt-data.img,format=raw,if=ide,index=1,media=disk
 $(BUILD)/qt-data.img: $(BUILD)/qt-root/bin/qthello user/qt/qt.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/qt/qt.env $(BUILD)/qt-root/qt.env
-	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label qtdata -size 64 ../$(BUILD)/qt-root
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label qtdata -size 160 ../$(BUILD)/qt-root
 # qt-bench (W15-S05; not in make test, like doom-bench): qtbench started by
 # stopwatch on the Qt disk, and its numbers against the budgets in
 # tests/smoke/qt-budgets.py (the first frame, a repaint, memory, idle wakes).
@@ -352,6 +352,26 @@ qt-smoke:
 	else echo "QT SMOKE SKIP (make qt builds Qt)"; fi
 qt-smoke-run: $(BUILD)/go.img $(BUILD)/qt-data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(QT_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/qt.txt 120 tests/smoke/keys/qt.keys
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory qtpad-smoke; \
+	else echo "QTPAD SMOKE SKIP (make busybox ports builds the workbench)"; fi
+# qtpad on the workbench (W15-S06): go-dev.img with a fresh home disk on hdb
+# and the Qt disk on the secondary channel (hdc); edit, save, build with tcc;
+# a second boot finds the edit.
+QT_DRIVE_HDC := -drive file=$(BUILD)/qt-data.img,format=raw,if=ide,index=2,media=disk
+qtpad-smoke: $(BUILD)/go-dev.img $(BUILD)/qt-data.img
+	rm -f $(BUILD)/home-qtpad.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-qtpad.img -label burrowhome -size 64 ../workbench
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-qtpad.img,format=raw,if=ide,index=1,media=disk $(QT_DRIVE_HDC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/qtpad-1.txt 150 tests/smoke/keys/qtpad-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-qtpad.img,format=raw,if=ide,index=1,media=disk $(QT_DRIVE_HDC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/qtpad-2.txt 120 tests/smoke/keys/qtpad-2.keys
+	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-qtpad.img >/dev/null && echo "QTPAD HOME PASS (fsck.fat after qtpad saved)"; \
+	else echo "QTPAD HOME SKIP (no fsck.fat)"; fi
+# The Qt workbench in a QEMU window (W15-S06): run-dev's image and home disk,
+# with the Qt disk at /opt/qt: run /opt/qt/bin/qtpad /home/hello.c
+run-qt: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/qt-data.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk $(QT_DRIVE_HDC) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds

@@ -1,0 +1,31 @@
+# qtpad, first boot (W15-S06): go-dev.img with a fresh home disk (hdb) and
+# the Qt disk (hdc). Open /home/hello.c in qtpad, add a comment line at the
+# end, save with Ctrl+S, quit with Ctrl+Q; then the shell shows the line
+# and tcc builds and runs the edited program.
+# Waits avoid trailing spaces, which editors strip.
+wait burrow>
+type run /opt/qt/bin/qtpad /home/hello.c
+key ret
+wait qtpad: opened /home/hello.c
+sleep 1
+key ctrl-end
+type // edited in qtpad on burrow
+key ret
+sleep 1
+screendump build/screen-qtpad.ppm
+key ctrl-s
+wait qtpad: saved /home/hello.c
+key ctrl-q
+wait qtpad: quit
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type cd /home; tail -1 hello.c; tcc -static -o hello hello.c; ./hello 30
+key ret
+wait computed on Burrow
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

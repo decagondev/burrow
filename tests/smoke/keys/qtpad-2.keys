@@ -1,0 +1,20 @@
+# qtpad, second boot on the same home disk (W15-S06): the line saved in
+# qtpad is still in hello.c, qtpad opens it again, and it still builds.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type cd /home; tail -1 hello.c | tr a-z A-Z; ./hello 12
+key ret
+wait computed on Burrow
+type exit
+key ret
+wait burrow>
+type run /opt/qt/bin/qtpad /home/hello.c
+key ret
+wait qtpad: opened /home/hello.c
+key ctrl-q
+wait qtpad: quit
+wait burrow>
+type poweroff
+key ret

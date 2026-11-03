@@ -56,14 +56,20 @@ const (
 	qtEnvFile = "opt/qt/qt.env"
 )
 
-// mountData mounts the second disk at /mnt when it holds FAT32 (W8-S07),
-// read-write when the disk can be written (W13-S04), at /home when its
-// label says it is the home disk (W13-S05).
+// mountData mounts every data disk (hdb, and since W15-S06 the secondary
+// channel's hdc and hdd) that holds FAT32 (W8-S07), read-write when the
+// disk can be written (W13-S04), at the place its label names: /home for
+// the home disk (W13-S05), /opt/qt for the Qt disk (W15-S02), /mnt for the
+// first other one.
 func (k *kernel) mountData(log *klog.Logger) {
-	d, ok := block.Get("hdb")
-	if !ok {
-		return
+	for _, name := range []string{"hdb", "hdc", "hdd"} {
+		if d, ok := block.Get(name); ok {
+			k.mountDisk(log, name, d)
+		}
 	}
+}
+
+func (k *kernel) mountDisk(log *klog.Logger, name string, d block.Device) {
 	var fsys *fat.FS
 	var err error
 	mode := "read-only"
@@ -74,7 +80,7 @@ func (k *kernel) mountData(log *klog.Logger) {
 		fsys, err = fat.Mount(block.ReaderAt(d))
 	}
 	if err != nil {
-		log.Warnf("hdb: %v", err)
+		log.Warnf("%s: %v", name, err)
 		return
 	}
 	point := "mnt"
@@ -85,10 +91,10 @@ func (k *kernel) mountData(log *klog.Logger) {
 		point = "opt/qt"
 	}
 	if err := k.fs.Mount(point, fsys, "fat32"); err != nil {
-		log.Errorf("mount /%s: %v", point, err)
+		log.Errorf("%s: mount /%s: %v", name, point, err)
 		return
 	}
-	log.Infof("hdb: FAT32 volume %q mounted at /%s (%s)", fsys.Label, point, mode)
+	log.Infof("%s: FAT32 volume %q mounted at /%s (%s)", name, fsys.Label, point, mode)
 	if point == "opt/qt" {
 		k.env = readEnv(k.fs, qtEnvFile)
 		log.Infof("%s: %d variables for every program", qtEnvFile, len(k.env))

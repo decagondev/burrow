@@ -134,7 +134,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 ## E15 Qt
 *Exit: Qt widget programs run on `/dev/fb0` with keyboard and mouse.* [W15]
-- Static qtbase (Core, Gui, Widgets) for musl with `linuxfb` · a syscall census of Qt on Linux · QtCore, then pixels, then input on Burrow · performance budgets · `qtpad`, an editor for `/home`, and `make run-qt`.
+- [x] Static qtbase (Core, Gui, Widgets) for musl with `linuxfb` · [x] a syscall census of Qt on Linux · [x] QtCore, then pixels, then input on Burrow · [x] performance budgets · [x] `qtpad`, an editor for `/home`, and `make run-qt`.
 
 ## E16 X11 and GTK
 *Exit: an X server with a window manager, then GTK programs.* [later]
