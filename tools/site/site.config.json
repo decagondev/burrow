@@ -1,0 +1,7 @@
+{
+  "title": "Burrow",
+  "tagline": "an educational x86-64 OS with a Go kernel",
+  "description": "Burrow: an educational x86-64 operating system with a Go kernel. Architecture, plans, progress, devlog and ABI reference.",
+  "repoUrl": "",
+  "branch": "main"
+}

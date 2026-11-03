@@ -25,7 +25,7 @@ Epics describe **what**; waves describe **when**. A wave can pull slices from se
 
 ## 2. Rolling-wave detail
 
-Waves 0-6 are planned to slice level (you can start typing). Waves 7-12 are planned to story level and get sliced when the previous wave closes, because what we learn in W5/W6 (especially the Go runtime spike) will change them. This is deliberate, not unfinished.
+Waves 0-6 were planned to slice level up front. Waves 7-12 were planned to story level ([WAVES-07-12.md](waves/WAVES-07-12.md)) and sliced when the previous wave closed, because what W5/W6 taught (especially the Go runtime spike) changed them; it did. Later waves (W13 on) are sliced when they are planned, one or two ahead of the work. This is deliberate, not unfinished.
 
 ## 3. Slice template
 

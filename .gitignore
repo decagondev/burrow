@@ -3,6 +3,7 @@ build/
 *.lst
 node_modules/
 tools/doccheck/package-lock.json
+tools/site/package-lock.json
 *.wad
 __pycache__/
 burrow-home.img

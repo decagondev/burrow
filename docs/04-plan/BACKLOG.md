@@ -12,16 +12,16 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - **E00.F01 Build system** [W0]
   - [x] E00.F01.S01 As a learner, I want `make` / `make run` / `make test`, so that I never memorise toolchain flags.
   - [x] E00.F01.S02 As a learner, I want `make sizes`, so that I see fixed-size budgets before they overflow.
-  - [ ] E00.F01.S03 As a kernel dev, I want a CI workflow (GitHub Actions running `make test`), so that regressions are caught on every push. [W4]
+  - [x] E00.F01.S03 As a kernel dev, I want a CI workflow (GitHub Actions running `make test`), so that regressions are caught on every push. [W4]
 - **E00.F02 Test harness** [W0, every wave]
   - [x] E00.F02.S01 Host C unit tests with sanitizers.
   - [x] E00.F02.S02 QEMU smoke test with ordered markers and debug-exit status.
   - [x] E00.F02.S03 Regression runner that boots mutated images.
-  - [ ] E00.F02.S04 In-kernel test runner (`ktest`) selected by boot flag, for nucleus and Go code that cannot run on the host. [W5]
-  - [ ] E00.F02.S05 Go runtime syscall census as a regression test. [W6]
+  - [x] E00.F02.S04 In-kernel test runner (`ktest`) selected by boot flag, for nucleus and Go code that cannot run on the host. [W5]
+  - [x] E00.F02.S05 Go runtime syscall census as a regression test. [W6]
 - **E00.F03 Living documentation** [W0, every wave]
   - [x] E00.F03.S01 DEVLOG, BUGS_AND_MITIGATIONS, RISKS, ADRs, architecture with Mermaid.
-  - [ ] E00.F03.S02 Mermaid diagrams validated in CI. [W4]
+  - [x] E00.F03.S02 Mermaid diagrams validated in CI. [W4]
 
 ## E01 Boot Sector (stage1)
 *Exit: BIOS loads us, we load stage2 reliably and fail loudly otherwise.* — all done in W1.
@@ -41,14 +41,14 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - **E03.F01 Freestanding C runtime**: [x] entry/BSS · [x] string · [x] kprintf on char_sink · [x] serial.
 - **E03.F02 Input verification**: [x] boot_info · [x] memory map · [x] manifest · [x] self-CRC · [x] ATA cross-check.
 - **E03.F03 Image loading** [W4]
-  - [ ] S01 As a kernel dev, I want a physical frame allocator for the loader (bump allocator over E820), so that images land in free RAM.
-  - [ ] S02 As a kernel dev, I want to read a manifest entry into RAM through `block_device` and verify its CRC.
-  - [ ] S03 As a kernel dev, I want ELF64 PT_LOAD segments copied to their physical addresses with .bss zeroed.
+  - [x] S01 As a kernel dev, I want a physical frame allocator for the loader (bump allocator over E820), so that images land in free RAM.
+  - [x] S02 As a kernel dev, I want to read a manifest entry into RAM through `block_device` and verify its CRC.
+  - [x] S03 As a kernel dev, I want ELF64 PT_LOAD segments copied to their physical addresses with .bss zeroed.
 - **E03.F04 Higher half hand-off** [W4]
-  - [ ] S01 Page-table builder (4 KiB + 2 MiB pages) as a pure module with host tests.
-  - [ ] S02 Map identity (temporary), physmap at `0xFFFF800000000000`, nucleus at `0xFFFFFFFF80000000`.
-  - [ ] S03 boot_info v2: module list (nucleus, kernel, initrd physical ranges), physmap base.
-  - [ ] S04 Jump to nucleus; nucleus prints `BURROW:NUCLEUS:OK`.
+  - [x] S01 Page-table builder (4 KiB + 2 MiB pages) as a pure module with host tests.
+  - [x] S02 Map identity (temporary), physmap at `0xFFFF800000000000`, nucleus at `0xFFFFFFFF80000000`.
+  - [x] S03 boot_info v2: module list (nucleus, kernel, initrd physical ranges), physmap base.
+  - [x] S04 Jump to nucleus; nucleus prints `BURROW:NUCLEUS:OK`.
 
 ## E04 Nucleus Core (C + asm mechanisms)
 *Exit: robust ring-0 base with exceptions, memory, threads, time, futexes.* [W5]
@@ -120,6 +120,24 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E13 A Workbench
 *Exit: code can be written, saved and built inside Burrow.* [W13]
 - An editor (busybox `vi`; kilo optional) · the screen console as a VT100-subset terminal · ATA writes · writable FAT32 checked by `fsck.fat` · a persistent `/home` and `make run-dev`.
+
+## E14 Desktop Groundwork
+*Exit: graphical programs find the kernel interfaces they expect below a toolkit.* [W14]
+- [ ] E14.F01 As a user, I want more than 128 MiB of RAM, so that toolkits and their fonts fit.
+- [ ] E14.F02 As a user, I want a mouse (`/dev/input/event1`, `/dev/input/mice`), so that I can point and click.
+- [ ] E14.F03 As a porter, I want `select`, `getrandom`, `/dev/urandom`, `statx` and the other start-up calls, so that toolkits start without patches.
+- [ ] E14.F04 As a user, I want a real-time clock, so that files and programs see the real date.
+- [ ] E14.F05 As a porter, I want `mmap` of regular files, so that fonts map and a dynamic loader becomes possible.
+- [ ] E14.F06 As a porter, I want `AF_UNIX` sockets (pairs, names, abstract names, `SCM_RIGHTS`), so that an X server and its clients can talk.
+- [ ] E14.F07 As a porter, I want the `KD*`/`VT_*` terminal calls, so that graphics programs can take and give back the screen.
+
+## E15 Qt
+*Exit: Qt widget programs run on `/dev/fb0` with keyboard and mouse.* [W15]
+- Static qtbase (Core, Gui, Widgets) for musl with `linuxfb` · a syscall census of Qt on Linux · QtCore, then pixels, then input on Burrow · performance budgets · `qtpad`, an editor for `/home`, and `make run-qt`.
+
+## E16 X11 and GTK
+*Exit: an X server with a window manager, then GTK programs.* [later]
+- TinyX `Xfbdev` with dwm and st (needs E14, all of it) · dynamic linking (`PT_INTERP`, musl's loader; needs E14.F05) · copy-on-write fork · the 1.20-branch kdrive `Xfbdev` (XKB, XInput 2: GTK3 needs XInput 2) · GTK3 · Qt's `xcb` platform.
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [later]

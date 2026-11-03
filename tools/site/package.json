@@ -1,0 +1,7 @@
+{
+  "name": "burrow-site",
+  "private": true,
+  "type": "module",
+  "description": "Build the static documentation site from docs/, the plan and the source tree",
+  "dependencies": { "marked": "^16", "highlight.js": "^11", "mermaid": "^11" }
+}

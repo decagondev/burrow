@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -412,7 +412,12 @@ $(BUILD) $(BUILD)/loader $(BUILD)/nucleus $(BUILD)/user:
 	mkdir -p $@
 
 docs-check:
-	cd tools/doccheck && npm install --silent && node check.mjs $(addprefix ../../,$(shell find . -name '*.md' -not -path './tools/doccheck/node_modules/*' -not -path './build/*'))
+	cd tools/doccheck && npm install --silent && node check.mjs $(addprefix ../../,$(shell find . -name '*.md' -not -path '*/node_modules/*' -not -path './build/*'))
+
+# The documentation website (docs/06-guides/PUBLISHING_THE_SITE.md): every
+# Markdown file, the plan's progress and the source tree, in build/site.
+site:
+	cd tools/site && npm install --silent && node build.mjs ../../$(BUILD)/site && node check-links.mjs ../../$(BUILD)/site
 
 clean:
 	rm -rf $(BUILD)

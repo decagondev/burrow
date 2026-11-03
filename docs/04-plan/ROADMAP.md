@@ -18,25 +18,41 @@
 | M11 | **DOOM** | Freedoom E1M1 playable in QEMU (done: `make doom-smoke`) | W11 |
 | M12 | Ports | Lua REPL, C++ hello with exceptions, Go user program | W12 |
 | M13 | A workbench | edit, save and build code inside Burrow; files survive a reboot | W13 |
+| M14 | Desktop groundwork | a mouse-driven paint program whose colour arrives over a Unix socket | W14 |
+| M15 | Qt | a Qt text editor on `/dev/fb0` edits and saves a file in `/home` | W15 |
 
 ```mermaid
-flowchart LR
-    W0["W0<br/>foundations"] --> W1["W1<br/>stage1"] --> W2["W2<br/>stage2"] --> W3["W3<br/>C loader"]
-    W3 --> W4["W4<br/>higher half"] --> W5["W5<br/>nucleus core"] --> W6["W6<br/>Go runtime"]
-    W6 --> W7["W7<br/>Go drivers"] --> W8["W8<br/>VFS + fb"] --> W9["W9<br/>processes"]
-    W9 --> W10["W10<br/>POSIX + shell"] --> W11["W11<br/>DOOM"] --> W12["W12<br/>ports"]
-    W8 -. "fb + evdev also feed" .-> W11
+flowchart TB
+    subgraph boot["Boot chain"]
+        direction LR
+        W0["W0<br/>foundations"] --> W1["W1<br/>stage1"] --> W2["W2<br/>stage2"] --> W3["W3<br/>C loader"]
+    end
+    subgraph core["Nucleus and Go kernel"]
+        direction LR
+        W4["W4<br/>higher half"] --> W5["W5<br/>nucleus core"] --> W6["W6<br/>Go runtime"] --> W7["W7<br/>Go drivers"] --> W8["W8<br/>VFS + fb"]
+    end
+    subgraph unix["User space"]
+        direction LR
+        W9["W9<br/>processes"] --> W10["W10<br/>POSIX + shell"] --> W11["W11<br/>DOOM"] --> W12["W12<br/>ports"] --> W13["W13<br/>workbench"]
+    end
+    subgraph desk["Desktop"]
+        direction LR
+        W14["W14<br/>desktop groundwork"] --> W15["W15<br/>Qt"] --> X["later: X11, dwm,<br/>GTK (E16)"]
+    end
+    boot --> core --> unix --> desk
     classDef done fill:#2e7d32,color:#fff;
     classDef next fill:#f9a825,color:#000;
-    class W0,W1,W2,W3 done;
-    class W4 next;
+    classDef later fill:#e6eaee,color:#333,stroke-dasharray: 4 3;
+    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13 done;
+    class W14 next;
+    class W15,X later;
 ```
 
-Green = done in the starter kit, yellow = next.
+Green = done, yellow = next, grey = planned.
 
 ## Critical path and risk
 
-The critical path is **W5 -> W6**: Go cannot run until the nucleus has threads, futexes and a reserve/commit VM, and W6 contains the riskiest spike (ADR-0003). Everything after W6 is "normal" OS work with many reference implementations. Plan accordingly: do not polish W4 visuals while W6 is unproven. See [RISKS.md](../living/RISKS.md).
+The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. Next, W14's Unix sockets and file mappings are the critical path: Qt (W15) needs part of them, and an X server (E16) needs all of them. See [RISKS.md](../living/RISKS.md).
 
 ## Rough effort (part-time, one person)
 

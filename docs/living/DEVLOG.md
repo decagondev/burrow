@@ -14,6 +14,19 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — Waves 14 and 15 planned: desktop groundwork, then Qt
+
+**Did:** looked at what TinyX `Xfbdev`, dwm, GTK and Qt need from the kernel, and planned [W14](../04-plan/waves/WAVE-14-desktop-groundwork.md) and [W15](../04-plan/waves/WAVE-15-qt.md).
+
+**Found:**
+- Missing for any of them: Unix sockets (none exist), a mouse (the PS/2 driver drops its bytes), `select`, `mmap` of files, more than 128 MiB, `/dev/urandom` and `getrandom`, a wall clock, `pipe2` with `O_NONBLOCK`, and the `KD*`/`VT_*` calls graphics programs make to take the screen. That is W14.
+- Qt does not need X: its `linuxfb` platform draws on `/dev/fb0` and reads evdev itself, so a static qtbase is the shortest way to real widgets. That is W15.
+- TinyX (tinycorelinux's kdrive fork; 1.2.0 is its last release with working input) has no XKB and no XInput, which is fine for dwm and st but not for GTK3, whose X backend requires XInput 2. GTK needs the kdrive `Xfbdev` of the 1.20 server branch (removed upstream after it), about 15 libraries, and realistically dynamic linking and copy-on-write fork. Those are E16 in the backlog.
+
+**Next:** W14-S01, more memory.
+
+---
+
 ## 2026-11-03 — Wave 13 complete: a workbench (M13)
 
 **Did:** W13-S01..S06. Burrow is a small development machine: `make run-dev` boots busybox, `vi`, kilo, Lua and TinyCC with a home disk that survives a power-off.
