@@ -89,6 +89,24 @@ func (w *wfile) Truncate(n int64) error {
 	return w.fsys.WriteFile(w.name, append([]byte(nil), w.data...))
 }
 
+// ReadAt serves mmap (W14-S05): a mapped page fills from the file as it is
+// at the first touch.
+func (w *wfile) ReadAt(b []byte, off int64) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if off < 0 {
+		return 0, fs.ErrInvalid
+	}
+	if off >= int64(len(w.data)) {
+		return 0, io.EOF
+	}
+	n := copy(b, w.data[off:])
+	if n < len(b) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
 func (w *wfile) Close() error { return nil }
 
 func (w *wfile) Stat() (fs.FileInfo, error) {

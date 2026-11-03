@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S05 mmap of files
+
+**Did:** `mmap` maps regular files privately: an area remembers its file and the offset at its start, and a page fills from the file when it is first touched (a fault, or the kernel copying in or out), with zeros past the end of the file. Splits from `munmap`, `mprotect` and `MAP_FIXED` keep the offsets right; `MADV_DONTNEED` lets the file show through again; fork copies the pages like any private memory. Read-only `MAP_SHARED` is the same thing; writable `MAP_SHARED` is `-ENODEV`, since nothing writes pages back. `mmaptest` maps a file from each file system (memfs, tarfs, FAT) and passed on the first boot.
+
+**Surprise:** none worth a BUG. The one design question, how a mapping keeps its file after `close`, had a short answer: no Burrow file system's `Close` does anything, so the area just keeps the `io.ReaderAt`. That is written down in `area.go` for the day one does.
+
+**Next:** W14-S06, Unix sockets with `socketpair`.
+
 ## 2026-11-03 — W14-S04 a real-time clock
 
 **Did:** `drivers/rtc` reads the CMOS clock at boot and hands it to the nucleus (`nu_set_realtime`), which from then on answers the realtime clocks with wall time. Putting the clock in the nucleus rather than in Go's `proc` made the Go runtime's own `time.Now` real too, so memfs, `/tmp` and FAT got real dates without a line changed in them. User programs gained `clock_getres`, `gettimeofday`, `time`, `FUTEX_CLOCK_REALTIME` deadlines, and an `-EPERM` for anyone setting the clock. The busybox and dev smoke tests boot with a fixed RTC (2030-01-02 03:04:05), so `date`, `ls -l` and the FAT dates the host reads with `mdir` can all be checked.

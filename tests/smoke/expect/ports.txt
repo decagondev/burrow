@@ -32,4 +32,9 @@ startup: sched_setaffinity ok
 startup: sched_getaffinity ok
 startup: membarrier ok
 startup: ok
+burrow> run /bin/mmaptest /bin/sh /mnt/hello.txt
+mmaptest: /tmp/mmap.dat ok (12388 bytes)
+mmaptest: /bin/sh ok
+mmaptest: /mnt/hello.txt ok (83 bytes)
+mmaptest: ok
 burrow> poweroff

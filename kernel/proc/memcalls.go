@@ -1,6 +1,11 @@
 package proc
 
-import "syscall"
+import (
+	"io"
+	"syscall"
+
+	"burrow/kernel/fs/devfs"
+)
 
 // brk: grow or shrink the heap that starts after the program's segments.
 // Linux semantics: the result is the (new or unchanged) break, never an error.
@@ -28,13 +33,14 @@ const (
 	protWrite   = 2
 	protExec    = 4
 	mapShared   = 0x01
+	mapPrivate  = 0x02
 	mapFixed    = 0x10
 	mapAnon     = 0x20
 	mmapMaxSize = 1 << 46 // reservations are free (area.go): the Go runtime asks for hundreds of MiB
 )
 
-// mmap: anonymous private memory (W9) and device memory with MAP_SHARED
-// (/dev/fb0, W11); regular files are not mappable yet.
+// mmap: anonymous private memory (W9), device memory with MAP_SHARED
+// (/dev/fb0, W11) and private mappings of regular files (W14-S05).
 func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 	addr, n, prot, flags := a[0], a[1], a[2], a[3]
 	if n == 0 || n > mmapMaxSize {
@@ -49,7 +55,14 @@ func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 		pr |= ProtExec
 	}
 	if flags&mapAnon == 0 {
-		return ok(p.mmapDevice(a[4], a[5], n, flags, pr, flags&mapFixed != 0, addr))
+		f := p.fds.get(a[4])
+		if f == nil {
+			return ok(-int64(syscall.EBADF))
+		}
+		if _, isDev := device(f).(Mappable); isDev {
+			return ok(p.mmapDevice(a[4], a[5], n, flags, pr, flags&mapFixed != 0, addr))
+		}
+		return ok(p.mmapFile(f, a[5], n, flags, prot, pr, addr))
 	}
 	addr, e := p.pickAddr(addr, n, flags&mapFixed != 0)
 	if e != 0 {
@@ -59,6 +72,36 @@ func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(-int64(syscall.ENOMEM))
 	}
 	return ok(int64(addr))
+}
+
+// mmapFile maps n bytes of a regular file from offset off, privately:
+// pages fill from the file at first touch, writes stay in the process.
+// A read-only MAP_SHARED mapping is the same thing; a writable one would
+// need writes to reach the file, so it is -ENODEV.
+func (p *Process) mmapFile(f *file, off, n, flags, prot uint64, pr Prot, addr uint64) int64 {
+	r, isR := f.f.(io.ReaderAt)
+	if _, isDev := f.f.(interface{ Device() devfs.Device }); !isR || isDev {
+		return -int64(syscall.ENODEV) // pipes, the terminal, devices without memory
+	}
+	if st, err := f.f.Stat(); err != nil || st.IsDir() {
+		return -int64(syscall.ENODEV)
+	}
+	switch {
+	case off%PageSize != 0 || int64(off) < 0 || flags&(mapShared|mapPrivate) == 0:
+		return -int64(syscall.EINVAL)
+	case f.flags&oAccMode == oWRONLY:
+		return -int64(syscall.EACCES)
+	case flags&mapShared != 0 && prot&protWrite != 0:
+		return -int64(syscall.ENODEV)
+	}
+	addr, e := p.pickAddr(addr, n, flags&mapFixed != 0)
+	if e != 0 {
+		return e
+	}
+	if err := p.mem.ReserveFile(addr, n, pr, prot&7 == 0, r, int64(off)); err != nil {
+		return -int64(syscall.ENOMEM)
+	}
+	return int64(addr)
 }
 
 // pickAddr chooses where n bytes go: addr itself for MAP_FIXED (what was

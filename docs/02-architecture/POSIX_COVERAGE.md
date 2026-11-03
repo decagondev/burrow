@@ -16,7 +16,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 5 | `fstat` | partial | W9 | `st_mode`, `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
 | 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |
-| 9 | `mmap` | partial | W9 | anonymous private memory (demand-zero since W12: a reservation costs nothing, a page gets its frame at first touch; `PROT_NONE` is inaccessible), and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); `-ENODEV` for regular files; `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
+| 9 | `mmap` | partial | W9 | anonymous private memory (demand-zero since W12: a reservation costs nothing, a page gets its frame at first touch; `PROT_NONE` is inaccessible), and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); regular files privately since W14 (`MAP_PRIVATE`, and read-only `MAP_SHARED`, which is the same thing; any page-aligned offset, `PROT_EXEC`, `MAP_FIXED`; pages fill from the file at first touch, past its end they read as zeros, writes stay in the process and fork copies them; the mapping outlives `close`; `-EACCES` on a write-only descriptor, `-ENODEV` for writable `MAP_SHARED`, pipes, the terminal, directories and devices without memory); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
 | 10 | `mprotect` | partial | W12 | pages and areas; pages already touched stay readable under `PROT_NONE` |
 | 11 | `munmap` | done | W9 |  |
 | 12 | `brk` | done | W9 | heap after the highest segment |
@@ -30,7 +30,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
 | 23 | `select` | partial | W14 | over the same readiness as `poll` (`kernel/proc/select.go`); a hang-up also marks a descriptor in the write set; the time left is not written back into the timeout |
 | 24 | `sched_yield` | done | W12 | |
-| 28 | `madvise` | partial | W12 | `MADV_DONTNEED` gives frames back (reads as zero); other advice accepted |
+| 28 | `madvise` | partial | W12 | `MADV_DONTNEED` gives frames back (anonymous memory reads as zero, a file mapping as the file again); other advice accepted |
 | 32, 33 | `dup` `dup2` | done | W10 |  |
 | 34 | `pause` | done | W10 | |
 | 35 | `nanosleep` | partial | W10 | `EINTR` when a signal arrives; the remaining time is not written back |
