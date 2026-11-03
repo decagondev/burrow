@@ -95,6 +95,7 @@ func main() {
 		MapMMIO:   amd64.MapMMIO,
 	})
 	checkBootDisk(log.With("block"))
+	diskTest(log.With("disktest"))
 	k.mountData(log.With("fat"))
 
 	rows, cols := 25, 80

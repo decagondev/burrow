@@ -18,8 +18,9 @@ As built: `vi` needed one call Burrow lacked, `ftruncate` (and `truncate` with i
 `kernel/gfx`: a terminal state machine for `ESC [` sequences (CUP, CUU/CUD/CUF/CUB, ED, EL, SGR 0/1/7/30-37/40-47, DECTCEM, DECSTBM) and a drawn cursor; host tests feed byte streams and check the cell grid. A screen check of `vi` on the console.
 As built: the console keeps a cell grid (`gfx/console.go`) and parses in `gfx/vt.go`; also CHA/VPA, insert/delete line, reverse index, ESC 7/8, the alternate screen (`?1049`, so the shell's lines come back after `vi`), bright colours; charset selection, OSC and unknown sequences are swallowed. The cursor is a line in the two pixel rows under each glyph, so it never hides a character. Queries (`ESC[6n`) are not answered, so `FEATURE_VI_ASK_TERMINAL` stays off. `tests/smoke/expect/busybox.screen` checks `vi`'s screen.
 
-### [ ] W13-S03 Disk writes (E13)
+### [x] W13-S03 Disk writes (E13)
 `block.Writer` (`WriteSectors`, `Flush`), ATA PIO `WRITE SECTORS` (0x30) and `FLUSH CACHE` (0xE7) in `drivers/ata`, tested against `haltest` fakes and on QEMU by writing a scratch disk and reading it back.
+As built: `block.Writer` and `block.WriterAt` (read-modify-write for partial sectors), a write half of the conformance test (`blocktest.RunWriter`) that the RAM disk and the ATA driver pass (the driver's simulated drive in `ata_test.go` takes data while DRQ is set). On QEMU, `make disk-smoke` boots with the kernel argument `disktest=hdb` (`kernel/cmd/kernel/disktest.go`): the kernel overwrites the last 64 sectors of a fresh blank scratch disk, flushes and reads them back, and `tests/smoke/checkdisk.py` finds the pattern in the image file on the host.
 
 ### [ ] W13-S04 Writable FAT32 (E13)
 `kernel/fs/fat`: allocate and free clusters, grow and truncate files, create and remove files and directories with long names, rename, update sizes and the FSInfo hints; mount read-write behind `vfs.Writable`. `make fat-interop` gains the other direction: images changed by the kernel's code pass `fsck.fat`, and mtools reads what it wrote.

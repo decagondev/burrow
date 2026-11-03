@@ -1,0 +1,5 @@
+# Disk writes (W13-S03): the kernel overwrites the end of a blank scratch disk
+# (kargs disktest=hdb).
+wait burrow>
+type poweroff
+key ret

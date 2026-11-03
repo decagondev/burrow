@@ -22,3 +22,7 @@ func TestRegistry(t *testing.T) {
 		t.Errorf("Get(hdb) = %v, %v", d, ok)
 	}
 }
+
+func TestRAMWriter(t *testing.T) {
+	blocktest.RunWriter(t, block.NewRAM(make([]byte, 32*512), 512))
+}

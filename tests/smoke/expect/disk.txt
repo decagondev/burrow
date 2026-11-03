@@ -1,0 +1,4 @@
+# Ordered markers for make disk-smoke (W13-S03, tests/smoke/keys/disk.keys). Append-only.
+[ata] INFO: hdb: "QEMU HARDDISK", 2048 sectors (1024 KiB)
+[disktest] INFO: hdb: wrote 64 sectors, flushed, read them back
+burrow> poweroff

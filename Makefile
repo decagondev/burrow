@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -234,7 +234,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke ports-smoke ports-dl-smoke doom-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke ports-dl-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -288,6 +288,20 @@ doom-smoke-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
 	@python3 -c 'import re,sys; m=re.search(r"\(([0-9.]+) fps\)", open(sys.argv[1], errors="replace").read()); fps=float(m.group(1)) if m else 0; print("DOOM BENCH %.1f fps (timedemo demo1)" % fps); sys.exit(fps < 20)' $(BUILD)/smoke-doom-bench.log
+
+# Disk writes (W13-S03): a kernel argument (disktest=hdb) makes the Go kernel
+# overwrite the end of a fresh blank scratch disk, flush and read it back;
+# then tests/smoke/checkdisk.py checks the image file on the host, so the
+# bytes are known to have reached the disk.
+$(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
+	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
+		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
+disk-smoke: $(BUILD)/go-disktest.img
+	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
+	QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk" \
+		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
+	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
 
 # Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
 ports-smoke: $(BUILD)/go.img $(BUILD)/data.img

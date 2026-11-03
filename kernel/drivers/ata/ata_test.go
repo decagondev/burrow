@@ -1,6 +1,7 @@
 package ata
 
 import (
+	"bytes"
 	"testing"
 
 	"burrow/kernel/block"
@@ -8,8 +9,9 @@ import (
 )
 
 // fakeChannel is an IDE channel with up to two disks that implements the
-// PIO protocol the driver uses: IDENTIFY and READ SECTORS (LBA28), with
-// DRQ set while a sector waits in the data port.
+// PIO protocol the driver uses: IDENTIFY, READ SECTORS and WRITE SECTORS
+// (LBA28), with DRQ set while a sector waits in the data port or the drive
+// waits for one; FLUSH CACHE is counted.
 type fakeChannel struct {
 	disks    [2][]byte // nil = no drive
 	models   [2]string
@@ -17,8 +19,11 @@ type fakeChannel struct {
 	cur      int // selected drive
 	out      []uint16
 	reading  int // sectors still to deliver for the current READ
+	writing  int // sectors still to take for the current WRITE
+	in       []uint16
 	nextLBA  uint64
 	commands int
+	flushes  int
 }
 
 func (f *fakeChannel) drive() []byte { return f.disks[f.cur] }
@@ -31,7 +36,7 @@ func (f *fakeChannel) In8(port uint16) uint8 {
 		if f.drive() == nil {
 			return 0
 		}
-		if len(f.out) > 0 {
+		if len(f.out) > 0 || f.writing > 0 {
 			return 0x40 | stDRQ
 		}
 		return 0x40
@@ -69,14 +74,21 @@ func (f *fakeChannel) command(cmd uint8) {
 			id[27+i] = uint16(m[2*i])<<8 | uint16(m[2*i+1])
 		}
 		f.out = id
-	case cmdRead:
-		f.reading = int(f.regs[regCount])
-		if f.reading == 0 {
-			f.reading = 256
+	case cmdRead, cmdWrite:
+		count := int(f.regs[regCount])
+		if count == 0 {
+			count = 256
 		}
 		f.nextLBA = uint64(f.regs[regLBA0]) | uint64(f.regs[regLBA1])<<8 |
 			uint64(f.regs[regLBA2])<<16 | uint64(f.regs[regDrive]&0x0F)<<24
-		f.loadSector()
+		if cmd == cmdRead {
+			f.reading = count
+			f.loadSector()
+		} else {
+			f.writing, f.in = count, nil
+		}
+	case cmdFlush:
+		f.flushes++
 	}
 }
 
@@ -104,7 +116,22 @@ func (f *fakeChannel) In16(port uint16) uint16 {
 	return w
 }
 
-func (f *fakeChannel) Out16(uint16, uint16) {}
+func (f *fakeChannel) Out16(port uint16, w uint16) {
+	if port != ioBase+regData || f.writing == 0 {
+		return
+	}
+	f.in = append(f.in, w)
+	if len(f.in) < SectorSize/2 {
+		return
+	}
+	s := f.drive()[f.nextLBA*SectorSize:][:SectorSize]
+	for i, w := range f.in {
+		s[2*i], s[2*i+1] = byte(w), byte(w>>8)
+	}
+	f.in = f.in[:0]
+	f.writing--
+	f.nextLBA++
+}
 
 func TestIdentifyAndConformance(t *testing.T) {
 	master := blocktest.Pattern(600, SectorSize) // more than one 256-sector command
@@ -140,4 +167,26 @@ func TestSlaveDisk(t *testing.T) {
 	}
 	blocktest.Run(t, d, f.disks[1])
 	var _ block.Device = d
+}
+
+func TestWriterConformance(t *testing.T) {
+	f := &fakeChannel{models: [2]string{"QEMU HARDDISK", ""}}
+	f.disks[0] = make([]byte, 600*SectorSize)
+	d, err := NewChannel(f).Identify(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w block.Writer = d
+	blocktest.RunWriter(t, w)
+	if f.flushes == 0 {
+		t.Error("Flush sent no FLUSH CACHE")
+	}
+	big := blocktest.Pattern(300, SectorSize)
+	f.commands = 0
+	if err := d.WriteSectors(100, big); err != nil || f.commands != 2 {
+		t.Errorf("300 sectors took %d WRITE commands (%v), want 2", f.commands, err)
+	}
+	if !bytes.Equal(f.disks[0][100*SectorSize:400*SectorSize], big) {
+		t.Error("the disk does not hold the 300 sectors written")
+	}
 }

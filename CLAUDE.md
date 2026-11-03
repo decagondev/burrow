@@ -29,6 +29,7 @@ make run-busybox  # the busybox image interactively (vi on the screen console, a
 make doom         # download (once, pinned, ~/.cache/burrow-doom) doomgeneric + Freedoom; build build/doom-root/{doom,freedoom1.wad}
 make doom-smoke   # Doom on build/go-doom.img: title, E1M1, quit; pixels checked (part of make test; skips without make doom)
 make doom-bench   # Doom's timedemo demo1, fails below 20 fps (~70 s; not in make test)
+make disk-smoke   # ATA writes: the kernel writes a scratch disk (kargs disktest=hdb), the host checks the image (part of make test)
 make ports-smoke  # threads (musl pthreads) and gohello (a Go user program) on go.img (part of make test)
 make ports        # download (once, pinned, ~/.cache/burrow-ports) Lua, TinyCC, a musl C++ toolchain; build build/ports-root
 make ports-dl-smoke # Lua, cxxtest, tcc on go-ports.img (part of make test; skips without make ports)

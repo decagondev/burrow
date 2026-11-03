@@ -1,8 +1,9 @@
 // Package block is the kernel's block layer (E07.F05): a Device reads whole
-// sectors; ReaderAt turns one into an io.ReaderAt for file systems; a small
-// registry names the disks drivers find ("hda", "hdb"). Every Device passes
-// the same conformance test (block/blocktest): the RAM disk and the ATA
-// driver alike (Liskov).
+// sectors, a Writer (W13-S03) also writes them and flushes; ReaderAt and
+// WriterAt turn them into io.ReaderAt / io.WriterAt for file systems; a
+// small registry names the disks drivers find ("hda", "hdb"). Every Device
+// and Writer passes the same conformance tests (block/blocktest): the RAM
+// disk and the ATA driver alike (Liskov).
 package block
 
 import (
@@ -21,7 +22,16 @@ type Device interface {
 	ReadSectors(lba uint64, buf []byte) error
 }
 
-// ErrRange is a read past the end of the device.
+// Writer is a disk that can be written. WriteSectors stores buf (whole
+// sectors) from sector lba, or fails without writing past the end; Flush
+// returns once every earlier write is on the medium (the drive's cache).
+type Writer interface {
+	Device
+	WriteSectors(lba uint64, buf []byte) error
+	Flush() error
+}
+
+// ErrRange is a read or write past the end of the device.
 var ErrRange = errors.New("block: read past the end of the device")
 
 // CheckRange validates a ReadSectors call; drivers call it first.
@@ -56,6 +66,16 @@ func (r *RAM) ReadSectors(lba uint64, buf []byte) error {
 	return nil
 }
 
+func (r *RAM) WriteSectors(lba uint64, buf []byte) error {
+	if err := CheckRange(r, lba, buf); err != nil {
+		return err
+	}
+	copy(r.data[lba*uint64(r.ss):], buf)
+	return nil
+}
+
+func (r *RAM) Flush() error { return nil }
+
 // ReaderAt reads any byte range of d by reading the sectors around it.
 func ReaderAt(d Device) io.ReaderAt { return readerAt{d} }
 
@@ -81,6 +101,33 @@ func (r readerAt) ReadAt(p []byte, off int64) (int, error) {
 		return n, io.EOF
 	}
 	return n, nil
+}
+
+// WriterAt writes any byte range of w: whole sectors directly, partial
+// ones by reading them first (read-modify-write). Not atomic: a crash
+// in between can leave part of a write on the disk.
+func WriterAt(w Writer) io.WriterAt { return writerAt{w} }
+
+type writerAt struct{ w Writer }
+
+func (wa writerAt) WriteAt(p []byte, off int64) (int, error) {
+	ss := int64(wa.w.SectorSize())
+	size := int64(wa.w.Sectors()) * ss
+	if off < 0 || off+int64(len(p)) > size {
+		return 0, ErrRange
+	}
+	first, last := off/ss, (off+int64(len(p))+ss-1)/ss
+	buf := make([]byte, (last-first)*ss)
+	if off%ss != 0 || (off+int64(len(p)))%ss != 0 { // a partial sector at either end
+		if err := wa.w.ReadSectors(uint64(first), buf); err != nil {
+			return 0, err
+		}
+	}
+	copy(buf[off-first*ss:], p)
+	if err := wa.w.WriteSectors(uint64(first), buf); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 var (

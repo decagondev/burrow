@@ -1,8 +1,9 @@
 // Package ata drives IDE disks on the primary channel with PIO and 28-bit
-// LBA (E07.F05): IDENTIFY, then READ SECTORS, polling the status register
-// with the channel's interrupt switched off (nIEN). Each disk found becomes
-// a block.Device named hda (master) or hdb (slave). It is the Go twin of
-// the loader's loader/ata_pio.c, plus IDENTIFY and multi-sector reads.
+// LBA (E07.F05): IDENTIFY, then READ SECTORS, and since W13-S03 WRITE
+// SECTORS and FLUSH CACHE, polling the status register with the channel's
+// interrupt switched off (nIEN). Each disk found becomes a block.Writer
+// named hda (master) or hdb (slave). It is the Go twin of the loader's
+// loader/ata_pio.c, plus IDENTIFY, multi-sector transfers and writes.
 //
 // Reference: the OSDev wiki "ATA PIO Mode"; ATA-6 for IDENTIFY words.
 package ata
@@ -40,6 +41,8 @@ const (
 
 	cmdIdentify = 0xEC
 	cmdRead     = 0x20
+	cmdWrite    = 0x30
+	cmdFlush    = 0xE7 // FLUSH CACHE
 	ctlNoIRQ    = 0x02 // nIEN
 
 	driveLBA   = 0xE0 // LBA mode, the two always-one bits
@@ -171,17 +174,7 @@ func (d *Disk) ReadSectors(lba uint64, buf []byte) error {
 
 func (d *Disk) readChunk(lba uint64, n int, buf []byte) error {
 	c := d.ch
-	sel := uint8(driveLBA) | uint8(lba>>24)&0x0F
-	if d.slave {
-		sel |= driveSlave
-	}
-	c.io.Out8(ioBase+regDrive, sel)
-	c.settle()
-	c.io.Out8(ioBase+regCount, uint8(n)) // 256 wraps to 0, which means 256
-	c.io.Out8(ioBase+regLBA0, uint8(lba))
-	c.io.Out8(ioBase+regLBA1, uint8(lba>>8))
-	c.io.Out8(ioBase+regLBA2, uint8(lba>>16))
-	c.io.Out8(ioBase+regCommand, cmdRead)
+	d.command(lba, n, cmdRead)
 	for s := 0; s < n; s++ {
 		c.settle()
 		if err := c.wait(true); err != nil {
@@ -194,6 +187,74 @@ func (d *Disk) readChunk(lba uint64, n int, buf []byte) error {
 		}
 	}
 	return nil
+}
+
+// WriteSectors implements block.Writer: one WRITE SECTORS per 256 sectors.
+func (d *Disk) WriteSectors(lba uint64, buf []byte) error {
+	if err := block.CheckRange(d, lba, buf); err != nil {
+		return err
+	}
+	if lba+uint64(len(buf)/SectorSize) > lba28Max {
+		return block.ErrRange
+	}
+	c := d.ch
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for len(buf) > 0 {
+		n := min(len(buf)/SectorSize, maxPerCommand)
+		if err := d.writeChunk(lba, n, buf[:n*SectorSize]); err != nil {
+			return fmt.Errorf("ata: write %d sectors at %d: %w", n, lba, err)
+		}
+		lba += uint64(n)
+		buf = buf[n*SectorSize:]
+	}
+	return nil
+}
+
+func (d *Disk) writeChunk(lba uint64, n int, buf []byte) error {
+	c := d.ch
+	d.command(lba, n, cmdWrite)
+	for s := 0; s < n; s++ {
+		c.settle()
+		if err := c.wait(true); err != nil { // DRQ: the drive takes a sector
+			return err
+		}
+		sector := buf[s*SectorSize : (s+1)*SectorSize]
+		for i := 0; i < SectorSize; i += 2 {
+			c.io.Out16(ioBase+regData, uint16(sector[i])|uint16(sector[i+1])<<8)
+		}
+	}
+	c.settle()
+	return c.wait(false) // the last sector is written (or the drive reports why not)
+}
+
+// Flush implements block.Writer: FLUSH CACHE, then wait until it is done.
+func (d *Disk) Flush() error {
+	c := d.ch
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	d.command(0, 0, cmdFlush)
+	c.settle()
+	if err := c.wait(false); err != nil {
+		return fmt.Errorf("ata: flush: %w", err)
+	}
+	return nil
+}
+
+// command selects the drive, loads the LBA and count, and issues cmd.
+func (d *Disk) command(lba uint64, n int, cmd uint8) {
+	c := d.ch
+	sel := uint8(driveLBA) | uint8(lba>>24)&0x0F
+	if d.slave {
+		sel |= driveSlave
+	}
+	c.io.Out8(ioBase+regDrive, sel)
+	c.settle()
+	c.io.Out8(ioBase+regCount, uint8(n)) // 256 wraps to 0, which means 256
+	c.io.Out8(ioBase+regLBA0, uint8(lba))
+	c.io.Out8(ioBase+regLBA1, uint8(lba>>8))
+	c.io.Out8(ioBase+regLBA2, uint8(lba>>16))
+	c.io.Out8(ioBase+regCommand, cmd)
 }
 
 func init() { driver.Register(&controller{}) }

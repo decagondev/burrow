@@ -55,3 +55,54 @@ func Pattern(sectors, sectorSize int) []byte {
 	}
 	return b
 }
+
+// RunWriter checks the write side of w, whose contents are scratch: single
+// and multi-sector writes read back, their neighbours untouched, the last
+// sector, writes past the end, bad buffer sizes, Flush, and WriterAt at
+// unaligned offsets. It leaves w holding Pattern-like data, not zeros.
+func RunWriter(t *testing.T, w block.Writer) {
+	t.Helper()
+	ss, n := w.SectorSize(), w.Sectors()
+	shadow := make([]byte, int(n)*ss)
+	if err := w.ReadSectors(0, shadow); err != nil {
+		t.Fatalf("reading the disk first: %v", err)
+	}
+	put := func(lba uint64, data []byte) {
+		t.Helper()
+		if err := w.WriteSectors(lba, data); err != nil {
+			t.Fatalf("WriteSectors(%d, %d bytes): %v", lba, len(data), err)
+		}
+		copy(shadow[lba*uint64(ss):], data)
+	}
+	put(0, Pattern(1, ss))
+	put(2, Pattern(5, ss)[ss:]) // 4 sectors
+	put(n-1, Pattern(3, ss)[2*ss:])
+	if err := w.Flush(); err != nil {
+		t.Errorf("Flush: %v", err)
+	}
+	got := make([]byte, len(shadow))
+	if err := w.ReadSectors(0, got); err != nil || !bytes.Equal(got, shadow) {
+		t.Fatalf("after writes the disk does not hold what was written (%v)", err)
+	}
+	for _, c := range []struct{ lba, count uint64 }{{n, 1}, {n - 1, 2}, {1 << 40, 1}} {
+		if err := w.WriteSectors(c.lba, make([]byte, c.count*uint64(ss))); !errors.Is(err, block.ErrRange) {
+			t.Errorf("WriteSectors(%d, %d sectors) past the end = %v, want ErrRange", c.lba, c.count, err)
+		}
+	}
+	if err := w.WriteSectors(0, make([]byte, ss-1)); err == nil {
+		t.Error("WriteSectors accepted a buffer that is not whole sectors")
+	}
+	wa := block.WriterAt(w)
+	msg := []byte("unaligned write across a sector boundary")
+	off := int64(3*ss - 10)
+	if k, err := wa.WriteAt(msg, off); err != nil || k != len(msg) {
+		t.Fatalf("WriteAt = %d, %v", k, err)
+	}
+	copy(shadow[off:], msg)
+	if err := w.ReadSectors(0, got); err != nil || !bytes.Equal(got, shadow) {
+		t.Error("WriteAt changed bytes outside its range, or not the ones inside")
+	}
+	if _, err := wa.WriteAt(msg, int64(len(shadow))-5); err == nil {
+		t.Error("WriteAt past the end succeeded")
+	}
+}
