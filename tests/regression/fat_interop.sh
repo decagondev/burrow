@@ -38,6 +38,7 @@ mcopy -i "$img" "datadisk/docs/A-Long-File-Name.text" "::/docs/A-Long-File-Name.
 
 # 3. Our writer, Linux tools: the same edits on Linux's image (4 KiB clusters)
 #    and on a copy of ours (512-byte clusters).
+rm -f "$img.big"
 mkfs.fat -F 32 -S 512 -s 8 -n LINUXFAT -C "$img.big" $((300 * 1024)) >/dev/null
 cp "$B/data.img" "$B/data-edited.img"
 work="$(mktemp -d)"
