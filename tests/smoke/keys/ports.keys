@@ -8,5 +8,9 @@ type run /bin/gohello
 key ret
 wait gohello: 
 wait burrow> 
+type run /bin/startup
+key ret
+wait startup: 
+wait burrow> 
 type poweroff
 key ret

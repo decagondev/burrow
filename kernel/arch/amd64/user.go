@@ -16,6 +16,7 @@ const (
 	nrASUnmap       = 0x1012
 	nrPageAlloc     = 0x1014
 	nrPageFree      = 0x1015
+	nrMemInfo       = 0x1006
 	nrASDestroy     = 0x1016
 	nrUThreadCreate = 0x1020
 	nrSyscallWait   = 0x1021
@@ -77,6 +78,12 @@ func (Nucleus) PageAlloc() (uint64, error) {
 }
 
 func (Nucleus) PageFree(pa uint64) { raw(nrPageFree, uintptr(pa), 1) }
+
+func (Nucleus) MemInfo() (totalBytes, freeBytes uint64) {
+	var m [2]uint64
+	raw(nrMemInfo, uintptr(unsafe.Pointer(&m[0])))
+	return m[0], m[1]
+}
 
 func (Nucleus) Frame(pa uint64) []byte { return PhysBytes(pa, proc.PageSize) }
 

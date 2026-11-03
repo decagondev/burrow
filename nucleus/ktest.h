@@ -57,6 +57,7 @@ int kt_shim_unknown_once(void);
 int kt_madvise_dontneed_zeroes(void);
 int kt_madvise_returns_frames(void);
 int kt_nu_bootinfo_mmio(void);
+int kt_nu_mem_info(void);
 
 /* ktest_user.c */
 int kt_uspace_map_translate(void);

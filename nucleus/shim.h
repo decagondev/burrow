@@ -21,7 +21,7 @@ enum {
 /* Nucleus-private calls, NUCLEUS_ABI.md (numbers never reused). */
 enum { NU_BASE = 0x1000, NU_irq_wait = 0x1000, NU_irq_ack = 0x1001,
        NU_bootinfo = 0x1002, NU_physmap_base = 0x1003, NU_debug_exit = 0x1004,
-       NU_mmio_map = 0x1005,
+       NU_mmio_map = 0x1005, NU_mem_info = 0x1006,
        NU_as_create = 0x1010, NU_as_map = 0x1011, NU_as_unmap = 0x1012, NU_as_translate = 0x1013,
        NU_page_alloc = 0x1014, NU_page_free = 0x1015, NU_as_destroy = 0x1016,
        NU_uthread_create = 0x1020, NU_syscall_wait = 0x1021, NU_syscall_reply = 0x1022,

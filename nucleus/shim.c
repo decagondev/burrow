@@ -18,6 +18,7 @@
 #include "vmm.h"
 #include "uspace.h"
 #include "uthread.h"
+#include "frames.h"
 #include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
@@ -85,6 +86,15 @@ static long nu_bootinfo(struct syscall_frame *f) {
     return (long)n;
 }
 
+/* Memory figures for sysinfo(2) (W14-S03): {total, free} bytes of RAM the
+ * frame allocator manages. */
+static long nu_mem_info(struct syscall_frame *f) {
+    uint64_t *out = (uint64_t *)SYSARG0(f);
+    out[0] = frames_total_count() * 4096;
+    out[1] = frames_free_count() * 4096;
+    return 16;
+}
+
 /* Device memory for a Go driver (a PCI BAR): uncached, NX, at physmap + pa. */
 #define MMIO_MAX_BYTES (256ull << 20)
 #define PHYS_LIMIT     (1ull << 46)
@@ -129,6 +139,7 @@ static const sys_fn g_nu_table[] = {
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
     [NU_bootinfo - NU_BASE] = nu_bootinfo,
     [NU_mmio_map - NU_BASE] = nu_mmio_map,
+    [NU_mem_info - NU_BASE] = nu_mem_info,
     [NU_physmap_base - NU_BASE] = nu_physmap_base,
     [NU_debug_exit - NU_BASE] = nu_debug_exit,
     [NU_as_create - NU_BASE] = nu_as_create,

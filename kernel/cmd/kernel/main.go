@@ -33,6 +33,7 @@ import (
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/proc"
+	"burrow/kernel/random"
 	"burrow/kernel/selftest"
 	"burrow/kernel/tty"
 	"burrow/kernel/vfs"
@@ -58,6 +59,13 @@ func main() {
 	k.log = log
 	log.Infof("hello from Go %s", "(Burrow kernel)")
 	testFaults()
+	seed, hw := amd64.Seed()
+	random.Kernel.Seed(seed)
+	if hw {
+		log.With("random").Infof("seeded from RDRAND")
+	} else {
+		log.With("random").Infof("seeded from the TSC (no RDRAND)")
+	}
 	mods, err := bootModules(log.With("boot"))
 	if err != nil {
 		log.Errorf("boot data: %v", err)

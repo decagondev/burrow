@@ -5,9 +5,10 @@ BURROW:NUCLEUS:OK
 [nucleus] go kernel mapped
 [nucleus] starting the Go kernel
 [kernel] INFO: hello from Go
+[random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 24 files, 3 directories
+[initrd] INFO: tarfs: 25 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok

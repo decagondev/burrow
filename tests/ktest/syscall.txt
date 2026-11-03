@@ -7,3 +7,5 @@ madvise_dontneed_zeroes
 nu_bootinfo_mmio
 # BUG-0012: discarded memory goes back to the allocator
 madvise_returns_frames
+# W14-S03: memory figures for sysinfo
+nu_mem_info

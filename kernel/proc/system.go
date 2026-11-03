@@ -156,7 +156,7 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 
 func (s *System) newProcess(file string, mem *Mem, fds *fdTable) *Process {
 	return &Process{PID: s.newID(), Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
-		cwd: "/", children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{}),
+		cwd: "/", umask: defaultUmask, children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{}),
 		threads: map[int]*Thread{}}
 }
 

@@ -8,4 +8,28 @@ burrow> run /bin/gohello
 gohello: 8 goroutines squared 1..100: 338350 (want 338350)
 gohello: 50 goroutines counted 50000 (want 50000)
 gohello: ok
+burrow> run /bin/startup
+startup: select-empty-pipe ok
+startup: select-data ok
+startup: select-ebadf ok
+startup: select-sleep ok
+startup: pselect ok
+startup: pipe2-nonblock ok
+startup: getrandom ok
+startup: getrandom-einval ok
+startup: dev-urandom ok
+startup: statx ok
+startup: statx-enoent ok
+startup: readlink-file ok
+startup: readlink-enoent ok
+startup: sysinfo ok
+startup: umask ok
+startup: getrusage ok
+startup: getrusage-einval ok
+startup: sched_getparam ok
+startup: sched_getscheduler ok
+startup: sched_setaffinity ok
+startup: sched_getaffinity ok
+startup: membarrier ok
+startup: ok
 burrow> poweroff

@@ -93,6 +93,22 @@ int kt_shim_unknown_once(void) {
     return 0;
 }
 
+/* W14-S03: nu_mem_info reports the frame allocator's totals in bytes, and
+ * the free figure follows an allocation. */
+int kt_nu_mem_info(void) {
+    uint64_t m[2];
+    KT_CHECK(sys3(0x1006, (long)m, 0, 0) == 16);
+    KT_CHECK(m[0] == frames_total_count() * 4096 && m[1] == frames_free_count() * 4096);
+    KT_CHECK(m[1] > 0 && m[1] <= m[0]);
+    uint64_t pa = frame_alloc();
+    KT_CHECK(pa != 0);
+    uint64_t n[2];
+    sys3(0x1006, (long)n, 0, 0);
+    frame_free(pa);
+    KT_CHECK(n[0] == m[0] && n[1] == m[1] - 4096);
+    return 0;
+}
+
 /* W8-S01: nu_bootinfo copies boot_info v2; nu_mmio_map maps device memory
  * at physmap + pa (the LAPIC page: its ID register reads back) and rejects
  * bad ranges instead of panicking. */

@@ -145,6 +145,17 @@ func (f *Fake) PageFree(pa uint64) {
 	delete(f.frames, pa)
 }
 
+// MemInfo: 1 GiB of RAM (or the LimitFrames limit), less the frames in use.
+func (f *Fake) MemInfo() (totalBytes, freeBytes uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	total := uint64(1 << 30)
+	if f.limit > 0 {
+		total = uint64(f.limit) * proc.PageSize
+	}
+	return total, total - uint64(len(f.frames))*proc.PageSize
+}
+
 func (f *Fake) Frame(pa uint64) []byte {
 	f.mu.Lock()
 	defer f.mu.Unlock()

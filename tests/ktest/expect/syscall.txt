@@ -9,4 +9,5 @@
 [ktest] madvise_dontneed_zeroes ok
 [ktest] nu_bootinfo_mmio ok
 [ktest] madvise_returns_frames ok
+[ktest] nu_mem_info ok
 BURROW:KTEST:OK

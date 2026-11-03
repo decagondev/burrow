@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S03 select and the small start-up calls
+
+**Did:** `select` and `pselect6` over the same wait loop as `poll`; `getrandom`, `/dev/random` and `/dev/urandom` from a new `kernel/random` (ChaCha8, seeded at boot from RDRAND, or from the TSC when the CPU has none: not for cryptography); `statx`; `readlink`/`readlinkat` (nothing is a link); `sysinfo` with real RAM figures from a new nucleus call, `nu_mem_info`; `umask`; `getrusage`; `sched_getparam`, `sched_getscheduler`, `sched_setaffinity`; `membarrier`'s query. `user/startup` checks all of them, and `make ports-smoke` runs it on the host's Linux before it boots Burrow, so a check that only Burrow passes cannot get in.
+
+**Surprise:** `pipe2` had honoured `O_NONBLOCK` since W11, though POSIX_COVERAGE.md still said it did not. musl's `sched_getscheduler` and `sched_getparam` return `ENOSYS` without making a system call, so `startup` makes them with `syscall()`. Neither was a bug worth a number.
+
+**Next:** W14-S04, a real-time clock.
+
 ## 2026-11-03 — W14-S02 a PS/2 mouse
 
 **Did:** the 8042's second port: the mouse comes up with the IntelliMouse handshake (a wheel, 4-byte packets) on IRQ 12, and its packets become `/dev/input/event1` (Linux input events) and `/dev/input/mice` (mousedev's PS/2 stream). Both event devices answer `EVIOCGBIT`, so a program can tell the keyboard from the mouse the way Qt and X servers do. `mousetest` draws a cursor that follows QEMU's `mouse_move`, and the devices smoke test finds it on screen at the right spot.

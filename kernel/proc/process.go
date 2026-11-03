@@ -29,6 +29,7 @@ type Process struct {
 	brkStart, brk uint64
 	mmapNext      uint64
 	cwd           string
+	umask         uint32 // kept for umask(2); nothing has permissions to mask yet
 
 	children   map[int]*Process // live and zombie (s.mu)
 	childEvent chan struct{}    // a child exited (capacity 1)
@@ -164,7 +165,7 @@ func (t *Thread) fork() int64 {
 	}
 	c := s.newProcess(p.Path, mem, p.fds.clone())
 	p.mu.Lock()
-	c.brkStart, c.brk, c.mmapNext, c.cwd = p.brkStart, p.brk, p.mmapNext, p.cwd
+	c.brkStart, c.brk, c.mmapNext, c.cwd, c.umask = p.brkStart, p.brk, p.mmapNext, p.cwd, p.umask
 	c.actions = p.actions // pending signals are not inherited
 	mask, fs, altSP, altSize := t.sigMask, t.fs, t.altSP, t.altSize
 	p.mu.Unlock()

@@ -28,6 +28,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
+| 23 | `select` | partial | W14 | over the same readiness as `poll` (`kernel/proc/select.go`); a hang-up also marks a descriptor in the write set; the time left is not written back into the timeout |
 | 24 | `sched_yield` | done | W12 | |
 | 28 | `madvise` | partial | W12 | `MADV_DONTNEED` gives frames back (reads as zero); other advice accepted |
 | 32, 33 | `dup` `dup2` | done | W10 |  |
@@ -45,8 +46,12 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 76, 77 | `truncate` `ftruncate` | partial | W13 | regular files open for writing (`/tmp`); `-EINVAL` for others, `-EBADF` if not open for writing |
 | 82, 264, 316 | `rename` `renameat` `renameat2` | done | W13 | inside one mount (`-EXDEV` across mounts), rename(2)'s replace rules; `RENAME_NOREPLACE`; FAT and `/tmp` |
 | 90-94, 260, 268 | `chmod` `fchmod` `chown` `fchown` `lchown` `fchownat` `fchmodat` | stub | W13 | accepted when the file exists, change nothing (FAT and memfs keep no owners or modes) |
+| 95 | `umask` | stub | W14 | kept per process (022 at first) and inherited by `fork`; nothing applies it yet |
+| 98 | `getrusage` | stub | W14 | `RUSAGE_SELF` `RUSAGE_CHILDREN` `RUSAGE_THREAD`: all zeros, nothing is accounted |
+| 99 | `sysinfo` | partial | W14 | uptime, RAM total and free (the nucleus's frame allocator, `nu_mem_info`), the process count; no swap, load average 0 |
 | 97, 160, 302 | `getrlimit` `setrlimit` `prlimit64` | partial | W12 | fixed limits (`RLIMIT_NOFILE` 256, `RLIMIT_STACK` the stack size, others unlimited); lowering is accepted, raising past the hard limit `-EPERM` |
 | 130 | `rt_sigsuspend` | done | W10 | |
+| 143, 145 | `sched_getparam` `sched_getscheduler` | done | W14 | `SCHED_OTHER`, priority 0; `-ESRCH` for no such process or thread |
 | 131 | `sigaltstack` | done | W12 | per thread; `SA_ONSTACK` handlers run on it; not inherited by new threads |
 | 63 | `uname` | done | W10 | `Burrow burrow 0.10 x86_64` |
 | 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`; `O_NONBLOCK` gives `-EAGAIN` instead of blocking, W11); no locks |
@@ -54,6 +59,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 80, 81 | `chdir` `fchdir` | done | W10 |  |
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |
 | 87 | `unlink` | done | W10 | `-EISDIR` for directories |
+| 89, 267 | `readlink` `readlinkat` | done | W14 | there are no symbolic links: `-EINVAL` for a path that exists, else its error |
 | 102, 104, 107, 108 | `getuid` `getgid` `geteuid` `getegid` | partial | W9 | everyone is root (0) |
 | 109 | `setpgid` | done | W10 | self or a child in the same session |
 | 111, 121 | `getpgrp` `getpgid` | done | W10 | |
@@ -64,6 +70,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 186 | `gettid` | done | W12 | the main thread's tid is the pid; tids share the pid number space |
 | 200, 234 | `tkill` `tgkill` | done | W12 | a signal for one thread |
 | 202 | `futex` | partial | W12 | `WAIT WAKE WAIT_BITSET WAKE_BITSET REQUEUE CMP_REQUEUE`, timeouts, `EINTR`; private to an address space (no PI, no robust lists) |
+| 203 | `sched_setaffinity` | done | W14 | one CPU: accepted when the mask holds CPU 0, else `-EINVAL` |
 | 204 | `sched_getaffinity` | done | W12 | one CPU |
 | 213, 291 | `epoll_create` `epoll_create1` | done | W12 | `EPOLL_CLOEXEC` |
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
@@ -76,13 +83,17 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 258, 263 | `mkdirat` `unlinkat` | done | W10 | `AT_REMOVEDIR` |
 | 262 | `newfstatat` | done | W10 | `AT_EMPTY_PATH` |
 | 269, 439 | `faccessat` `faccessat2` | partial | W10 | existence only |
+| 270 | `pselect6` | partial | W14 | as `select` with a timespec; the signal mask is ignored |
 | 271 | `ppoll` | partial | W10 | as `poll`; the signal mask argument is ignored |
 | 280 | `utimensat` | stub | W13 | accepted when the file exists; times are not set |
 | 284, 290 | `eventfd` `eventfd2` | done | W12 | `EFD_SEMAPHORE EFD_NONBLOCK EFD_CLOEXEC` |
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
-| 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |
+| 293 | `pipe2` | done | W10 | `O_CLOEXEC`, `O_NONBLOCK` (`-EAGAIN`; checked again in W14) |
+| 318 | `getrandom` | partial | W14 | never blocks; `GRND_NONBLOCK` `GRND_RANDOM` `GRND_INSECURE`; the bytes come from `kernel/random`, a ChaCha8 generator seeded once from RDRAND or the TSC: **not for cryptography** |
+| 324 | `membarrier` | stub | W14 | `MEMBARRIER_CMD_QUERY` answers 0 (no commands); others `-EINVAL` |
+| 332 | `statx` | done | W14 | the basic fields from the same data as `newfstatat` (`STATX_BASIC_STATS`, no birth time); `AT_EMPTY_PATH` |
 
-**Devices** (W11). `/dev/fb0` is the BGA framebuffer as Linux fbdev (`kernel/fbdev`): 1024x768, 32 bpp XRGB, `line_length` the real pitch; map it with `mmap(MAP_SHARED)`. While any file has it open the text console draws nothing on screen (serial still gets everything) and repaints when the last one closes. `/dev/input/event0` is the PS/2 keyboard as Linux evdev (`kernel/evdev`): `struct input_event` with Linux key codes, press 1, release 0, autorepeat 2, each followed by `EV_SYN`; every open file has its own queue; while any is open the keyboard is grabbed and the console gets no keys. `/dev/input/event1` is the PS/2 mouse (W14-S02): `EV_REL` `REL_X REL_Y REL_WHEEL` (y down, wheel up positive) and `EV_KEY` `BTN_LEFT BTN_RIGHT BTN_MIDDLE`, one `EV_SYN` per packet; it grabs nothing. `/dev/input/mice` is the mouse as Linux mousedev's PS/2 stream: 3-byte packets, 4-byte with the wheel after the IntelliMouse handshake (sample rates 200, 100, 80 written to it), commands answered with `0xFA` (and the id for `0xF2`).
+**Devices** (W11). `/dev/random` and `/dev/urandom` (W14-S03) read `kernel/random`, the same generator as `getrandom`; writes are accepted and change nothing; neither ever blocks, and neither is for cryptography. `/dev/fb0` is the BGA framebuffer as Linux fbdev (`kernel/fbdev`): 1024x768, 32 bpp XRGB, `line_length` the real pitch; map it with `mmap(MAP_SHARED)`. While any file has it open the text console draws nothing on screen (serial still gets everything) and repaints when the last one closes. `/dev/input/event0` is the PS/2 keyboard as Linux evdev (`kernel/evdev`): `struct input_event` with Linux key codes, press 1, release 0, autorepeat 2, each followed by `EV_SYN`; every open file has its own queue; while any is open the keyboard is grabbed and the console gets no keys. `/dev/input/event1` is the PS/2 mouse (W14-S02): `EV_REL` `REL_X REL_Y REL_WHEEL` (y down, wheel up positive) and `EV_KEY` `BTN_LEFT BTN_RIGHT BTN_MIDDLE`, one `EV_SYN` per packet; it grabs nothing. `/dev/input/mice` is the mouse as Linux mousedev's PS/2 stream: 3-byte packets, 4-byte with the wheel after the IntelliMouse handshake (sample rates 200, 100, 80 written to it), commands answered with `0xFA` (and the id for `0xF2`).
 
 **Terminal.** fds 0-2 of a program are the console terminal (`kernel/tty`): canonical mode with echo, erase (DEL, `^H`), kill (`^U`), end of file (`^D`); `ICRNL`; raw mode through `TCSETS` (a half-typed line becomes input); in raw mode `VMIN` 0 makes a read return at once (`VTIME` 0) or after `VTIME` tenths of a second without input (W13), `VMIN` above 0 waits for a byte. `^C`, `^\` and `^Z` send `SIGINT`, `SIGQUIT` and `SIGTSTP` to the foreground process group (the console's `run` gives it the program's group). Output is not post-processed (the console already turns `\n` into `\r\n`).
 

@@ -1,9 +1,7 @@
 package proc
 
 import (
-	"encoding/binary"
 	"errors"
-	"hash/fnv"
 	"io/fs"
 	"path"
 	"strings"
@@ -105,80 +103,6 @@ func (p *Process) writable(name string, exists bool, flags int) (fs.File, error)
 		return nil, err
 	}
 	return &wfile{fsys: wfs, name: name, data: data, append: flags&oAppend != 0}, nil
-}
-
-// statBuf is Linux's struct stat (144 bytes) for info.
-func statBuf(name string, info fs.FileInfo) []byte {
-	st := make([]byte, 144)
-	put := func(off int, v uint64) { binary.LittleEndian.PutUint64(st[off:], v) }
-	h := fnv.New64a()
-	h.Write([]byte(name))
-	put(8, h.Sum64()|1)                                                   // st_ino: stable per path
-	put(16, 1)                                                            // st_nlink
-	binary.LittleEndian.PutUint32(st[24:], uint32(unixMode(info.Mode()))) // st_mode
-	put(48, uint64(info.Size()))
-	put(56, PageSize)                       // st_blksize
-	put(64, uint64(info.Size()+511)/512)    // st_blocks
-	put(88, uint64(info.ModTime().Unix()))  // st_mtim
-	put(72, uint64(info.ModTime().Unix()))  // st_atim
-	put(104, uint64(info.ModTime().Unix())) // st_ctim
-	return st
-}
-
-func unixMode(m fs.FileMode) uint64 {
-	t := uint64(syscall.S_IFREG)
-	switch {
-	case m.IsDir():
-		t = syscall.S_IFDIR
-	case m&fs.ModeCharDevice != 0:
-		t = syscall.S_IFCHR
-	case m&fs.ModeNamedPipe != 0:
-		t = syscall.S_IFIFO
-	}
-	return t | uint64(m.Perm())
-}
-
-func sysFstatFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.fstat(a[0], a[1])) }
-
-func (p *Process) fstat(fd, bufVA uint64) int64 {
-	f := p.fds.get(fd)
-	if f == nil {
-		return -int64(syscall.EBADF)
-	}
-	if f.console != nil {
-		return errno(p.mem.CopyOut(bufVA, statBuf("dev/console", consoleInfo{})))
-	}
-	info, err := f.f.Stat()
-	if err != nil {
-		return errno(err)
-	}
-	return errno(p.mem.CopyOut(bufVA, statBuf(f.path, info)))
-}
-
-// stat and lstat (no symbolic links yet: the same thing).
-func sysStatFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.statAt(uint64(atFDCWD&0xFFFFFFFF), a[0], a[1], 0))
-}
-
-func sysNewfstatatFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.statAt(a[0], a[1], a[2], a[3]))
-}
-
-func (p *Process) statAt(dirfd, nameVA, bufVA, flags uint64) int64 {
-	if flags&atEmptyPath != 0 {
-		if s, err := p.mem.CString(nameVA, 1); err == nil && s == "" {
-			return p.fstat(dirfd, bufVA)
-		}
-	}
-	name, err := p.at(dirfd, nameVA)
-	if err != nil {
-		return errno(err)
-	}
-	info, err := fs.Stat(p.sys.files, name)
-	if err != nil {
-		return errno(err)
-	}
-	return errno(p.mem.CopyOut(bufVA, statBuf(name, info)))
 }
 
 // access/faccessat: existence only (everyone is root).

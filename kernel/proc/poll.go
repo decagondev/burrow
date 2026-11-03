@@ -48,18 +48,9 @@ func sysPollFn(t *Thread, a [6]uint64) (int64, bool) {
 
 // ppoll: like poll with a timespec; the signal mask argument is ignored.
 func sysPpollFn(t *Thread, a [6]uint64) (int64, bool) {
-	p := t.p
-	timeout := time.Duration(-1)
-	if a[2] != 0 {
-		var ts [16]byte
-		if err := p.mem.CopyIn(a[2], ts[:]); err != nil {
-			return ok(errno(err))
-		}
-		sec, nsec := int64(binary.LittleEndian.Uint64(ts[0:])), int64(binary.LittleEndian.Uint64(ts[8:]))
-		if sec < 0 || nsec < 0 || nsec >= 1e9 {
-			return ok(-int64(syscall.EINVAL))
-		}
-		timeout = time.Duration(sec)*time.Second + time.Duration(nsec)
+	timeout, e := t.p.timeArg(a[2], time.Nanosecond)
+	if e < 0 {
+		return ok(e)
 	}
 	return ok(t.poll(a[0], a[1], timeout))
 }
@@ -75,6 +66,21 @@ func (t *Thread) poll(va, n uint64, timeout time.Duration) int64 {
 	if err := p.mem.CopyIn(va, buf); err != nil {
 		return errno(err)
 	}
+	ready := t.wait(buf, timeout)
+	if ready < 0 {
+		return ready
+	}
+	if err := p.mem.CopyOut(va, buf); err != nil {
+		return errno(err)
+	}
+	return ready
+}
+
+// wait is poll on pollfds in Go memory (select builds them too): it fills
+// in every revents (all zero after a timeout) and returns how many are
+// ready, or -EINTR.
+func (t *Thread) wait(buf []byte, timeout time.Duration) int64 {
+	p := t.p
 	var deadline <-chan time.Time
 	if timeout > 0 {
 		t := time.NewTimer(timeout)
@@ -84,7 +90,7 @@ func (t *Thread) poll(va, n uint64, timeout time.Duration) int64 {
 	for {
 		ready, waits, waiters := p.scan(buf)
 		if ready > 0 || timeout == 0 {
-			return p.pollDone(va, buf, ready)
+			return int64(ready)
 		}
 		cases := []reflect.SelectCase{
 			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.cancel())},
@@ -104,7 +110,10 @@ func (t *Thread) poll(va, n uint64, timeout time.Duration) int64 {
 		case 0:
 			return -int64(syscall.EINTR)
 		case 1:
-			return p.pollDone(va, buf, 0)
+			for off := 0; off < len(buf); off += pollfdSize {
+				binary.LittleEndian.PutUint16(buf[off+6:], 0)
+			}
+			return 0
 		}
 	}
 }
@@ -141,16 +150,4 @@ func (p *Process) scan(buf []byte) (int, []<-chan struct{}, []inputWaiter) {
 		}
 	}
 	return ready, waits, waiters
-}
-
-func (p *Process) pollDone(va uint64, buf []byte, ready int) int64 {
-	if ready == 0 {
-		for off := 0; off < len(buf); off += pollfdSize {
-			binary.LittleEndian.PutUint16(buf[off+6:], 0)
-		}
-	}
-	if err := p.mem.CopyOut(va, buf); err != nil {
-		return errno(err)
-	}
-	return int64(ready)
 }

@@ -10,6 +10,7 @@ import (
 	"burrow/kernel/fs/memfs"
 	"burrow/kernel/fs/tarfs"
 	"burrow/kernel/klog"
+	"burrow/kernel/random"
 	"burrow/kernel/vfs"
 )
 
@@ -22,6 +23,8 @@ func (k *kernel) mountFiles(console io.Writer) *devfs.FS {
 	dev.Register("null", devfs.Null{}, 0o666)
 	dev.Register("zero", devfs.Zero{}, 0o666)
 	dev.Register("console", devfs.WriteOnly{Writer: console}, 0o620)
+	dev.Register("random", random.Kernel, 0o666) // W14-S03: not for cryptography
+	dev.Register("urandom", random.Kernel, 0o666)
 	k.fs.Mount(".", mountInitrd(k.modules, k.log.With("initrd")), "tarfs")
 	k.fs.Mount("tmp", memfs.New(), "ramfs")
 	k.fs.Mount("dev", dev, "devfs")

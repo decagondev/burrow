@@ -33,7 +33,8 @@ type Nucleus interface {
 	Unmap(as, va, n uint64) error
 	PageAlloc() (uint64, error) // one zeroed frame
 	PageFree(pa uint64)
-	Frame(pa uint64) []byte // the frame's 4096 bytes, in place
+	Frame(pa uint64) []byte                  // the frame's 4096 bytes, in place
+	MemInfo() (totalBytes, freeBytes uint64) // RAM for sysinfo (W14-S03)
 
 	StartThread(as, rip, rsp, fs uint64) (tid uint64, err error)
 	Kill(tid uint64) error // returns once the thread is gone
