@@ -38,6 +38,7 @@ key ret
 type second line
 key esc
 sleep 1
+screendump build/screen-busybox-vi.ppm
 type :wq
 key ret
 wait burrow>

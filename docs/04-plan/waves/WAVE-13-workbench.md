@@ -14,8 +14,9 @@ Design (continues W8-W12: drivers and file systems are Go policy; the nucleus do
 Enable `VI` and its features in `user/busybox.config`; `vi` edits a file in `/tmp` over the serial terminal. busybox-smoke drives it: open, insert, `:wq`, `cat` shows the text.
 As built: `vi` needed one call Burrow lacked, `ftruncate` (and `truncate` with it), to save. `FEATURE_VI_ASK_TERMINAL` stays off until the screen console can answer `ESC[6n`. `make run-busybox` boots the busybox image interactively; until S02, use `vi` in the terminal that shows the serial line.
 
-### [ ] W13-S02 The screen console speaks VT100 (E13)
+### [x] W13-S02 The screen console speaks VT100 (E13)
 `kernel/gfx`: a terminal state machine for `ESC [` sequences (CUP, CUU/CUD/CUF/CUB, ED, EL, SGR 0/1/7/30-37/40-47, DECTCEM, DECSTBM) and a drawn cursor; host tests feed byte streams and check the cell grid. A screen check of `vi` on the console.
+As built: the console keeps a cell grid (`gfx/console.go`) and parses in `gfx/vt.go`; also CHA/VPA, insert/delete line, reverse index, ESC 7/8, the alternate screen (`?1049`, so the shell's lines come back after `vi`), bright colours; charset selection, OSC and unknown sequences are swallowed. The cursor is a line in the two pixel rows under each glyph, so it never hides a character. Queries (`ESC[6n`) are not answered, so `FEATURE_VI_ASK_TERMINAL` stays off. `tests/smoke/expect/busybox.screen` checks `vi`'s screen.
 
 ### [ ] W13-S03 Disk writes (E13)
 `block.Writer` (`WriteSectors`, `Flush`), ATA PIO `WRITE SECTORS` (0x30) and `FLUSH CACHE` (0xE7) in `drivers/ata`, tested against `haltest` fakes and on QEMU by writing a scratch disk and reading it back.

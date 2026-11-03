@@ -1,0 +1,16 @@
+# Pixels of busybox vi on the screen console (W13-S02), dumped by
+# tests/smoke/keys/busybox.keys before :wq. Append-only. The console text
+# starts at y=96 in 12x20 cells (scale 2); vi drew it with VT100 sequences,
+# so these pixels exist only if the console understood them.
+size  build/screen-busybox-vi.ppm 1024 768
+# "h" of "hello from vi" at the top-left cell (cursor home, not escape junk)
+pixel build/screen-busybox-vi.ppm 0 96 #e6e6e6
+# a "~" on row 2: vi addressed the row with ESC[3;1H
+pixel build/screen-busybox-vi.ppm 2 140 #e6e6e6
+# the status line on the last row (33): "/" of "/tmp/v.txt"
+pixel build/screen-busybox-vi.ppm 32 738 #e6e6e6
+# the cursor: a line under row 1, column 10 (the last "e")
+pixel build/screen-busybox-vi.ppm 125 134 #e6e6e6
+# paper where nothing was written
+pixel build/screen-busybox-vi.ppm 244 100 #1e1e28
+pixel build/screen-busybox-vi.ppm 64 140 #1e1e28

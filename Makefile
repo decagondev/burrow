@@ -330,8 +330,8 @@ run-go: $(BUILD)/go.img $(BUILD)/data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # busybox, interactive (W10-S08, vi since W13-S01): needs `make busybox`
-# first. At burrow> type `run /bin/busybox sh`; vi draws correctly in this
-# terminal (the serial line) until the screen console learns VT100 (W13-S02).
+# first. At burrow> type `run /bin/busybox sh`; vi draws on the screen
+# console (VT100 since W13-S02) and on this terminal (the serial line).
 run-busybox: $(BUILD)/go-busybox.img $(BUILD)/data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-busybox.img,$(QEMU_COMMON)) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
