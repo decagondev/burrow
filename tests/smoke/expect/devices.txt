@@ -4,4 +4,16 @@ burrow> run /bin/fbtest
 fbtest: 1024x768, 32 bpp, red at bit 16, line_length 4096, smem_len 3145728
 fbtest: bars drawn, press Enter
 fbtest: done
+burrow> run /bin/evtest
+evtest: nothing queued (EAGAIN)
+evtest: device "Burrow PS/2 keyboard"; reading, q quits
+evtest: key 30 down
+evtest: key 30 up
+evtest: key 48 down
+evtest: key 48 up
+evtest: key 103 down
+evtest: key 103 up
+evtest: key 16 down
+evtest: key 16 up
+evtest: done
 burrow> poweroff

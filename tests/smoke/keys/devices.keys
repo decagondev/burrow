@@ -10,5 +10,14 @@ key ret
 wait fbtest: done
 wait burrow>
 screendump build/screen-devices-after.ppm
+# evtest owns the keyboard while it runs: a, b, the up arrow, then q quits
+type run /bin/evtest
+key ret
+wait evtest: device
+type ab
+key up
+type q
+wait evtest: done
+wait burrow> 
 type poweroff
 key ret

@@ -26,7 +26,10 @@ type Env struct {
 	IRQ     func(line int) hal.IRQLine
 	Log     *klog.Logger // StartAll gives each driver its own "[name]" child
 	Input   chan<- byte  // console input: keyboards and serial lines write here
-	Dev     *devfs.FS    // where a driver registers its device files (/dev)
+	// Scancodes, if set, sees every raw keyboard byte first (/dev/input/event0,
+	// W11); grabbed means a program holds the keyboard, so nothing goes to Input.
+	Scancodes func(sc byte) (grabbed bool)
+	Dev       *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
 }

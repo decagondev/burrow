@@ -22,7 +22,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 13 | `rt_sigaction` | done | W10 | `SA_SIGINFO SA_RESTORER SA_RESTART SA_NODEFER SA_RESETHAND`; not `SA_ONSTACK` |
 | 14 | `rt_sigprocmask` | done | W10 | |
 | 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
-| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only; anything else `-ENOTTY` |
+| 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only; `/dev/input/event0`: `EVIOCGNAME EVIOCGVERSION EVIOCGID EVIOCGRAB`; anything else `-ENOTTY` |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |
@@ -65,6 +65,8 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 271 | `ppoll` | partial | W10 | as `poll`; the signal mask argument is ignored |
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | partial | W10 | `O_CLOEXEC`; `O_NONBLOCK` not honoured |
+
+**Devices** (W11). `/dev/fb0` is the BGA framebuffer as Linux fbdev (`kernel/fbdev`): 1024x768, 32 bpp XRGB, `line_length` the real pitch; map it with `mmap(MAP_SHARED)`. While any file has it open the text console draws nothing on screen (serial still gets everything) and repaints when the last one closes. `/dev/input/event0` is the PS/2 keyboard as Linux evdev (`kernel/evdev`): `struct input_event` with Linux key codes, press 1, release 0, autorepeat 2, each followed by `EV_SYN`; every open file has its own queue; while any is open the keyboard is grabbed and the console gets no keys.
 
 **Terminal.** fds 0-2 of a program are the console terminal (`kernel/tty`): canonical mode with echo, erase (DEL, `^H`), kill (`^U`), end of file (`^D`); `ICRNL`; raw mode through `TCSETS` (a half-typed line becomes input). `^C`, `^\` and `^Z` send `SIGINT`, `SIGQUIT` and `SIGTSTP` to the foreground process group (the console's `run` gives it the program's group). Output is not post-processed (the console already turns `\n` into `\r\n`).
 

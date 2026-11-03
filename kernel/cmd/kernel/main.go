@@ -84,14 +84,15 @@ func main() {
 	input := make(chan byte, 256)
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
 	driver.StartAll(&driver.Env{
-		Ports:   amd64.Ports{},
-		Ports16: amd64.Ports{},
-		Ports32: amd64.Ports{},
-		IRQ:     func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
-		Log:     log,
-		Input:   input,
-		Dev:     dev,
-		MapMMIO: amd64.MapMMIO,
+		Ports:     amd64.Ports{},
+		Ports16:   amd64.Ports{},
+		Ports32:   amd64.Ports{},
+		IRQ:       func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
+		Log:       log,
+		Input:     input,
+		Dev:       dev,
+		Scancodes: registerEvent0(dev, k.boot),
+		MapMMIO:   amd64.MapMMIO,
 	})
 	checkBootDisk(log.With("block"))
 	k.mountData(log.With("fat"))

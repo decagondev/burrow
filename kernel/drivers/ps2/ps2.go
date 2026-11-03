@@ -176,8 +176,10 @@ func (*keyboard) Start(env *driver.Env) error {
 	var dec Decoder
 	driver.Serve(env.IRQ(IRQ), func() {
 		c.Drain(func(sc byte) {
-			for _, b := range dec.Feed(sc) {
-				if env.Input != nil {
+			grabbed := env.Scancodes != nil && env.Scancodes(sc)
+			typed := dec.Feed(sc) // always, so modifiers stay right across a grab
+			for _, b := range typed {
+				if env.Input != nil && !grabbed {
 					env.Input <- b
 				}
 			}

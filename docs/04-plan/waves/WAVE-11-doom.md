@@ -12,8 +12,9 @@ Design (continues W9-W10: the nucleus stays mechanism; devices are Go policy):
 `FBIOGET_VSCREENINFO`, `FBIOGET_FSCREENINFO` (`line_length` = the real pitch, PIT-27), `FBIOPUT_VSCREENINFO` for the current mode, `FBIOPAN_DISPLAY` at 0; `mmap` of the framebuffer; the console steps aside while it is open. `user/fbtest.c` draws colour bars; a screen check reads them back.
 As built: `kernel/fbdev` (the device), `kernel/proc/devices.go` (`Ioctler`, `Mappable`, `O_NONBLOCK` through `Poller`), device pages in `proc.Mem` (`MapDevice`), `devfs.Opener` for per-open handles. `make devices-smoke` boots `go.img` and checks the bars and the console's repaint (`tests/smoke/expect/devices.screen`). User C programs see the Linux UAPI headers through `build/uapi` (links to the host's `linux-libc-dev`).
 
-### [~] W11-S02 /dev/input/event0: evdev from PS/2 (E10.F02)
+### [x] W11-S02 /dev/input/event0: evdev from PS/2 (E10.F02)
 Scancode set 1 (with `E0` prefixes) to Linux key codes; press, release and autorepeat as `EV_KEY` values 1/0/2 followed by `EV_SYN`; `O_NONBLOCK` reads (`EAGAIN`), `poll`; the device grabs the keyboard while open. `user/evtest.c` prints events; go-smoke types into it. The evdev → Doom key map gets a unit test (BUG-0004).
+As built: `kernel/evdev` (a queue per open file, `EVIOCGNAME EVIOCGVERSION EVIOCGID EVIOCGRAB`); the PS/2 driver hands every byte to `driver.Env.Scancodes` first and sends nothing to the console while it reports a grab. The typing check is in `make devices-smoke` (evtest), not go-smoke. The Doom key-map test moves to S03, where the backend is compiled.
 
 ### [ ] W11-S03 doomgeneric with the Burrow backend (E10.F03) — needs a go-ahead to download its source
 `make doom` fetches doomgeneric at a pinned commit and builds it with musl and the snippet backend.

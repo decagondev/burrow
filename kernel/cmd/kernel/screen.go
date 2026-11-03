@@ -6,8 +6,10 @@ import (
 	"image"
 	"io"
 	"sync"
+	"time"
 
 	"burrow/kernel/drivers/bga"
+	"burrow/kernel/evdev"
 	"burrow/kernel/fbdev"
 	"burrow/kernel/fs/devfs"
 	"burrow/kernel/gfx"
@@ -95,4 +97,12 @@ func registerFB0(dev *devfs.FS, s *screenOut) error {
 	base, pitch := bga.Phys()
 	mode := fbdev.Mode{Phys: base, Width: fb.Width, Height: fb.Height, PitchBytes: pitch}
 	return dev.Register("fb0", fbdev.New(mode, s.hold), 0o660)
+}
+
+// registerEvent0 makes the keyboard /dev/input/event0 and returns the hook
+// the PS/2 driver feeds raw scancodes to (driver.Env.Scancodes).
+func registerEvent0(dev *devfs.FS, boot time.Time) func(byte) bool {
+	ev := evdev.New(func() time.Duration { return time.Since(boot) })
+	dev.Register("input/event0", ev, 0o660)
+	return ev.Feed
 }

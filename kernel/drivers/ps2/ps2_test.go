@@ -75,3 +75,40 @@ func TestKeyboardTypesIntoInput(t *testing.T) {
 		t.Fatalf("typed %q, want \"hi\\r\"", got)
 	}
 }
+
+// While Scancodes says the keyboard is grabbed, keys reach it and not Input.
+func TestGrabbedKeysSkipInput(t *testing.T) {
+	f := haltest.NewFake8042()
+	q := haltest.NewFakeIRQ()
+	defer q.Close()
+	input := make(chan byte, 16)
+	seen := make(chan byte, 16)
+	grabbed := true
+	env := &driver.Env{
+		Ports: f, Input: input, Log: klog.New(io.Discard, klog.Info),
+		IRQ:       func(int) hal.IRQLine { return q },
+		Scancodes: func(sc byte) bool { seen <- sc; return grabbed },
+	}
+	d := NewDriver()
+	d.Probe(env)
+	if err := d.Start(env); err != nil {
+		t.Fatal(err)
+	}
+	f.Send(false, 0x23, 0xA3) // h, grabbed
+	q.Fire()
+	for _, want := range []byte{0x23, 0xA3} {
+		select {
+		case sc := <-seen:
+			if sc != want {
+				t.Errorf("Scancodes got %#x, want %#x", sc, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("Scancodes never called")
+		}
+	}
+	select {
+	case b := <-input:
+		t.Errorf("a grabbed key typed %q", b)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
