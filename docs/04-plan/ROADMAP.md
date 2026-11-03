@@ -15,7 +15,7 @@
 | M8 | Files + pixels | `cat /etc/motd` from initrd; Go draws on the framebuffer | W8 |
 | M9 | First process | static musl `hello` runs in ring 3 | W9 |
 | M10 | A Unix | busybox shell, pipes, fork/exec | W10 |
-| M11 | **DOOM** | Freedoom E1M1 playable in QEMU | W11 |
+| M11 | **DOOM** | Freedoom E1M1 playable in QEMU (done: `make doom-smoke`) | W11 |
 | M12 | Ports | Lua REPL, C++ hello with exceptions, Go user program | W12 |
 
 ```mermaid

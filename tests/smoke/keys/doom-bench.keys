@@ -1,0 +1,8 @@
+# Doom's timedemo (W11-S06, make doom-bench): demo1 played as fast as it goes.
+wait burrow> 
+type run /bin/doom -iwad /mnt/freedoom1.wad -timedemo demo1
+key ret
+wait fps)
+wait burrow> 
+type poweroff
+key ret

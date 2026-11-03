@@ -23,6 +23,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 14 | `rt_sigprocmask` | done | W10 | |
 | 15 | `rt_sigreturn` | done | W10 | Linux `rt_sigframe`: `ucontext` with `sigcontext` and the FXSAVE state, `siginfo` |
 | 16 | `ioctl` | partial | W10 | the terminal: `TCGETS TCSETS TCSETSW TCSETSF TIOCGWINSZ TIOCSWINSZ TIOCGPGRP TIOCSPGRP TIOCSCTTY TIOCNOTTY TIOCGSID FIONREAD`; `/dev/fb0` (W11): `FBIOGET_VSCREENINFO FBIOGET_FSCREENINFO`, `FBIOPUT_VSCREENINFO` and `FBIOPAN_DISPLAY` for the current mode only; `/dev/input/event0`: `EVIOCGNAME EVIOCGVERSION EVIOCGID EVIOCGRAB`; anything else `-ENOTTY` |
+| 19 | `readv` | done | W11 | one read of the vectors' total length (at most 1 MiB), scattered over them |
 | 20 | `writev` | done | W9 | up to 1024 vectors, 1 MiB in total |
 | 21 | `access` | partial | W10 | existence only (everyone is root) |
 | 22 | `pipe` | done | W10 | 64 KiB buffer |

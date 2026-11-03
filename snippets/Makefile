@@ -5,4 +5,4 @@ check:
 	gcc $(CFLAGS_K) -c nucleus/syscall_shim.c -o /tmp/snip_shim.o
 	gcc $(CFLAGS_K) -c nucleus/go_initial_stack.c -o /tmp/snip_stack.o
 	gofmt -l kernel/ | (! grep .)
-	@echo "snippets OK (doom backend needs doomgeneric headers: see userland/)"
+	@echo "snippets OK (the Doom backend moved to user/doom: make doom builds it)"

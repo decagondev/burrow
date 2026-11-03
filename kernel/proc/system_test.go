@@ -263,3 +263,28 @@ func TestSpawnErrors(t *testing.T) {
 		t.Errorf("a failed spawn leaked %d frames", r.nu.FramesInUse())
 	}
 }
+
+func TestReadv(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	r.str(p, scratch, "/etc/motd")
+	fd := uint64(r.call(p, 2, scratch, 0))
+	iov := make([]byte, 32)
+	le.PutUint64(iov, scratch+256)
+	le.PutUint64(iov[8:], 5)
+	le.PutUint64(iov[16:], scratch+512)
+	le.PutUint64(iov[24:], 100)
+	r.put(p, scratch+128, iov)
+	if n := r.call(p, 19, fd, scratch+128, 2); n != 11 {
+		t.Fatalf("readv = %d, want 11", n)
+	}
+	a, b := make([]byte, 5), make([]byte, 6)
+	p.Mem().CopyIn(scratch+256, a)
+	p.Mem().CopyIn(scratch+512, b)
+	if string(a)+string(b) != "hello file\n" {
+		t.Errorf("readv scattered %q + %q", a, b)
+	}
+	if e := r.call(p, 19, 99, scratch+128, 2); e != -int64(syscall.EBADF) {
+		t.Errorf("readv of a bad fd = %d", e)
+	}
+}

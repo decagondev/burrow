@@ -67,6 +67,10 @@ func (p *Process) Wait() (status int, reason string) {
 	return p.exitCode, ""
 }
 
+// TermSig is the signal that ended the process (0 if it exited), once
+// Wait has returned.
+func (p *Process) TermSig() int { <-p.done; return p.termSig }
+
 // waitStatus is Linux's wait4 status word.
 func (p *Process) waitStatus() uint64 {
 	if p.termSig != 0 {

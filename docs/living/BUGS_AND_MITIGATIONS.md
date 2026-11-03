@@ -120,7 +120,7 @@ flowchart LR
 - Root cause: two headers from different worlds share a name with different meanings (evdev 28, Doom 13).
 - Fix: capture `EVDEV_KEY_ENTER = KEY_ENTER` before including `doomkeys.h`, `#undef`, map explicitly.
 - Mitigation: build ported code with `-Werror`; when bridging two APIs, prefix constants from one side.
-- Regression: none possible until W11; add an evdev→doom key-map unit test in E10.F02.
+- Regression: `tests/unit/doom/keymap_test.c` (W11), run by `make doom`: evdev Enter maps to Doom's Enter, evdev 13 (`=`) does not.
 - Lesson: compile-check reference code, don't just read it.
 
 ### BUG-0003: A corrupted loader failed for the wrong reason (cannot self-verify)

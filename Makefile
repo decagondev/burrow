@@ -62,7 +62,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
+.PHONY: all run run-go hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -180,6 +180,26 @@ $(BUILD)/initrd-busybox.tar: $(BUILD)/initrd.tar $(BUILD)/busybox
 $(BUILD)/go-busybox.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-busybox.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
 
+# Doom (W11): `make doom` downloads doomgeneric (pinned commit) and Freedoom
+# (pinned sha256) once (scripts/doom.sh) and builds build/doom-root/doom with
+# the Burrow backend, plus freedoom1.wad. The game boots from go-doom.img
+# (the usual initrd plus /bin/doom) with the WAD on doom-data.img, a FAT32
+# disk mounted at /mnt; go.img and data.img stay as they are.
+doom: $(BUILD)/uapi/.stamp
+	MUSL_GCC="$(MUSL_GCC)" scripts/doom.sh $(BUILD)/doom-root $(abspath $(BUILD)/uapi)
+$(BUILD)/initrd-doom.tar: $(BUILD)/initrd.tar $(BUILD)/doom-root/doom
+	rm -rf $(BUILD)/initrd-doom-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-doom-root
+	cp $(BUILD)/doom-root/doom $(BUILD)/initrd-doom-root/bin/doom
+	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-doom-root -cf $@ .
+$(BUILD)/go-doom.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-doom.tar
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar >/dev/null
+DOOM_DRIVE := -drive file=$(BUILD)/doom-data.img,format=raw,if=ide,index=1,media=disk
+$(BUILD)/doom-data.img: $(BUILD)/doom-root/freedoom1.wad $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	rm -rf $(BUILD)/doom-data && mkdir -p $(BUILD)/doom-data
+	cp $(BUILD)/doom-root/freedoom1.wad $(BUILD)/doom-data/
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label doomdata -size 48 ../$(BUILD)/doom-data
+
 # The data disk (W8): datadisk/ as FAT32, the primary slave, mounted at /mnt.
 DATADISK_FILES := $(shell find datadisk -type f)
 DATA_DRIVE := -drive file=$(BUILD)/data.img,format=raw,if=ide,index=1,media=disk
@@ -208,7 +228,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke busybox-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke doom-smoke busybox-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -248,6 +268,19 @@ go-smoke: $(BUILD)/go.img $(BUILD)/data.img
 # (tests/smoke/expect/devices.screen), /dev/input/event0.
 devices-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/devices.txt 60 tests/smoke/keys/devices.keys
+
+# Doom typed into (W11-S05); skips until `make doom` ran.
+doom-smoke:
+	@if [ -f $(BUILD)/doom-root/doom ]; then $(MAKE) --no-print-directory doom-smoke-run; \
+	else echo "DOOM SMOKE SKIP (make doom downloads and builds it)"; fi
+doom-smoke-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
+
+# Doom's own benchmark (W11-S06, RISKS R-07): -timedemo demo1 as fast as it
+# goes (about 70 s in QEMU, so not part of make test); fails below 20 fps.
+doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
+	QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
+	@python3 -c 'import re,sys; m=re.search(r"\(([0-9.]+) fps\)", open(sys.argv[1], errors="replace").read()); fps=float(m.group(1)) if m else 0; print("DOOM BENCH %.1f fps (timedemo demo1)" % fps); sys.exit(fps < 20)' $(BUILD)/smoke-doom-bench.log
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 busybox-smoke:

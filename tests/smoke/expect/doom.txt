@@ -1,0 +1,10 @@
+# Ordered markers for Doom on Burrow (W11-S05, tests/smoke/keys/doom.keys). Append-only.
+# The pixels are checked by doom.screen; the serial log shows start-up and,
+# after Quit Game, the console's prompt again.
+burrow> run /bin/doom -iwad /mnt/freedoom1.wad
+ adding /mnt/freedoom1.wad
+Freedoom: Phase 1
+R_Init: Init DOOM refresh daemon
+I_InitGraphics: framebuffer: x_res: 640, y_res: 400
+I_InitGraphics: Auto-scaling factor: 2
+burrow> poweroff

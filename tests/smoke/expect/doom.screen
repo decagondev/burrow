@@ -1,0 +1,18 @@
+# Pixels of Doom on Burrow (tests/smoke/keys/doom.keys). Append-only.
+# Doom's 640x400 frame sits centred at (192,184) on a screen the console
+# cleared to black. The title: Freedoom's title picture.
+size  build/screen-doom-title.ppm 1024 768
+pixel build/screen-doom-title.ppm 0 0 #000000
+pixel build/screen-doom-title.ppm 191 184 #000000
+pixel build/screen-doom-title.ppm 1023 767 #000000
+pixel build/screen-doom-title.ppm 192 184 #8b0101
+pixel build/screen-doom-title.ppm 250 560 #ff801c
+pixel build/screen-doom-title.ppm 831 583 #440101
+# E1M1 after New Game: the status bar's frame and panels (the face and the
+# view change; these do not).
+size  build/screen-doom-e1m1.ppm 1024 768
+pixel build/screen-doom-e1m1.ppm 0 0 #000000
+pixel build/screen-doom-e1m1.ppm 196 525 #1c1c1c
+pixel build/screen-doom-e1m1.ppm 250 540 #303030
+pixel build/screen-doom-e1m1.ppm 780 535 #9f9f9f
+pixel build/screen-doom-e1m1.ppm 240 575 #8b8b8b

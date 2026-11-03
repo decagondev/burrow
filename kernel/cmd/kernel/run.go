@@ -33,8 +33,8 @@ func runProgram(k *kernel, args []string, out io.Writer) {
 	switch {
 	case reason != "":
 		fmt.Fprintf(out, "run: %s: killed (status %d)\n", args[0], status)
-	case status > 128:
-		fmt.Fprintf(out, "run: %s: killed by signal %d\n", args[0], status-128)
+	case p.TermSig() != 0: // exit(255) is status 255 too, so ask
+		fmt.Fprintf(out, "run: %s: killed by signal %d\n", args[0], p.TermSig())
 	case status != 0:
 		fmt.Fprintf(out, "run: %s: exit status %d\n", args[0], status)
 	}

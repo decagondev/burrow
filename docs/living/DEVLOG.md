@@ -14,6 +14,38 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — Wave 11 complete: DOOM (M11)
+
+**Did:** W11-S01..S06. An unmodified static musl build of doomgeneric runs on Burrow and plays Freedoom: Phase 1:
+
+```text
+burrow> run /bin/doom -iwad /mnt/freedoom1.wad
+ adding /mnt/freedoom1.wad
+                           Freedoom: Phase 1
+R_Init: Init DOOM refresh daemon - .......................................
+I_InitGraphics: framebuffer: x_res: 640, y_res: 400, x_virtual: 640, y_virtual: 400, bpp: 32
+I_InitGraphics: Auto-scaling factor: 2
+(title screen, New Game, E1M1, Quit Game)
+burrow> run /bin/doom -iwad /mnt/freedoom1.wad -timedemo demo1
+timed 7117 gametics in 2484 realtics (100.279793 fps)
+```
+
+Devices (Go policy, nothing new in the nucleus): `/dev/fb0` (`kernel/fbdev`: the fbdev ioctls, `mmap(MAP_SHARED)` of the framebuffer, the console stepping aside while it is open) and `/dev/input/event0` (`kernel/evdev`: PS/2 scancodes as Linux input events, a queue per open, the keyboard grabbed while open). In `kernel/proc`: `Ioctler`, `Mappable` and `Poller` looked up on a file's device, device pages that are never freed and are shared by fork, real `O_NONBLOCK`, and `readv`. Doom: `make doom` fetches doomgeneric (pinned commit) and Freedoom 0.13.0 (sha256 from its signed checksum file), builds the engine with our backend (`user/doom/doomgeneric_burrow.c`, Linux interfaces only) and puts the 28.8 MB WAD on a FAT32 disk.
+
+**Numbers:** 100-104 fps in `timedemo demo1` under QEMU TCG (Doom's game runs at 35 tics/s), with every frame copied by the backend and every syscall going through the Go dispatcher; RISKS R-07 retired. The Go kernel needed one new syscall for Doom (`readv`).
+
+**Surprises:**
+- Doom ran on its second boot. The first failed at `W_Init` because musl's `fread` uses `readv`; nothing else was missing, because W9-W10 had already implemented the Linux behaviour programs rely on.
+- `/mnt` is a Windows-backed checkout in WSL: copying `/usr/include/linux` fails on headers whose names differ only in case (`xt_CONNMARK.h`, `xt_connmark.h`). `build/uapi` links to the directories instead.
+- The console showed "killed by signal 127" for Doom's `exit(255)`: a status above 128 is ambiguous, so `run` asks the process how it ended.
+- `open` stats the path first, which opens and closes the device once: the console repainted itself in the middle of Doom's start-up until taking the screen also cleared it.
+
+**Learned:** Copying Linux's device interfaces paid for itself. The backend written against Linux headers as a planning snippet ran with no code changes; the work was in making each device behave the way the headers promise, and testing that on the host.
+
+**Next:** W12, ports: Lua, C++, a Go user program.
+
+**Links:** ADR-0006, BUG-0004, PIT-27, R-07
+
 ## 2026-11-03 — W10-S08 busybox
 
 **Did:** `make busybox` fetches busybox 1.36.1 (the newest release busybox.net marks stable) once, checks the pinned sha256 and builds a 320 KiB static musl binary from `user/busybox.config`: ash with line editing and job control, about 60 applets, run without links in `/bin` (`FEATURE_SH_STANDALONE`, exec path `/bin/busybox`). `make busybox-smoke` boots `go-busybox.img` and types a session: `$((6*7))`, `ls / | wc -l`, `seq 5 | sort -r | head -n 2`, `cd /etc && pwd && cat motd | grep -c .`, a `for` loop, `^C` on a foreground `sleep` (status 130), `exit`. It skips when no busybox build is present, so `make test` and CI work without the download.

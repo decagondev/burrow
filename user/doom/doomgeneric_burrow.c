@@ -1,14 +1,15 @@
 /* =============================================================================
- * doomgeneric_burrow.c - Doom platform layer for Burrow (Epic E11).
+ * doomgeneric_burrow.c - Doom platform layer for Burrow (Epic E10, W11).
  *
  * KEY IDEA: this file only uses LINUX interfaces - fbdev (/dev/fb0) and
  * evdev (/dev/input/event0). Burrow implements small, compatible subsets of
  * both. So you can build and debug this backend on a plain Linux VM console
  * FIRST, then the same static binary (musl) runs on Burrow unchanged.
  *
- *   musl-gcc -static -O2 -o doom doomgeneric/[a-z]*.c doomgeneric_burrow.c
+ * Built by `make doom` (scripts/doom.sh) against doomgeneric's engine;
+ * tests/unit/doom/keymap_test.c checks map_key (BUG-0004).
  *
- * Kernel features this needs (each one is a slice in E8-E11):
+ * Kernel features this needs (W9-W11):
  *   open/close/read (O_NONBLOCK), ioctl FBIOGET_VSCREENINFO/FSCREENINFO,
  *   mmap of /dev/fb0, clock_gettime(CLOCK_MONOTONIC), nanosleep, file I/O
  *   for the WAD (Freedoom: freely redistributable).

@@ -9,6 +9,7 @@ The keys file is a small script, one step per line ('#' comments):
     type <text>    press each character (letters, digits, space, - . / , = ;)
     key <name>     press one QEMU key name (ret, backspace, ctrl-u, ...)
     screendump <f> save the screen as a PPM (checked by checkscreen.py)
+    sleep <s>      pause (for a guest that shows progress only on screen)
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -95,6 +96,8 @@ def main():
                     press(key_name(ch))
             elif op == 'key':
                 press(arg)
+            elif op == 'sleep':
+                time.sleep(float(arg))
             elif op == 'screendump':
                 path = os.path.abspath(arg)
                 if os.path.exists(path):

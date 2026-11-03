@@ -1,0 +1,34 @@
+# Doom (W11-S05) started from the Go kernel's console with the Freedoom WAD
+# on the FAT disk at /mnt. Doom draws only on screen, so steps after its
+# start are timed: the title, then Enter four times (menu, New Game, the
+# episode, the skill) into E1M1, a walk forward, and Quit Game from the
+# menu (Escape, up wraps to the last item, Enter, y).
+wait burrow> 
+type run /bin/doom -iwad /mnt/freedoom1.wad
+key ret
+wait Auto-scaling
+sleep 4
+screendump build/screen-doom-title.ppm
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+sleep 4
+screendump build/screen-doom-e1m1.ppm
+key up
+key up
+key up
+sleep 1
+key esc
+sleep 1
+key up
+sleep 1
+key ret
+sleep 1
+type y
+wait burrow> 
+type poweroff
+key ret

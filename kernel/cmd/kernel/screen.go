@@ -65,8 +65,8 @@ func startScreen() *gfx.Console {
 }
 
 // screenOut is the on-screen console. It stands aside while a program
-// holds /dev/fb0 (W11-S01) and, when the last one lets go, repaints the
-// splash and starts a fresh console (the program's pixels are gone).
+// holds /dev/fb0 (W11-S01), leaving it a black screen, and, when the last
+// one lets go, repaints the splash and starts a fresh console.
 type screenOut struct {
 	mu   sync.Mutex
 	con  *gfx.Console
@@ -86,6 +86,9 @@ func (s *screenOut) hold(held bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.held = held
+	if fb := bga.Screen(); held && fb != nil {
+		fb.Fill(image.Rect(0, 0, fb.Width, fb.Height), gfx.RGB(0, 0, 0)) // a blank screen for the program
+	}
 	if !held {
 		s.con = startScreen()
 	}

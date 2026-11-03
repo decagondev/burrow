@@ -10,5 +10,5 @@ Score = Likelihood x Impact (1-3 each). Review at every wave exit.
 | R-04 | Address-layout assumptions wrong (Go hints vs user ranges) | 2 | 2 | 4 | spike; static-PIE fallback (MEMORY_MAP §2) | spike result |
 | R-05 | Scope creep before M6 | 3 | 2 | 6 | roadmap critical path; story-level only beyond W6 | any W7+ work before M6 |
 | R-06 | Real-hardware differences (BIOS quirks) | 2 | 1 | 2 | QEMU first; Bochs as second emulator; UEFI path later | first hardware test |
-| R-07 | Syscall-ring latency makes Doom slow | 2 | 2 | 4 | measure in W9; fast path for hot syscalls handled directly in nucleus | FPS < 20 |
+| R-07 | Syscall-ring latency makes Doom slow | 1 | 2 | 2 | measured in W11: `make doom-bench` = 100-104 fps (timedemo demo1, QEMU TCG); retired unless the bench drops | FPS < 20 |
 | R-08 | Learning fatigue on long debugging sessions | 2 | 2 | 4 | 30-120 min slices; DEVLOG; celebrate milestones | three sessions without a commit |

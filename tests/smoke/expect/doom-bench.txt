@@ -1,0 +1,6 @@
+# Ordered markers for make doom-bench (W11-S06, tests/smoke/keys/doom-bench.keys). Append-only.
+# demo1 is the same 7117 tics on every run; only the time varies.
+burrow> run /bin/doom -iwad /mnt/freedoom1.wad -timedemo demo1
+timed 7117 gametics in 
+run: /bin/doom: exit status 255
+burrow> poweroff

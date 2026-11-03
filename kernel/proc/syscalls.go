@@ -22,6 +22,7 @@ const (
 	sysRtSigaction   = 13
 	sysRtSigprocmask = 14
 	sysIoctl         = 16
+	sysReadv         = 19
 	sysWritev        = 20
 	sysNanosleep     = 35
 	sysGetpid        = 39
@@ -53,7 +54,7 @@ func ok(r int64) (int64, bool) { return r, false }
 var table = map[uint64]handler{
 	sysRead: sysReadFn, sysWrite: sysWriteFn, sysOpen: sysOpenFn, sysClose: sysCloseFn,
 	sysFstat: sysFstatFn, sysLseek: sysLseekFn, sysMmap: sysMmapFn, sysMunmap: sysMunmapFn,
-	sysBrk: sysBrkFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
+	sysBrk: sysBrkFn, sysReadv: sysReadvFn, sysWritev: sysWritevFn, sysNanosleep: sysNanosleepFn,
 	sysPrctl: sysPrctlFn, sysArchPrctl: sysArchPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
 	sysExit: sysExitFn, sysExitGroup: sysExitFn,
 	sysFork: sysForkFn, sysVfork: sysForkFn, sysClone: sysCloneFn, sysExecve: sysExecveFn,
@@ -143,31 +144,73 @@ func sysWritevFn(p *Process, a [6]uint64) (int64, bool) {
 }
 
 func sysReadFn(p *Process, a [6]uint64) (int64, bool) {
-	f := p.fds.get(a[0])
-	switch {
-	case f == nil || f.flags&oAccMode == oWRONLY:
-		return ok(-int64(syscall.EBADF))
-	case f.console != nil:
-		return ok(0) // console input reaches processes with the TTY (W10-S05): EOF until then
+	b, e := p.readFile(a[0], a[2])
+	if e < 0 {
+		return ok(e)
 	}
-	if wouldBlock(f, pollIn) {
-		return ok(-int64(syscall.EAGAIN))
-	}
-	buf := make([]byte, min(a[2], maxIO))
-	var n int
-	var err error
-	if c, isC := device(f).(Canceller); isC {
-		n, err = c.ReadCancel(buf, p.cancel())
-	} else {
-		n, err = f.f.Read(buf)
-	}
-	if err != nil && err != io.EOF {
+	if err := p.mem.CopyOut(a[1], b); err != nil {
 		return ok(errno(err))
 	}
-	if err := p.mem.CopyOut(a[1], buf[:n]); err != nil {
+	return ok(int64(len(b)))
+}
+
+// readv: one read of the iovecs' total length, scattered over them (W11:
+// musl's stdio reads with it).
+func sysReadvFn(p *Process, a [6]uint64) (int64, bool) {
+	if a[2] > 1024 {
+		return ok(-int64(syscall.EINVAL))
+	}
+	iov := make([]byte, 16*a[2])
+	if err := p.mem.CopyIn(a[1], iov); err != nil {
 		return ok(errno(err))
+	}
+	var total uint64
+	for i := uint64(0); i < a[2]; i++ {
+		total += binary.LittleEndian.Uint64(iov[16*i+8:])
+	}
+	if total > maxIO {
+		total = maxIO
+	}
+	b, e := p.readFile(a[0], total)
+	if e < 0 {
+		return ok(e)
+	}
+	n := len(b)
+	for i := uint64(0); i < a[2] && len(b) > 0; i++ {
+		base, size := binary.LittleEndian.Uint64(iov[16*i:]), binary.LittleEndian.Uint64(iov[16*i+8:])
+		k := min(uint64(len(b)), size)
+		if err := p.mem.CopyOut(base, b[:k]); err != nil {
+			return ok(errno(err))
+		}
+		b = b[k:]
 	}
 	return ok(int64(n))
+}
+
+// readFile is one read(2) of at most n bytes from fd: the bytes, or -errno.
+func (p *Process) readFile(fd, n uint64) ([]byte, int64) {
+	f := p.fds.get(fd)
+	switch {
+	case f == nil || f.flags&oAccMode == oWRONLY:
+		return nil, -int64(syscall.EBADF)
+	case f.console != nil:
+		return nil, 0 // console input reaches processes with the TTY (W10-S05): EOF until then
+	}
+	if wouldBlock(f, pollIn) {
+		return nil, -int64(syscall.EAGAIN)
+	}
+	buf := make([]byte, min(n, maxIO))
+	var k int
+	var err error
+	if c, isC := device(f).(Canceller); isC {
+		k, err = c.ReadCancel(buf, p.cancel())
+	} else {
+		k, err = f.f.Read(buf)
+	}
+	if err != nil && err != io.EOF {
+		return nil, errno(err)
+	}
+	return buf[:k], 0
 }
 
 func sysCloseFn(p *Process, a [6]uint64) (int64, bool) { return ok(errno(p.fds.close(a[0]))) }
