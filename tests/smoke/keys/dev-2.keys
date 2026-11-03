@@ -8,6 +8,9 @@ wait built-in shell
 type cd /home; cat notes.txt; ./hello 12; lua sum.lua; ls answer.lua
 key ret
 wait No such file
+type head -1 hello.c | tr a-z A-Z
+key ret
+wait EDITED WITH KILO
 type exit
 key ret
 wait burrow>

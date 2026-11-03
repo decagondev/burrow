@@ -1,6 +1,7 @@
 # The workbench, first boot (W13-S05): in /home, write a note with vi,
 # compile the starter C program with tcc, write a Lua script with echo,
-# rename it and run it. Everything lands on the home disk.
+# rename it and run it; edit hello.c with kilo and rebuild it. Everything
+# lands on the home disk.
 # Waits avoid trailing spaces, which editors strip.
 wait burrow>
 type run /bin/busybox sh
@@ -25,6 +26,22 @@ wait computed on Burrow
 type echo 'print(6*7)' > answer.lua; mv answer.lua sum.lua; lua sum.lua
 key ret
 wait 42
+# kilo (W13-S06): a comment line at the top of hello.c, Ctrl-S saves,
+# Ctrl-Q quits; then the first line upper-cased (only the file prints it so)
+# and the program rebuilt and run
+type kilo hello.c
+key ret
+sleep 2
+type // edited with kilo
+key ret
+key ctrl-s
+wait written on disk
+screendump build/screen-dev-kilo.ppm
+key ctrl-q
+sleep 1
+type head -1 hello.c | tr a-z A-Z; tcc -static -o hello hello.c; ./hello 10
+key ret
+wait fib(10)
 type exit
 key ret
 wait burrow>

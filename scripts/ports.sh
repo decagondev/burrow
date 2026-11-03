@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# ports.sh - fetch, verify and build the downloaded ports (W12-S04..S06):
+# ports.sh - fetch, verify and build the downloaded ports (W12-S04..S06,
+# kilo since W13-S06):
 # Lua 5.4, a C++ test built with a musl cross toolchain (libstdc++,
 # exceptions, std::thread), and TinyCC with the C library it needs to
 # compile programs on Burrow. Downloads go once into $PORTS_CACHE (default
@@ -24,6 +25,8 @@ LUA_SHA256=2335b6c582a52654f94612bf10d2f4672805d05329aa6568b1d8cd9e5c6fb8e6
 TCC_COMMIT=e23dabed154a8495f3ac1ff3cc9d04fa1c207893 # mob, 2026-10-16
 TCC_SHA256=d2470fdeed862ddb18f4ec4e6a405fa984580c3d85c38492516749c61931c30e
 CROSS_SHA256=c5d410d9f82a4f24c549fe5d24f988f85b2679b452413a9f7e5f7b956f2fe7ea # musl.cc, GCC 11.2.1
+KILO_COMMIT=323d93b29bd89a2cb446de90c4ed4fea1764176e # antirez/kilo, 2025-01-04, BSD-2-Clause
+KILO_SHA256=79e62c23fdf369fa0cbbeaab9fd8ae2848dcc0156faf6efc89ea274528b39723
 
 fetch() { # url file sha256
   if [ ! -f "$CACHE/dl/$2" ]; then
@@ -44,9 +47,11 @@ unpack() { # file dir-it-makes [where]
 fetch "https://www.lua.org/ftp/lua-$LUA_VERSION.tar.gz" "lua-$LUA_VERSION.tar.gz" "$LUA_SHA256"
 fetch "https://codeload.github.com/TinyCC/tinycc/tar.gz/$TCC_COMMIT" "tinycc-$TCC_COMMIT.tar.gz" "$TCC_SHA256"
 fetch "https://musl.cc/x86_64-linux-musl-cross.tgz" "x86_64-linux-musl-cross.tgz" "$CROSS_SHA256"
+fetch "https://codeload.github.com/antirez/kilo/tar.gz/$KILO_COMMIT" "kilo-$KILO_COMMIT.tar.gz" "$KILO_SHA256"
 unpack "lua-$LUA_VERSION.tar.gz" "lua-$LUA_VERSION"
 unpack "tinycc-$TCC_COMMIT.tar.gz" "tinycc-$TCC_COMMIT"
 unpack "x86_64-linux-musl-cross.tgz" "x86_64-linux-musl-cross" "$CACHE/cross"
+unpack "kilo-$KILO_COMMIT.tar.gz" "kilo-$KILO_COMMIT"
 CROSS="$CACHE/cross/x86_64-linux-musl-cross"
 CC="$CROSS/bin/x86_64-linux-musl-gcc"
 CXX="$CROSS/bin/x86_64-linux-musl-g++"
@@ -64,6 +69,10 @@ for f in "$LUA_SRC"/*.c; do
 done
 "$CC" -static -o "$OUT/bin/lua" "$LUA_BUILD"/*.o -lm
 echo "ports: Lua $LUA_VERSION -> $OUT/bin/lua"
+
+# kilo: antirez's small editor with syntax highlighting, one file.
+"$CC" -static -O2 -std=c99 -D_DEFAULT_SOURCE -o "$OUT/bin/kilo" "$CACHE/src/kilo-$KILO_COMMIT/kilo.c"
+echo "ports: kilo ${KILO_COMMIT:0:7} -> $OUT/bin/kilo"
 
 # C++: our test program against the toolchain's static libstdc++.
 "$CXX" -static -s -O2 -std=c++17 -o "$OUT/bin/cxxtest" "$ROOT/user/cxx/cxxtest.cpp" -pthread

@@ -1,6 +1,6 @@
 # Working on Burrow
 
-Burrow can be used as a small development machine (W13): edit files with `vi`, compile C with TinyCC, run Lua, and keep your work on a disk that survives a power-off. This guide is the short version; [PORTING.md](PORTING.md) is about bringing more software over.
+Burrow can be used as a small development machine (W13): edit files with `vi` or `kilo`, compile C with TinyCC, run Lua, and keep your work on a disk that survives a power-off. This guide is the short version; [PORTING.md](PORTING.md) is about bringing more software over.
 
 ## Start it
 
@@ -21,6 +21,7 @@ At the `burrow>` console:
 run /bin/busybox sh      a shell (busybox ash: pipes, redirects, history, tab completion)
 cd /home                 your files
 vi hello.c               edit: i inserts, Esc stops, :wq saves and quits, :q! quits without saving
+kilo hello.c             or edit with colours: type away, Ctrl-S saves, Ctrl-F finds, Ctrl-Q quits
 tcc -static -o hello hello.c
 ./hello 30               run what you compiled
 lua hello.lua            run a Lua script (lua alone starts the REPL; Ctrl-D leaves it)

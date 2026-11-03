@@ -1,0 +1,18 @@
+# Pixels of kilo on the screen console (W13-S06), dumped by
+# tests/smoke/keys/dev-1.keys after Ctrl-S. Append-only. kilo colours C
+# with SGR 31-36 and draws its status bar in reverse video; these pixels
+# exist only if the console honours both.
+size  build/screen-dev-kilo.ppm 1024 768
+# the comment just typed on row 0: cyan (36)
+pixel build/screen-dev-kilo.ppm 8 98 #00cdcd
+# "int" of main on row 6: green (32)
+pixel build/screen-dev-kilo.ppm 4 216 #00cd00
+# "0" in long a = 0 on row 8: red (31)
+pixel build/screen-dev-kilo.ppm 158 256 #cd0000
+# "for" on row 9: yellow (33)
+pixel build/screen-dev-kilo.ppm 52 276 #cdcd00
+# the printf string on row 14: magenta (35)
+pixel build/screen-dev-kilo.ppm 134 376 #cd00cd
+# the status bar on row 31: reverse video (light paper, dark ink)
+pixel build/screen-dev-kilo.ppm 500 718 #e6e6e6
+pixel build/screen-dev-kilo.ppm 0 716 #1e1e28

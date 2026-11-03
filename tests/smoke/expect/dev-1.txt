@@ -3,4 +3,7 @@
 'notes.txt' 1L, 24C
 fib(30) = 832040, computed on Burrow
 42
+bytes written on disk
+// EDITED WITH KILO
+fib(10) = 55, computed on Burrow
 burrow> poweroff

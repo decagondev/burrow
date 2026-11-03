@@ -115,3 +115,44 @@ func TestRawMode(t *testing.T) {
 		t.Errorf("raw read %q, echo %q", got, out.String())
 	}
 }
+
+// Non-canonical reads follow VMIN and VTIME (termios(3)): kilo sets
+// VMIN=0 VTIME=1 to tell a lone Esc from an arrow key's sequence.
+func TestVminVtime(t *testing.T) {
+	tt := New(&buf{}, 25, 80)
+	raw := tt.Termios()
+	raw.Lflag &^= ICANON | ECHO | ISIG
+	raw.CC[VMIN], raw.CC[VTIME] = 0, 0
+	tt.SetTermios(raw, false)
+	p := make([]byte, 8)
+	if n, err := tt.Read(p); n != 0 || err != nil { // polling: nothing there, return at once
+		t.Errorf("VMIN=0 VTIME=0 with no input = %d, %v", n, err)
+	}
+	raw.CC[VTIME] = 1 // 100 ms
+	tt.SetTermios(raw, false)
+	start := time.Now()
+	if n, _ := tt.Read(p); n != 0 || time.Since(start) < 90*time.Millisecond || time.Since(start) > time.Second {
+		t.Errorf("VTIME=1 with no input = %d after %v, want 0 after 100 ms", n, time.Since(start))
+	}
+	done := make(chan int)
+	go func() { n, _ := tt.Read(p); done <- n }()
+	for !tt.HasReader() { // a timed read still counts as a reader: the console forwards keys to it
+		time.Sleep(time.Millisecond)
+	}
+	tt.Input(0x1B)
+	if n := <-done; n != 1 || p[0] != 0x1B {
+		t.Errorf("VTIME=1 with a key = %d %q", n, p[:n])
+	}
+	raw.CC[VMIN], raw.CC[VTIME] = 1, 0 // blocking again
+	tt.SetTermios(raw, false)
+	go func() { n, _ := tt.Read(p); done <- n }()
+	select {
+	case n := <-done:
+		t.Fatalf("VMIN=1 returned %d with no input", n)
+	case <-time.After(150 * time.Millisecond):
+	}
+	tt.Input('k')
+	if n := <-done; n != 1 {
+		t.Errorf("VMIN=1 read %d", n)
+	}
+}

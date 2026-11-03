@@ -51,8 +51,9 @@ SMOKE PASS [disk] (106 log lines)
 DISK WRITE PASS (64 sectors at the end of build/scratch.img)
 SMOKE PASS [ports] (113 log lines)
 SMOKE PASS [ports-dl] (124 log lines)  # SKIP until make ports has built them
-SMOKE PASS [dev-1] (109 log lines)     # SKIP until make busybox ports
-SMOKE PASS [dev-2] (108 log lines)
+SCREEN PASS (8 checks)                 # dev: SKIP until make busybox ports
+SMOKE PASS [dev-1] (817 log lines)
+SMOKE PASS [dev-2] (109 log lines)
 HOME DISK PASS (fsck.fat after two boots)
 SCREEN PASS (13 checks)                # doom: SKIP until make doom has built it
 SMOKE PASS [doom] (138 log lines)

@@ -10,6 +10,7 @@ import (
 	"io"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // termios flags (Linux asm-generic/termbits.h).
@@ -160,8 +161,20 @@ func (t *TTY) Input(b byte) {
 }
 
 // ReadCancel blocks until input is ready: a whole line in canonical mode
-// (at most len(p) of it), end of file after ^D, or EINTR on cancel.
+// (at most len(p) of it), end of file after ^D, or EINTR on cancel. In
+// non-canonical mode with VMIN 0 (W13-S06, termios(3)) it does not wait
+// with VTIME 0, and waits at most VTIME tenths of a second otherwise,
+// returning 0 then; VMIN above 0 waits for at least one byte.
 func (t *TTY) ReadCancel(p []byte, cancel <-chan struct{}) (int, error) {
+	var expire <-chan time.Time
+	t.mu.Lock()
+	poll := t.termios.Lflag&ICANON == 0 && t.termios.CC[VMIN] == 0
+	if poll && t.termios.CC[VTIME] > 0 {
+		timer := time.NewTimer(time.Duration(t.termios.CC[VTIME]) * 100 * time.Millisecond)
+		defer timer.Stop()
+		expire = timer.C
+	}
+	t.mu.Unlock()
 	for {
 		t.mu.Lock()
 		if len(t.ready) > 0 {
@@ -180,11 +193,20 @@ func (t *TTY) ReadCancel(p []byte, cancel <-chan struct{}) (int, error) {
 			t.mu.Unlock()
 			return 0, nil
 		}
+		if poll && expire == nil { // VMIN 0, VTIME 0: nothing there, say so
+			t.mu.Unlock()
+			return 0, nil
+		}
 		ch := t.changed
 		t.readers++
 		t.mu.Unlock()
 		select {
 		case <-ch:
+		case <-expire: // VTIME passed with no input
+			t.mu.Lock()
+			t.readers--
+			t.mu.Unlock()
+			return 0, nil
 		case <-cancel:
 			t.mu.Lock()
 			t.readers--

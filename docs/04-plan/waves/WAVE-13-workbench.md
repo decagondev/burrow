@@ -1,4 +1,4 @@
-# W13 A Workbench  (M13)  — status: in progress
+# W13 A Workbench  (M13)  — status: done
 
 Goal: write, save and build code *inside* Burrow. Demo: in `make run-dev`, open `/home/fib.c` in `vi` on the screen console, edit it, save, compile it with `tcc`, run it, power off, boot again, and the file is still there. The same for a Lua script. Stories: E13 ([BACKLOG.md](../BACKLOG.md)).
 
@@ -30,6 +30,9 @@ As built: `fs/fat/write.go` (clusters: allocate from a rotating hint, grow and s
 Writes on a FAT file reach the disk (`fsync`, `fdatasync`, and on close), `rename`/`renameat`, `ftruncate`, `chmod` as accepted no-ops where FAT has no field; `build/home.img` mounted at `/home`; `make run-dev` (busybox, `vi`, Lua, TinyCC, `/home`). A smoke test edits, saves, reboots the same disk and reads the file back.
 As built: rename in memfs, FAT (`fs/fat/rename.go`: new entry first, a moved directory's `..` follows) and the VFS (`vfs.Renamer`, `EXDEV` across mounts); `kernel/proc/metacalls.go` for rename/renameat/renameat2, fsync, and chmod/chown/utimensat accepted as no-ops. The disk's label decides the mount point: `BURROWHOME` mounts at `/home`. `burrow-home.img` (repository root, git-ignored) is made once from `workbench/`; `make run-dev` boots `go-dev.img` (busybox, Lua, TinyCC) with it. `make dev-smoke` boots twice on a fresh test copy: vi saves a note, tcc compiles into `/home`, a script is renamed; the second boot finds all of it; `fsck.fat` checks the disk. The guide is `docs/06-guides/WORKBENCH.md`.
 
-### [ ] W13-S06 kilo, a small editor with syntax highlighting (E13) — optional, needs a go-ahead to download it
+### [x] W13-S06 kilo, a small editor with syntax highlighting (E13)
+antirez's kilo (BSD-2-Clause) at commit `323d93b`, sha256-pinned in `scripts/ports.sh`, built static into `/bin/kilo` on `go-dev.img`. It needed the TTY to honour `VMIN` and `VTIME` in non-canonical mode (`VMIN=0 VTIME=1`: wait 100 ms, then return 0), which is how it tells a lone Esc from an arrow key; `kernel/tty` now follows termios(3) for `VMIN` 0, and a timed read still counts as a reader for the console. `dev-1.keys` edits `hello.c` with kilo, saves with Ctrl-S, rebuilds it with tcc; `dev-1.screen` checks the syntax colours and the reverse-video status bar; the second boot finds the edit.
 
 Exit: **M13 demo — a workbench.** `make clean test` green; DEVLOG wave entry; PORTING.md and a short "working on Burrow" guide.
+
+As built: one commit per slice, plus BUG-0013 (the Doom test raced Doom's screen melt; `sendkeys.py` gained `waitpixel`) and a fix to the new FAT interop step. The guide is [WORKBENCH.md](../../06-guides/WORKBENCH.md).

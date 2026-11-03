@@ -15,7 +15,7 @@
 | W10 | A Unix | M10 | done | [WAVE-10](WAVE-10-a-unix.md) |
 | W11 | DOOM | M11 | done | [WAVE-11](WAVE-11-doom.md) |
 | W12 | Ports | M12 | done | [WAVE-12](WAVE-12-ports.md) |
-| W13 | A workbench | M13 | **in progress** | [WAVE-13](WAVE-13-workbench.md) |
+| W13 | A workbench | M13 | done | [WAVE-13](WAVE-13-workbench.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 

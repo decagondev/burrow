@@ -14,6 +14,42 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — Wave 13 complete: a workbench (M13)
+
+**Did:** W13-S01..S06. Burrow is a small development machine: `make run-dev` boots busybox, `vi`, kilo, Lua and TinyCC with a home disk that survives a power-off.
+
+```text
+burrow> run /bin/busybox sh
+# cd /home
+# kilo hello.c          (syntax colours on the screen console; Ctrl-S: 469 bytes written on disk)
+# tcc -static -o hello hello.c; ./hello 10
+fib(10) = 55, computed on Burrow
+# exit
+burrow> poweroff
+   ... boot again on the same disk ...
+# cat notes.txt; ./hello 12
+saved on the first boot
+fib(12) = 144, computed on Burrow
+```
+
+- **Editors:** busybox `vi` (a config change and `ftruncate`), and kilo (antirez, BSD-2-Clause) after the TTY learned `VMIN`/`VTIME`.
+- **The screen console became a terminal:** a cell grid and a VT100/ANSI subset (`gfx/vt.go`: positioning, erase, insert/delete line, scrolling regions, colours, reverse, the alternate screen, an underline cursor).
+- **Writing goes to the disk:** `block.Writer` with ATA `WRITE SECTORS` and `FLUSH CACHE`; writable FAT32 (`fs/fat/write.go`, `dirwrite.go`, `rename.go`) with data-then-entry-then-FAT ordering; rename, fsync and the metadata calls; a FAT volume labelled `BURROWHOME` mounts at `/home`.
+
+**Numbers:** `fsck.fat` accepts what the kernel writes, on Linux-made (4 KiB clusters) and Burrow-made (512 B) images; the two-boot workbench test passes with `fsck.fat` after it; the disk-write boot is checked byte for byte on the host.
+
+**Surprises:**
+- Doom's smoke test had raced Doom's screen melt since W11; the two "unexplained" failures then were this. `waitpixel` waits for a screen condition instead of a time (BUG-0013).
+- kilo tells a lone Esc from an arrow key with `VMIN=0 VTIME=1`: a read that times out. A terminal that ignores `VTIME` makes Esc wait for the next key.
+- vi exits without a newline, so its last status line and the next prompt share a serial line; smoke markers are per line.
+- Twice I committed in parallel with the checks and the checks failed (an unrelated Doom race, then my own interop step that could not rerun). Committing only after the suite reports is the rule again.
+
+**Learned:** The pieces for "a computer you can work on" were mostly there; what was missing were contracts at the edges: a terminal that is a terminal (escape codes, `VMIN`/`VTIME`), and a disk that takes writes in an order a crash cannot hurt.
+
+**Next:** BACKLOG E12 (SMP, NX everywhere, UEFI, virtio, networking, real hardware); smaller: `make run-dev` with more than one home, copy-on-write fork, a page cache.
+
+**Links:** BUG-0013, WORKBENCH.md, PORTING.md
+
 ## 2026-11-03 — Wave 12 complete: ports (M12)
 
 **Did:** W12-S04..S07 on top of S01-S03's threads, epoll and Go. Downloaded, pinned and built by `make ports`, run in `make ports-dl-smoke`:
