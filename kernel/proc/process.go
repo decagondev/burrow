@@ -81,9 +81,8 @@ func (p *Process) Mem() *Mem { return p.mem }
 // TID is the nucleus thread.
 func (p *Process) TID() uint64 { return p.tid }
 
-// exit ends the process: thread, memory, descriptors. With a parent that
-// can wait for it, it stays a zombie until reaped; its children are
-// orphaned to the kernel (an init process adopts them in W10-S07).
+// exit ends the process: thread, memory, descriptors. It stays a zombie
+// until its parent reaps it (init reaps at once); its children go to init.
 func (p *Process) exit(code, sig int, reason string) {
 	s := p.sys
 	if err := s.nu.Kill(p.tid); err != nil {
@@ -102,13 +101,19 @@ func (p *Process) exit(code, sig int, reason string) {
 	s.mu.Lock()
 	p.exitCode, p.termSig, p.reason = code, sig, reason
 	delete(s.byTID, p.tid)
+	adopted := false
 	for pid, c := range p.children {
-		c.PPID = 0
-		if c.zombie {
-			delete(s.byPID, pid)
-		}
+		c.PPID = 1
+		s.init.children[pid] = c
+		adopted = adopted || c.zombie
 	}
 	p.children = nil
+	if adopted { // zombies it never reaped: init does it now
+		select {
+		case s.init.childEvent <- struct{}{}:
+		default:
+		}
+	}
 	parent := s.byPID[p.PPID]
 	if parent != nil && !parent.zombie {
 		p.zombie = true

@@ -70,6 +70,9 @@ func sigName(sig int) string {
 // send makes sig pending for p and wakes it: blocking calls return EINTR,
 // and a thread computing in ring 3 stops at its next tick (Interrupt).
 func (p *Process) send(sig int, info sigInfo) {
+	if p.tid == 0 { // init (kernel-side) takes no signals
+		return
+	}
 	p.mu.Lock()
 	if p.exited || sig < 1 || sig > nSig {
 		p.mu.Unlock()

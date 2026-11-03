@@ -57,12 +57,12 @@ burrow> run /bin/hello
 hello from ring 3
 burrow> run /bin/crash
 about to dereference NULL
-[proc] WARN: pid 2 (crash) killed: page fault at 0x0
+[proc] WARN: pid 3 (crash) killed: page fault at 0x0
 run: /bin/crash: killed (status 139)
 burrow> run /bin/hello
 hello from ring 3
 burrow> run /bin/musl-hello one two
-hello from musl in ring 3 (pid 4, 3 args: /bin/musl-hello one two)
+hello from musl in ring 3 (pid 5, 3 args: /bin/musl-hello one two)
 malloc works
 hostname from the initrd: burrow
 burrow> run /bin/forktest
@@ -71,7 +71,7 @@ forktest: parent still sees 1
 hello from ring 3
 forktest: exec child exited with 0
 forktest: crashing child killed by signal 11
-forktest: my parent is 0
+forktest: my parent is 1
 burrow> run /bin/fdtest
 fdtest: the pipe carried 18 bytes: hello from ring 3
 fdtest: /tmp/note says: written by fdtest
@@ -106,5 +106,8 @@ spin: spinning until ^C
 $ echo $?
 130
 $ exit
+burrow> ps
+  PID  PPID  PGID STATE    COMMAND
+    1     0     1 kernel   init
 burrow> poweroff
 [console] INFO: poweroff

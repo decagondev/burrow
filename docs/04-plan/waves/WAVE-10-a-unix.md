@@ -27,7 +27,7 @@ User syscalls build a `trap_frame` and return with IRETQ. New calls: `nu_uthread
 ### [x] W10-S06 Userland: sh and tools (E09.F05)
 `user/sh.c` and the tools, built with musl into `/bin`; go-smoke types `sh`, then `ls / | wc -l`, `echo hi > /tmp/x; cat /tmp/x`, `spin` + `^C`, `exit`.
 
-### [ ] W10-S07 init in Go (E09.F05)
+### [x] W10-S07 init in Go (E09.F05)
 PID 1 is a Go-side init: it adopts orphans and reaps zombies; the console's shell runs as its child.
 
 ### [ ] W10-S08 busybox (E09.F05) — needs a go-ahead to download its source

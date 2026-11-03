@@ -136,10 +136,10 @@ func TestFaultKillsOnlyThatProcess(t *testing.T) {
 	if st != 139 || !strings.Contains(why, "page fault at 0x0") {
 		t.Errorf("status %d %q", st, why)
 	}
-	if !strings.Contains(r.log.String(), "pid 1 (prog) killed: page fault at 0x0 (rip 0x400207)") {
+	if !strings.Contains(r.log.String(), "pid 2 (prog) killed: page fault at 0x0 (rip 0x400207)") {
 		t.Errorf("log %q", r.log.String())
 	}
-	if pid := r.call(b, 39); pid != 2 {
+	if pid := r.call(b, 39); pid != int64(b.PID) {
 		t.Errorf("the other process answers getpid = %d", pid)
 	}
 }

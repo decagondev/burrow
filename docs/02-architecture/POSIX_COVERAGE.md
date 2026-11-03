@@ -48,7 +48,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 109 | `setpgid` | done | W10 | self or a child in the same session |
 | 111, 121 | `getpgrp` `getpgid` | done | W10 | |
 | 112, 124 | `setsid` `getsid` | done | W10 | |
-| 110 | `getppid` | done | W10 | orphans report 0 (the kernel) until init adopts them (W10-S07) |
+| 110 | `getppid` | done | W10 | orphans are adopted by init (pid 1) |
 | 158 | `arch_prctl` | partial | W9 | `ARCH_SET_FS`, `ARCH_GET_FS` (TLS); not GS |
 | 186 | `gettid` | partial | W9 | = pid (one thread per process) |
 | 200, 234 | `tkill` `tgkill` | done | W10 | tid = pid (one thread per process) |

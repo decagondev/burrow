@@ -21,6 +21,13 @@ func addCommands(con *console.Console, k *kernel) {
 	for _, cmd := range console.FileCommands(k.fs) {
 		con.Add(cmd)
 	}
+	con.Add(console.Command{Name: "ps", Help: "list processes",
+		Run: func(_ []string, out io.Writer) {
+			fmt.Fprintln(out, "  PID  PPID  PGID STATE    COMMAND")
+			for _, p := range k.procs.Processes() {
+				fmt.Fprintf(out, "%5d %5d %5d %-8s %s\n", p.PID, p.PPID, p.PGID, p.State, p.Path)
+			}
+		}})
 	con.Add(console.Command{Name: "sh", Help: "start the shell (/bin/sh) on this terminal; exit returns here",
 		Run: func(args []string, out io.Writer) { runProgram(k, append([]string{"/bin/sh"}, args...), out) }})
 	con.Add(console.Command{Name: "run", Help: "run <program> [args]: start a user program and wait for it",

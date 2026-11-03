@@ -27,12 +27,62 @@ type System struct {
 	nextPID  int
 	reported map[uint64]bool // unknown syscall numbers already logged
 	tty      *tty.TTY        // the controlling terminal (SetTerminal), or nil
+	init     *Process        // pid 1 (kernel-side, no thread)
 }
 
 // NewSystem: programs are read from files; fds 0-2 are the console.
+// PID 1 is init, kept by the kernel itself (no thread): it adopts orphans
+// and reaps every child of its own as soon as it exits.
 func NewSystem(nu Nucleus, files fs.FS, console io.Writer, log *klog.Logger) *System {
-	return &System{nu: nu, files: files, console: console, log: log,
+	s := &System{nu: nu, files: files, console: console, log: log,
 		byTID: map[uint64]*Process{}, byPID: map[int]*Process{}, nextPID: 1, reported: map[uint64]bool{}}
+	s.init = s.newProcess("init", nil, &fdTable{fds: map[int]fd{}})
+	s.init.PGID, s.init.SID = 1, 1
+	s.byPID[1] = s.init
+	go s.reap()
+	return s
+}
+
+// reap is init's loop: wait for children forever, never keeping a zombie.
+func (s *System) reap() {
+	for range s.init.childEvent {
+		s.mu.Lock()
+		for pid, c := range s.init.children {
+			if c.zombie {
+				delete(s.init.children, pid)
+				delete(s.byPID, pid)
+			}
+		}
+		s.mu.Unlock()
+	}
+}
+
+// Info is one row of the process table (the console's ps).
+type Info struct {
+	PID, PPID, PGID int
+	State, Path     string
+}
+
+// Processes lists the process table in pid order.
+func (s *System) Processes() []Info {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Info, 0, len(s.byPID))
+	for pid := 1; len(out) < len(s.byPID) && pid < s.nextPID; pid++ {
+		p, ok := s.byPID[pid]
+		if !ok {
+			continue
+		}
+		state := "running"
+		switch {
+		case p == s.init:
+			state = "kernel"
+		case p.zombie:
+			state = "zombie"
+		}
+		out = append(out, Info{p.PID, p.PPID, p.PGID, state, p.Path})
+	}
+	return out
 }
 
 // The mmap area grows up from here (MEMORY_MAP.md: user mmap space).
@@ -72,7 +122,7 @@ func (s *System) prepare(file string, data []byte, argv, envp []string) (*image,
 }
 
 // Spawn loads the program at file (an io/fs path) and starts it as a
-// child of the kernel (ppid 0): nobody waits for it but Process.Wait.
+// child of init (which reaps it); Process.Wait reports how it ended.
 func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	data, err := fs.ReadFile(s.files, file)
 	if err != nil {
@@ -84,11 +134,13 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	}
 	p := s.newProcess("/"+file, im.mem, s.stdio())
 	p.brkStart, p.brk = im.end, im.end
-	p.PGID, p.SID = p.PID, p.PID
+	p.PGID, p.SID, p.PPID = p.PID, p.PID, 1
 	s.mu.Lock() // registered before it can make its first call
 	defer s.mu.Unlock()
+	s.init.children[p.PID] = p
 	tid, err := s.nu.StartThread(im.mem.Space(), im.entry, im.sp, 0)
 	if err != nil {
+		delete(s.init.children, p.PID)
 		im.mem.Close()
 		return nil, err
 	}

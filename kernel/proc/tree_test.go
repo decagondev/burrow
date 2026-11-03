@@ -112,9 +112,18 @@ func TestWait4KilledChildAndOrphans(t *testing.T) {
 		t.Errorf("status %#x, want 11 (WTERMSIG SIGSEGV)", st)
 	}
 	gk := r.newestThread(kid)
-	if ppid := r.callAs(gk, 110); ppid != 0 {
-		t.Errorf("orphan's ppid = %d, want 0 (the kernel)", ppid)
+	if ppid := r.callAs(gk, 110); ppid != 1 {
+		t.Errorf("orphan's ppid = %d, want 1 (init adopted it)", ppid)
 	}
+	r.nu.Inject(proc.Request{TID: gk, Nr: 231})
+	r.waitFor(func() bool { // init reaps it: no zombie left
+		for _, i := range r.sys.Processes() {
+			if i.PID == int(grandchild) {
+				return false
+			}
+		}
+		return true
+	})
 }
 
 func TestExecve(t *testing.T) {

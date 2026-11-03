@@ -66,6 +66,8 @@ type echo $?
 key ret
 type exit
 key ret
+type ps
+key ret
 screendump build/screen-boot_to_go-end.ppm
 type poweroff
 key ret
