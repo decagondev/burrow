@@ -8,13 +8,16 @@ import (
 	"testing"
 )
 
-// TestCensusQt: every system call the Qt census saw on Linux
-// (tests/regression/census-qt.txt, made by census-qt.sh) has a handler,
-// unless its line names the slice that will add one ("# W15-S02 ...").
-// A named call that already has a handler is an error too: the note is
-// stale and should go.
-func TestCensusQt(t *testing.T) {
-	f, err := os.Open("../../tests/regression/census-qt.txt")
+// TestCensusQt and TestCensusX11: every system call a census saw on Linux
+// (tests/regression/census-qt.txt from census-qt.sh, census-x11.txt from
+// x11-linux.sh) has a handler, unless its line names the slice that will
+// add one ("# W15-S02 ...", "# W16-S02 ..."). A named call that already has
+// a handler is an error too: the note is stale and should go.
+func TestCensusQt(t *testing.T)  { checkCensus(t, "census-qt.txt") }
+func TestCensusX11(t *testing.T) { checkCensus(t, "census-x11.txt") }
+
+func checkCensus(t *testing.T, file string) {
+	f, err := os.Open("../../tests/regression/" + file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,10 +41,10 @@ func TestCensusQt(t *testing.T) {
 		_, inTable := table[nr]
 		_, inTTable := ttable[nr]
 		served := inTable || inTTable
-		later := strings.Contains(note, "W15-S")
+		later := strings.Contains(note, "W1")
 		switch {
 		case !served && !later:
-			t.Errorf("%s (%d): Qt makes it and nothing serves it; implement it or name the slice", fields[0], nr)
+			t.Errorf("%s (%d): the census saw it and nothing serves it; implement it or name the slice", fields[0], nr)
 		case served && later:
 			t.Errorf("%s (%d): served now; drop the %q note", fields[0], nr, strings.TrimSpace(note))
 		}

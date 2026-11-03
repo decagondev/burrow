@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W16-S01 the X stack on Linux first
+
+**Did:** `make x11` fetches 26 pinned sources and builds the X libraries (Xlib, xcb, Xft, fontconfig, FreeType, libXfont 1), the core fonts, TinyX's `Xfbdev`, dwm, st and dmenu, all static for musl: 17 MB for the whole desktop, against 82 MB for five Qt programs. On the host, against Xvfb and driven by xdotool, a new `xhello` draws with the core font and Xft and takes a key, st runs busybox `sh`, dmenu returns a chosen line, and dwm manages a window and quits. The census has 48 calls; Burrow lacks three (`fadvise64`, `fstatfs`, `mremap`), named for S02.
+
+**Surprise:** that 18 autotools cross builds went through at the first attempt, given `PKG_CONFIG_LIBDIR`; TinyX needed only the xtrans m4 path and one header patch (`XTest.h` left the protocol headers years ago). The test harness taught two small things: `xdotool windowactivate` needs a window manager, and st's exit status when its shell ends is a race inside st, so the test checks what st did instead.
+
+**Next:** W16-S02, `Xfbdev` on Burrow.
+
 ## 2026-11-03 — W15 done: Qt on the framebuffer (M15)
 
 **Did:** the wave in six slices. Qt 6.12 built static for musl, with a census of its system calls on Linux (S01); QtCore on Burrow from a FAT disk at `/opt/qt`, which needed `waitid` and `FIONREAD` on pipes (S02, BUG-0016); Qt painting on `/dev/fb0` through linuxfb (S03) and Qt widgets driven by the keyboard and mouse through evdev (S04), both with no kernel change; budgets for start-up, repaint, memory and idling, which found disk reads five times too slow everywhere (S05, BUG-0017); and `qtpad`, an editor for `/home`, with the ATA driver's second channel so the home and Qt disks can be attached together (S06). The M15 demo is in `make qt-smoke`: qtpad adds a line to `/home/hello.c`, saves, quits, `tcc` builds the file, and a second boot finds the line.

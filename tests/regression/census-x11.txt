@@ -1,0 +1,56 @@
+# System calls of the static musl X programs (xhello, st with busybox sh,
+# dmenu, dwm) under strace -f against Xvfb on the host: name and Linux
+# x86-64 number. tests/regression/x11-linux.sh census (make x11-census)
+# fails if they start using a name not listed; kernel/proc's
+# TestCensusX11 fails if a listed call has no handler, unless its line names
+# the slice that adds it (# W16-Sxx).
+# Seen by strace (make x11-census):
+access 21
+arch_prctl 158
+brk 12
+close 3
+connect 42
+dup2 33
+exit_group 231
+fadvise64 221 # W16-S02: fontconfig's posix_fadvise
+fcntl 72
+fork 57
+fstat 5
+fstatfs 138 # W16-S02: fontconfig asks what file system holds its cache
+getdents64 217
+getegid 108
+geteuid 107
+getgid 104
+getpeername 52
+getpid 39
+getppid 110
+getrandom 318
+gettid 186
+getuid 102
+ioctl 16
+lseek 8
+madvise 28
+mmap 9
+mremap 25 # W16-S02: musl's realloc of large blocks
+munmap 11
+open 2
+poll 7
+prctl 157
+pselect6 270
+read 0
+readlink 89
+recvfrom 45
+recvmsg 47
+rt_sigaction 13
+rt_sigprocmask 14
+setsid 112
+set_tid_address 218
+shutdown 48
+socket 41
+stat 4
+uname 63
+wait4 61
+write 1
+writev 20
+# Not seen by strace: musl reads it through Linux's vDSO, which Burrow has not.
+clock_gettime 228 # vdso

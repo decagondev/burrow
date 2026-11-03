@@ -229,3 +229,8 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-36 | W15 | The census misses calls Qt makes only on Burrow, and calls strace cannot see | W15-S01 found one at once: musl reads `clock_gettime` through the vDSO, so it is listed by hand (`# vdso`); paths Burrow answers differently show in the `unimplemented syscall` log |
 | PIT-37 | W15 | A Qt program (fonts, a 3 MiB backing store) runs in tens of MiB, and fork copies eagerly (`QProcess`) | 512 MiB since W14-S01; copy-on-write fork stays in the backlog |
 | PIT-38 | W15 | The newest Qt may need a newer compiler than musl.cc's GCC 11.2.1 | checked in W15-S01: qtbase 6.12.0 builds with it |
+| PIT-39 | W16 | Autotools cross builds of 18 X libraries probe the host | `--host=x86_64-linux-musl`, `PKG_CONFIG_LIBDIR` at our sysroot only, `--disable-shared` everywhere (W16-S01: all built at the first attempt; TinyX needed `ACLOCAL_PATH` for xtrans's macros) |
+| PIT-40 | W16 | st needs pseudo-terminals, which Burrow does not have | a whole slice of tty work in W16-S03, with a `ptytest` checked against Linux |
+| PIT-41 | W16 | TinyX's input is 2006 Linux: the console keymap through `KDGKBENT`, its own mouse protocol detection | answer as Linux did then; W14's `/dev/input/mice` already speaks the IntelliMouse handshake |
+| PIT-42 | W16 | No XKB: Qt 6's xcb platform, GTK3 and XKB-built clients will not run on TinyX | ship only programs built without XKB; the 1.20-branch kdrive is E16, later |
+| PIT-43 | W16 | Fork copies eagerly, and every st and dmenu forks a program | measured in W16-S05; copy-on-write fork is E18 |

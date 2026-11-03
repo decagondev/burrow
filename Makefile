@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -322,6 +322,17 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
+
+# The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,
+# st and dmenu once (scripts/x11.sh, sha256-pinned, ~/.cache/burrow-x11) and
+# builds them static for musl into build/x11-root (bin/, fonts/, etc/fonts:
+# the tree for /opt/x11; needs make ports). `make x11-census` runs the X
+# programs against the host's Xvfb (xvfb, xdotool) and takes their census.
+# Neither is in make test.
+x11: | $(BUILD)
+	scripts/x11.sh $(BUILD)/x11-root
+x11-census: $(BUILD)/busybox
+	tests/regression/x11-linux.sh $(BUILD) census
 
 # Qt (W15-S01): `make qt` fetches qtbase 6.12.0 and the DejaVu fonts once
 # (scripts/qt.sh, sha256-pinned, ~/.cache/burrow-qt), builds Qt for the host

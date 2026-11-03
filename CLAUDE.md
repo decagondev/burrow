@@ -38,6 +38,8 @@ make ports-smoke  # threads (musl pthreads) and gohello (a Go user program) on g
 make ports        # download (once, pinned, ~/.cache/burrow-ports) Lua, TinyCC, a musl C++ toolchain; build build/ports-root
 make ports-dl-smoke # Lua, cxxtest, tcc on go-ports.img (part of make test; skips without make ports)
 make busybox      # download (once, sha256-pinned, ~/.cache/burrow-busybox) and build build/busybox
+make x11          # download (once, pinned, ~/.cache/burrow-x11) the X libraries, TinyX, dwm, st, dmenu; build static into build/x11-root (needs make ports)
+make x11-census   # the X programs against the host's Xvfb (xhello, st, dmenu, dwm) + their syscall census vs tests/regression/census-x11.txt
 make qt           # download (once, pinned, ~/.cache/burrow-qt) qtbase 6.12.0 + DejaVu; build host Qt, static musl Qt, user/qt into build/qt-root (long; needs make ports)
 make qt-census    # Qt programs under strace on the host vs tests/regression/census-qt.txt (kernel/proc TestCensusQt checks each call is served)
 make qt-bench     # qtbench via stopwatch vs the budgets in tests/smoke/qt-budgets.py (first frame, repaint, memory, idle wakes; not in make test)
