@@ -45,7 +45,7 @@ func TestKeyboardTypesIntoInput(t *testing.T) {
 	env := &driver.Env{
 		Ports: f, Input: input, Log: klog.New(io.Discard, klog.Info),
 		IRQ: func(line int) hal.IRQLine {
-			if line != IRQ {
+			if line != IRQ && line != MouseIRQ {
 				t.Errorf("asked for irq %d", line)
 			}
 			return q

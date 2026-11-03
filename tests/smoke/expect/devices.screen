@@ -16,3 +16,9 @@ pixel build/screen-devices-fb0.ppm 1 700 #ffffff
 size  build/screen-devices-after.ppm 1024 768
 pixel build/screen-devices-after.ppm 0 2 #007d9c
 pixel build/screen-devices-after.ppm 1022 700 #1e1e28
+# mousetest (W14-S02): the 9x9 white cursor moved from (512,384) to (612,434).
+size  build/screen-devices-mouse.ppm 1024 768
+pixel build/screen-devices-mouse.ppm 612 434 #ffffff
+pixel build/screen-devices-mouse.ppm 616 438 #ffffff
+pixel build/screen-devices-mouse.ppm 512 384 #000000
+pixel build/screen-devices-mouse.ppm 618 434 #000000

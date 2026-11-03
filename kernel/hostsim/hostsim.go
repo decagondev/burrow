@@ -47,7 +47,7 @@ func New() *Machine {
 		input:  make(chan byte, 256),
 		closed: make(chan struct{}),
 	}
-	for _, line := range []int{ps2.IRQ, uart.COM1IRQ} {
+	for _, line := range []int{ps2.IRQ, ps2.MouseIRQ, uart.COM1IRQ} {
 		m.irqs[line] = haltest.NewFakeIRQ()
 	}
 	com1 := uart.New(m, uart.COM1)

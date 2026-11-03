@@ -1,7 +1,9 @@
-// Package ps2 drives the 8042 PS/2 controller and the keyboard on its first
-// port (E06.F03). Bring-up is polled; afterwards every IRQ 1 wakes the
-// driver goroutine (driver.Serve), which drains the controller through
-// Decoder into the console's input channel. Mouse (port 2, IRQ 12): later.
+// Package ps2 drives the 8042 PS/2 controller, the keyboard on its first
+// port (E06.F03) and the mouse on its second (W14-S02, mouse.go). Bring-up
+// is polled; afterwards IRQ 1 and IRQ 12 each wake a driver goroutine
+// (driver.Serve), and either one drains the controller, sending each byte
+// by the status register's aux bit: keyboard bytes through Decoder into the
+// console's input channel, mouse bytes through MouseDecoder to Env.Mouse.
 //
 // Reference: the OSDev wiki "8042 PS/2 Controller" and "PS/2 Keyboard".
 package ps2
@@ -9,6 +11,7 @@ package ps2
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"burrow/kernel/driver"
 	"burrow/kernel/hal"
@@ -141,17 +144,14 @@ func (c *Controller) setConfig(cfg byte) error {
 	return c.write(portData, cfg)
 }
 
-// Drain reads every waiting keyboard byte (mouse bytes are dropped).
-func (c *Controller) Drain(each func(byte)) {
+// Drain reads every waiting byte; aux says it came from the mouse.
+func (c *Controller) Drain(each func(b byte, aux bool)) {
 	for i := 0; i < flushLimit; i++ {
 		st := c.io.In8(portStatus)
 		if st&stOutputFull == 0 {
 			return
 		}
-		b := c.io.In8(portData)
-		if st&stAux == 0 {
-			each(b)
-		}
+		each(c.io.In8(portData), st&stAux != 0)
 	}
 }
 
@@ -173,18 +173,43 @@ func (*keyboard) Start(env *driver.Env) error {
 	if err := c.Init(); err != nil {
 		return err
 	}
-	var dec Decoder
-	driver.Serve(env.IRQ(IRQ), func() {
-		c.Drain(func(sc byte) {
-			grabbed := env.Scancodes != nil && env.Scancodes(sc)
-			typed := dec.Feed(sc) // always, so modifiers stay right across a grab
-			for _, b := range typed {
+	var mouse MouseDecoder
+	wheel, mouseErr := c.InitMouse()
+	mouse.Wheel = wheel
+	var (
+		mu  sync.Mutex // both IRQ goroutines drain the one data port
+		dec Decoder
+	)
+	drain := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		c.Drain(func(b byte, aux bool) {
+			if aux {
+				if dx, dy, w, btn, ok := mouse.Feed(b); ok && env.Mouse != nil {
+					env.Mouse(dx, dy, w, btn)
+				}
+				return
+			}
+			grabbed := env.Scancodes != nil && env.Scancodes(b)
+			typed := dec.Feed(b) // always, so modifiers stay right across a grab
+			for _, ch := range typed {
 				if env.Input != nil && !grabbed {
-					env.Input <- b
+					env.Input <- ch
 				}
 			}
 		})
-	})
+	}
+	driver.Serve(env.IRQ(IRQ), drain)
 	env.Log.Infof("keyboard ready on irq %d (scancode set 1 via translation)", IRQ)
+	if mouseErr != nil {
+		env.Log.Warnf("no mouse: %v", mouseErr)
+		return nil
+	}
+	driver.Serve(env.IRQ(MouseIRQ), drain)
+	packets := "3-byte packets"
+	if wheel {
+		packets = "a wheel, 4-byte packets"
+	}
+	env.Log.Infof("mouse ready on irq %d (%s)", MouseIRQ, packets)
 	return nil
 }

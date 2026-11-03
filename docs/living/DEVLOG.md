@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W14-S02 a PS/2 mouse
+
+**Did:** the 8042's second port: the mouse comes up with the IntelliMouse handshake (a wheel, 4-byte packets) on IRQ 12, and its packets become `/dev/input/event1` (Linux input events) and `/dev/input/mice` (mousedev's PS/2 stream). Both event devices answer `EVIOCGBIT`, so a program can tell the keyboard from the mouse the way Qt and X servers do. `mousetest` draws a cursor that follows QEMU's `mouse_move`, and the devices smoke test finds it on screen at the right spot.
+
+**Surprise:** none worth a BUG: every piece worked on its first QEMU boot, after the host tests (a fake IntelliMouse on the fake 8042) had caught the sign conventions. PS/2 y grows upward, Linux's `REL_Y` grows downward, and the wheel byte is negative for up: three places for a sign to go wrong, each pinned by a test.
+
+**Next:** W14-S03, `select` and the small calls start-up code makes.
+
 ## 2026-11-03 — W14-S01 more memory, and BUG-0014
 
 **Did:** Go images boot with 512 MiB (`GO_MEM`); `make mem-smoke` touches 1.5 GiB on a 2 GiB guest. The physmap no longer maps the PCI hole as RAM on guests over 3 GiB, and a process that runs out of memory is killed (`SIGKILL`, logged) instead of panicking the nucleus, which now keeps 32 MiB for the kernel.

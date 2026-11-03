@@ -19,5 +19,18 @@ key up
 type q
 wait evtest: done
 wait burrow> 
+# mousetest (W14-S02): the cursor starts in the middle, moves right 100 and
+# down 50, a left click reports where, the screen is dumped, a right click ends
+type run /bin/mousetest
+key ret
+wait mousetest: reading
+mouse 100 50
+sleep 0.5
+click left
+wait mousetest: left down
+screendump build/screen-devices-mouse.ppm
+click right
+wait mousetest: done
+wait burrow> 
 type poweroff
 key ret

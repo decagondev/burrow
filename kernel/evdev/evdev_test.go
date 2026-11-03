@@ -132,7 +132,7 @@ func TestIoctls(t *testing.T) {
 	h := open(t, New(clock))
 	var got []byte
 	out := func(_ uint64, b []byte) error { got = append([]byte(nil), b...); return nil }
-	if n, err := h.Ioctl(0x80004506|32<<16, 0, nil, out); err != nil || string(got[:n-1]) != name {
+	if n, err := h.Ioctl(0x80004506|32<<16, 0, nil, out); err != nil || string(got[:n-1]) != keyboardName {
 		t.Errorf("EVIOCGNAME(32) = %d %q %v", n, got, err)
 	}
 	if n, _ := h.Ioctl(0x80004506|4<<16, 0, nil, out); n != 4 || string(got) != "Burr" {

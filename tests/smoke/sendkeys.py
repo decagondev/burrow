@@ -13,6 +13,8 @@ The keys file is a small script, one step per line ('#' comments):
     waitpixel <x> <y> <#rrggbb>
                    dump the screen until pixel (x, y) has that colour: for a
                    guest that shows progress only on screen, without a race
+    mouse <dx> <dy> move the PS/2 mouse (screen directions: dy > 0 is down)
+    click <button>  press and release left, right or middle
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -22,6 +24,7 @@ import sys
 import time
 
 KEY_DELAY_S = 0.02            # between keys: the guest drains the 8042 per IRQ
+BUTTONS = {'left': 1, 'right': 2, 'middle': 4}   # QEMU's mouse_button mask
 NAMES = {' ': 'spc', '-': 'minus', '.': 'dot', '/': 'slash', ',': 'comma',
          '=': 'equal', ';': 'semicolon', "'": 'apostrophe',
          '|': 'shift-backslash', '>': 'shift-dot', '<': 'shift-comma', '$': 'shift-4',
@@ -126,6 +129,14 @@ def main():
                     press(key_name(ch))
             elif op == 'key':
                 press(arg)
+            elif op == 'mouse':
+                dx, dy = arg.split()
+                s.sendall(f'mouse_move {int(dx)} {int(dy)}\n'.encode())
+                time.sleep(KEY_DELAY_S)
+            elif op == 'click':
+                for state in (BUTTONS[arg], 0):
+                    s.sendall(f'mouse_button {state}\n'.encode())
+                    time.sleep(0.1)
             elif op == 'sleep':
                 time.sleep(float(arg))
             elif op == 'screendump':

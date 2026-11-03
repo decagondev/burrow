@@ -7,7 +7,7 @@ BURROW:NUCLEUS:OK
 [kernel] INFO: hello from Go
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 23 files, 3 directories
+[initrd] INFO: tarfs: 24 files, 3 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -22,6 +22,7 @@ BURROW:GO:SELFTEST:OK
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
 [ps2] INFO: keyboard ready on irq 1
+[ps2] INFO: mouse ready on irq 12
 [serial] INFO: receive interrupts on irq 4
 [driver] INFO: started: [ata bga pci ps2 serial]
 [block] INFO: hda sector 1: boot manifest "BRWMNFST" found

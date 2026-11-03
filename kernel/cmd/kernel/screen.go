@@ -102,10 +102,15 @@ func registerFB0(dev *devfs.FS, s *screenOut) error {
 	return dev.Register("fb0", fbdev.New(mode, s.hold), 0o660)
 }
 
-// registerEvent0 makes the keyboard /dev/input/event0 and returns the hook
-// the PS/2 driver feeds raw scancodes to (driver.Env.Scancodes).
-func registerEvent0(dev *devfs.FS, boot time.Time) func(byte) bool {
-	ev := evdev.New(func() time.Duration { return time.Since(boot) })
-	dev.Register("input/event0", ev, 0o660)
-	return ev.Feed
+// registerInput makes the input devices, /dev/input/event0 (the keyboard),
+// event1 (the mouse) and mice (W14-S02), and returns the hooks the PS/2
+// driver feeds (driver.Env.Scancodes and Mouse).
+func registerInput(dev *devfs.FS, boot time.Time) (func(byte) bool, func(dx, dy, wheel int, buttons uint8)) {
+	clock := func() time.Duration { return time.Since(boot) }
+	kbd, mice := evdev.New(clock), evdev.NewMice()
+	mouse := evdev.NewMouse(clock, mice)
+	dev.Register("input/event0", kbd, 0o660)
+	dev.Register("input/event1", mouse, 0o660)
+	dev.Register("input/mice", mice, 0o660)
+	return kbd.Feed, mouse.Feed
 }

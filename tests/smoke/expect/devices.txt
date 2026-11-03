@@ -16,4 +16,10 @@ evtest: key 103 up
 evtest: key 16 down
 evtest: key 16 up
 evtest: done
+burrow> run /bin/mousetest
+mousetest: event0 keyboard, event1 mouse ("Burrow PS/2 mouse")
+mousetest: reading, right click ends
+mousetest: left down at 612,434
+mousetest: saw packets on /dev/input/mice
+mousetest: done at 612,434
 burrow> poweroff

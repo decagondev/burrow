@@ -83,6 +83,7 @@ func main() {
 
 	input := make(chan byte, 256)
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
+	scancodes, mouse := registerInput(dev, k.boot)
 	driver.StartAll(&driver.Env{
 		Ports:     amd64.Ports{},
 		Ports16:   amd64.Ports{},
@@ -91,7 +92,8 @@ func main() {
 		Log:       log,
 		Input:     input,
 		Dev:       dev,
-		Scancodes: registerEvent0(dev, k.boot),
+		Scancodes: scancodes,
+		Mouse:     mouse,
 		MapMMIO:   amd64.MapMMIO,
 	})
 	checkBootDisk(log.With("block"))

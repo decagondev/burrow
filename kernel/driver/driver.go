@@ -29,7 +29,10 @@ type Env struct {
 	// Scancodes, if set, sees every raw keyboard byte first (/dev/input/event0,
 	// W11); grabbed means a program holds the keyboard, so nothing goes to Input.
 	Scancodes func(sc byte) (grabbed bool)
-	Dev       *devfs.FS // where a driver registers its device files (/dev)
+	// Mouse, if set, gets every mouse packet in screen directions (dy > 0
+	// down, wheel > 0 up; buttons: bit 0 left, 1 right, 2 middle; W14-S02).
+	Mouse func(dx, dy, wheel int, buttons uint8)
+	Dev   *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
 }

@@ -1,11 +1,13 @@
-// Package evdev is /dev/input/event0 (W11-S02, E10.F02): the keyboard as
-// Linux input events. It takes raw scancode set 1 bytes from the PS/2
-// driver, turns them into Linux key codes, and gives every open file its
-// own queue of struct input_event (EV_KEY press 1 / release 0 / repeat 2,
-// each followed by EV_SYN). While any file has it open the keyboard is
-// grabbed: Feed reports that, and the driver then keeps the keys from the
-// text console. Never blocks the driver: a full queue drops events.
-// Layouts: <linux/input.h>. Docs: docs/04-plan/waves/WAVE-11-doom.md.
+// Package evdev is Linux's input devices: /dev/input/event0, the keyboard
+// (W11-S02, E10.F02), /dev/input/event1, the mouse, and /dev/input/mice,
+// the mouse as a PS/2 byte stream (W14-S02, E14.F02). Every open file has
+// its own queue of struct input_event (EV_KEY press 1 / release 0 / repeat
+// 2, EV_REL motion, each batch followed by EV_SYN), and the identifying
+// ioctls (EVIOCGBIT and friends) tell a keyboard from a mouse the way
+// toolkits ask. While any file has the keyboard open it is grabbed: Feed
+// reports that, and the driver then keeps the keys from the text console.
+// Never blocks the driver: a full queue drops events.
+// Layouts: <linux/input.h>. Docs: docs/04-plan/waves/WAVE-14-desktop-groundwork.md.
 package evdev
 
 import (
@@ -22,6 +24,7 @@ const (
 
 	EvSyn     = 0
 	EvKey     = 1
+	EvRel     = 2
 	SynReport = 0
 
 	queueEvents = 256 // per open file; Linux's evdev buffer is of this order
@@ -53,19 +56,75 @@ func KeyCode(e0 bool, code byte) uint16 {
 	return uint16(code)
 }
 
-// Device is the keyboard's event device.
-type Device struct {
-	clock func() time.Duration // event timestamps
+// identity is what the identifying ioctls report about a device.
+type identity struct {
+	name, phys string
+	product    uint16
+	keys, rels []uint16 // the EV_KEY and EV_REL codes it can send
+}
 
+// core is what the event devices share: the files that have one open and
+// the keys (or buttons) held down. mu guards both.
+type core struct {
+	id    identity
+	clock func() time.Duration
 	mu    sync.Mutex
-	e0    bool
 	down  map[uint16]bool
 	opens map[*handle]bool
 }
 
-// New makes the device; clock gives the time stamped on events.
+func newCore(id identity, clock func() time.Duration) core {
+	return core{id: id, clock: clock, down: map[uint16]bool{}, opens: map[*handle]bool{}}
+}
+
+// send queues a batch of events for every open file (c.mu held).
+func (c *core) send(ev []byte) {
+	for h := range c.opens {
+		h.push(ev)
+	}
+}
+
+// Open gives each open file its own queue (devfs.Opener).
+func (c *core) Open() (devfs.Device, error) {
+	h := &handle{d: c, changed: make(chan struct{})}
+	c.mu.Lock()
+	c.opens[h] = true
+	c.mu.Unlock()
+	return h, nil
+}
+
+// The registered device itself (never opened through devfs) has no events.
+func (c *core) Read([]byte) (int, error)  { return 0, syscall.EAGAIN }
+func (c *core) Write([]byte) (int, error) { return 0, syscall.EINVAL }
+
+func event(t time.Duration, typ, code uint16, value int32) []byte {
+	b := make([]byte, EventSize)
+	le := binary.LittleEndian
+	le.PutUint64(b[0:], uint64(t/time.Second))
+	le.PutUint64(b[8:], uint64(t%time.Second/time.Microsecond))
+	le.PutUint16(b[16:], typ)
+	le.PutUint16(b[18:], code)
+	le.PutUint32(b[20:], uint32(value))
+	return b
+}
+
+// Device is the keyboard's event device.
+type Device struct {
+	core
+	e0 bool
+}
+
+// New makes the keyboard; clock gives the time stamped on events.
 func New(clock func() time.Duration) *Device {
-	return &Device{clock: clock, down: map[uint16]bool{}, opens: map[*handle]bool{}}
+	keys := make([]uint16, 0, maxPlain+len(extended))
+	for c := uint16(1); c <= maxPlain; c++ {
+		keys = append(keys, c)
+	}
+	for _, c := range extended {
+		keys = append(keys, c)
+	}
+	id := identity{name: keyboardName, phys: "isa0060/serio0/input0", product: 1, keys: keys}
+	return &Device{core: newCore(id, clock)}
 }
 
 // Feed takes one scancode byte from the keyboard and queues the event it
@@ -96,36 +155,9 @@ func (d *Device) Feed(sc byte) (grabbed bool) {
 		d.down[code] = true
 	}
 	t := d.clock()
-	ev := append(event(t, EvKey, code, value), event(t, EvSyn, SynReport, 0)...)
-	for h := range d.opens {
-		h.push(ev)
-	}
+	d.send(append(event(t, EvKey, code, value), event(t, EvSyn, SynReport, 0)...))
 	return grabbed
 }
 
 // Grabbed reports whether a program holds the device.
 func (d *Device) Grabbed() bool { d.mu.Lock(); defer d.mu.Unlock(); return len(d.opens) > 0 }
-
-func event(t time.Duration, typ, code uint16, value int32) []byte {
-	b := make([]byte, EventSize)
-	le := binary.LittleEndian
-	le.PutUint64(b[0:], uint64(t/time.Second))
-	le.PutUint64(b[8:], uint64(t%time.Second/time.Microsecond))
-	le.PutUint16(b[16:], typ)
-	le.PutUint16(b[18:], code)
-	le.PutUint32(b[20:], uint32(value))
-	return b
-}
-
-// Open gives each open file its own queue (devfs.Opener).
-func (d *Device) Open() (devfs.Device, error) {
-	h := &handle{d: d, changed: make(chan struct{})}
-	d.mu.Lock()
-	d.opens[h] = true
-	d.mu.Unlock()
-	return h, nil
-}
-
-// The registered device itself (never opened through devfs) has no events.
-func (d *Device) Read([]byte) (int, error)  { return 0, syscall.EAGAIN }
-func (d *Device) Write([]byte) (int, error) { return 0, syscall.EINVAL }
