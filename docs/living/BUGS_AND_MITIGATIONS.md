@@ -35,6 +35,15 @@ flowchart LR
 
 ## Closed
 
+### BUG-0013: The Doom smoke test dumped the screen during Doom's screen melt
+- Found: 2026-11-03, W11-S05: `make doom-smoke` failed 2 runs in the first 3 and was put down to a one-off; seen again in W13-S03 (2 failures in 3).
+- Severity: minor (the test, not the kernel: Doom ran correctly every time).
+- Symptom: `doom.screen` pixels on the title or the status bar were darker or wrong (`#141414` for `#1c1c1c`, `#740101` for `#8b8b8b`); the dumped picture showed the title or E1M1 half drawn in columns.
+- Root cause: Doom's wipe ("melt") drops the new screen in columns at random speeds. `doom.keys` dumped the screen after a fixed `sleep 4`; when the level's first frames were slow (QEMU TCG, a busy host), the melt was not finished.
+- Fix: `sendkeys.py` gains `waitpixel <x> <y> <#rrggbb>`: dump the screen until that pixel shows the colour. `doom.keys` waits for the pixels nearest the bottom of each screen, the last ones the melt reveals, before the real dump.
+- Regression: `make doom-smoke` 6/6 after the fix (3/6 before it, with a one-pixel wait).
+- Lesson: a guest that shows progress only on screen needs a screen condition to wait for, not a time; and two unexplained failures out of three are a bug, not bad luck.
+
 ### BUG-0012: Eager commit let the Go runtime's sparse mappings exhaust RAM (GC stress OOM)
 - Found: 2026-11-02, W9-S05: `make go-smoke` failed about 1 boot in 3 with `fatal error: runtime: out of memory` in the GC stress, before any user program ran.
 - Severity: major (the Go kernel dies; it had been one heap-size wobble from failing since W6).

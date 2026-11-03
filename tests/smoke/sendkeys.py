@@ -10,6 +10,9 @@ The keys file is a small script, one step per line ('#' comments):
     key <name>     press one QEMU key name (ret, backspace, ctrl-u, ...)
     screendump <f> save the screen as a PPM (checked by checkscreen.py)
     sleep <s>      pause (for a guest that shows progress only on screen)
+    waitpixel <x> <y> <#rrggbb>
+                   dump the screen until pixel (x, y) has that colour: for a
+                   guest that shows progress only on screen, without a race
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -76,10 +79,34 @@ def wait_for_file(path, deadline):
     raise SystemExit(f'sendkeys: QEMU never wrote {path}')
 
 
+def pixel(path, x, y):
+    """The colour of (x, y) in a binary PPM, as '#rrggbb'."""
+    with open(path, 'rb') as f:
+        data = f.read()
+    fields, pos = [], 0
+    while len(fields) < 4:  # P6, width, height, maxval
+        while data[pos:pos + 1].isspace():
+            pos += 1
+        end = pos
+        while not data[end:end + 1].isspace():
+            end += 1
+        fields.append(data[pos:end])
+        pos = end
+    width = int(fields[1])
+    o = pos + 1 + (y * width + x) * 3
+    return '#%02x%02x%02x' % tuple(data[o:o + 3])
+
+
 def main():
     mon, log, keys = sys.argv[1:4]
     deadline = time.time() + float(sys.argv[4] if len(sys.argv) > 4 else 30)
     s = connect(mon, deadline)
+
+    def dump(path):
+        if os.path.exists(path):
+            os.remove(path)
+        s.sendall(f'screendump {path}\n'.encode())
+        wait_for_file(path, deadline)
 
     def press(name):
         s.sendall(f'sendkey {name}\n'.encode())
@@ -102,11 +129,17 @@ def main():
             elif op == 'sleep':
                 time.sleep(float(arg))
             elif op == 'screendump':
-                path = os.path.abspath(arg)
-                if os.path.exists(path):
-                    os.remove(path)
-                s.sendall(f'screendump {path}\n'.encode())
-                wait_for_file(path, deadline)
+                dump(os.path.abspath(arg))
+            elif op == 'waitpixel':
+                x, y, want = arg.split()
+                probe = os.path.abspath(log + '.probe.ppm')
+                while True:
+                    dump(probe)
+                    if pixel(probe, int(x), int(y)) == want.lower():
+                        break
+                    if time.time() > deadline:
+                        raise SystemExit(f'sendkeys: pixel ({x},{y}) never became {want}')
+                    time.sleep(0.2)
             else:
                 raise SystemExit(f'sendkeys: unknown step {line!r}')
     s.close()
