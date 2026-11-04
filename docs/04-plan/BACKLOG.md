@@ -154,8 +154,13 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - Later: DHCP · virtio-net · a browser (NetSurf, framebuffer or X) · ssh (dropbear) · TLS for C programs (mbedTLS).
 
 ## E18 Foundations for bigger programs
-*Exit: big programs start fast, share memory, and share code.* [later]
-- Copy-on-write fork · writable shared memory (`MAP_SHARED` of files and anonymous memory, `memfd_create`, SysV shm for MIT-SHM) · dynamic linking (`PT_INTERP`, musl's loader, shared Qt and X libraries) · a Unix file system with permissions and symbolic links (ext2) · lazy `execve` through file mappings (W15-S05) · sound (SB16 or AC'97, OSS `/dev/dsp`) · an absolute pointer (USB tablet or virtio-input: no mouse grab, PIT-32).
+*Exit: big programs start fast, share memory, and share code.* [W18]
+
+- [ ] E18.F01 As a user, I want fork to share memory until a write (copy-on-write), so that forking a big program is cheap. [W18]
+- [ ] E18.F02 As a user, I want `execve` to read a program's pages as they are touched, so that big programs start fast. [W18]
+- [ ] E18.F03 As a porter, I want shared memory (`MAP_SHARED`, `/dev/shm`, `memfd_create`, SysV `shm*`), so that programs and the X server share buffers. [W18]
+- [ ] E18.F04 As a porter, I want dynamic linking (`PT_INTERP`, musl's loader, `dlopen`), so that programs share code and load plugins. [W18]
+- Later: a Unix file system with permissions and symbolic links (ext2) · shared Qt and X libraries · sound (SB16 or AC'97, OSS `/dev/dsp`) · an absolute pointer (USB tablet or virtio-input: no mouse grab, PIT-32).
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [later]
