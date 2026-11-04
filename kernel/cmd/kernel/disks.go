@@ -61,7 +61,7 @@ var dataDisks = map[string]struct{ point, env string }{
 
 // mountData mounts every data disk (hdb, and since W15-S06 the secondary
 // channel's hdc and hdd) that holds FAT32 (W8-S07), read-write when the
-// disk can be written (W13-S04), or ext2 (W19-S01, read-only so far), at
+// disk can be written (W13-S04), or ext2 (W19-S01; read-write since S02), at
 // the place its label names: /home for the home disk (W13-S05), /opt/qt for
 // the Qt disk (W15-S02), /mnt for the first other one, and /opt/x11 for the
 // X disk (W16-S02).
@@ -84,11 +84,21 @@ type volume struct {
 func openVolume(d block.Device) (volume, error) {
 	r := block.ReaderAt(d)
 	if ext2.Probe(r) {
-		e, err := ext2.Mount(r)
+		var e *ext2.FS
+		var err error
+		if w, isW := d.(block.Writer); isW {
+			e, err = ext2.MountRW(fatDisk{r, block.WriterAt(w), w})
+		} else {
+			e, err = ext2.Mount(r)
+		}
 		if err != nil {
 			return volume{}, err
 		}
-		return volume{fsys: e, label: e.Label, mode: "read-only", kind: "ext2", shown: "ext2"}, nil
+		mode := "read-only"
+		if e.Writable() {
+			mode = "read-write"
+		}
+		return volume{fsys: e, label: e.Label, mode: mode, kind: "ext2", shown: "ext2"}, nil
 	}
 	var fsys *fat.FS
 	var err error
@@ -152,7 +162,8 @@ func readEnv(fsys fs.FS, name string) []string {
 	return env
 }
 
-// fatDisk is a block.Writer as the fat.Disk a writable mount needs.
+// fatDisk is a block.Writer as the Disk a writable mount needs (fat.Disk,
+// and ext2.Disk since W19-S02).
 type fatDisk struct {
 	io.ReaderAt
 	io.WriterAt

@@ -4,8 +4,9 @@
 // io/fs.FS and an fs.ReadLinkFS; fs.FileInfo.Sys() is a vfs.Attr. Revision
 // 0 and 1 volumes without a journal or extents; an unknown incompatible
 // feature is refused, an unknown read-only-compatible one is reported in
-// ReadOnlyFeatures. Read-only in S01; it never writes to the disk. Never
-// decides permissions: it reports owners, kernel/proc checks them.
+// ReadOnlyFeatures and keeps it read-only. Mounted with MountRW it writes
+// (W19-S02, write.go); Mount never writes. Never decides permissions: it
+// reports owners, kernel/proc checks them.
 // Docs: docs/03-decisions/ADR-0010-ext2.md, WAVE-19-unix.md.
 package ext2
 
@@ -14,18 +15,29 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"sync"
 	"syscall"
+	"time"
 )
 
-// FS is a mounted ext2 volume. It holds only the geometry; inodes,
+// FS is a mounted ext2 volume. It keeps the geometry, and for writing the
+// superblock, the group descriptors and the bitmaps it has read; inodes,
 // directories and data are read from the disk when asked for. Safe for
-// concurrent use (nothing it keeps changes).
+// concurrent use: writes are serialized, lookups share a lock.
 type FS struct {
 	r       io.ReaderAt
 	sb      super
 	tables  []int64 // byte offset of each group's inode table
 	hasType bool    // directory entries carry the file's type
 	Label   string
+
+	mu      sync.RWMutex
+	disk    Disk              // nil: read-only
+	super   []byte            // the superblock as read; its free counts kept current
+	gdt     []byte            // the group descriptors as read, kept current
+	bitmaps map[uint32][]byte // bitmap blocks read so far, by block number
+	dirty   map[uint32]bool   // bitmap blocks changed since the last commit
+	now     func() time.Time
 	// ReadOnlyFeatures: the volume uses a feature this package could not
 	// keep consistent when writing; it must stay read-only.
 	ReadOnlyFeatures bool
@@ -53,7 +65,8 @@ func Mount(r io.ReaderAt) (*FS, error) {
 		return nil, fmt.Errorf("ext2: group descriptors: %w", err)
 	}
 	f := &FS{r: r, sb: sb, hasType: sb.incompat&incompatFiletype != 0, Label: sb.label,
-		ReadOnlyFeatures: sb.roCompat&^knownROCompat != 0}
+		ReadOnlyFeatures: sb.roCompat&^knownROCompat != 0, super: b, gdt: gdt,
+		bitmaps: map[uint32][]byte{}, dirty: map[uint32]bool{}, now: time.Now}
 	for g := range sb.groups {
 		blk := le.Uint32(gdt[g*groupDescSize+bgInodeTable:])
 		if blk == 0 || blk >= sb.blocks {
@@ -160,6 +173,8 @@ func pathErr(op, name string, err error) error {
 
 // Open implements fs.FS; it follows symbolic links.
 func (f *FS) Open(name string) (fs.File, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	in, err := f.walk(name, true)
 	if err != nil {
 		return nil, pathErr("open", name, err)
@@ -176,6 +191,8 @@ func (f *FS) Open(name string) (fs.File, error) {
 
 // Stat implements fs.StatFS; it follows symbolic links.
 func (f *FS) Stat(name string) (fs.FileInfo, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	in, err := f.walk(name, true)
 	if err != nil {
 		return nil, pathErr("stat", name, err)
@@ -185,6 +202,8 @@ func (f *FS) Stat(name string) (fs.FileInfo, error) {
 
 // Lstat implements fs.ReadLinkFS: a final symbolic link is described itself.
 func (f *FS) Lstat(name string) (fs.FileInfo, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	in, err := f.walk(name, false)
 	if err != nil {
 		return nil, pathErr("lstat", name, err)
@@ -194,6 +213,8 @@ func (f *FS) Lstat(name string) (fs.FileInfo, error) {
 
 // ReadLink implements fs.ReadLinkFS.
 func (f *FS) ReadLink(name string) (string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	in, err := f.walk(name, false)
 	if err != nil {
 		return "", pathErr("readlink", name, err)

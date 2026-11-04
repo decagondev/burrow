@@ -551,6 +551,18 @@ dev-smoke-run: $(BUILD)/go-dev.img
 		&& echo "HOME DATES PASS (a file saved on Burrow carries the RTC's date)" \
 		|| { echo "HOME DATES FAIL: hello.c is not dated 2030-01-02"; exit 1; }; \
 	else echo "HOME DATES SKIP (no mtools)"; fi
+	# W19-S02: the same two boots on an ext2 home (mke2fs -d of workbench/),
+	# then e2fsck and debugfs check what the kernel wrote.
+	rm -f $(BUILD)/home-ext2.img
+	$(MKE2FS) -q -F -t ext2 -L BURROWHOME -E root_owner=0:0 -d workbench $(BUILD)/home-ext2.img 64M
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-ext2.img,format=raw,if=ide,index=1,media=disk $(FIXED_RTC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-ext2-1.txt 120 tests/smoke/keys/dev-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-ext2.img,format=raw,if=ide,index=1,media=disk" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-ext2-2.txt 90 tests/smoke/keys/dev-2.keys
+	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/home-ext2.img >/dev/null && echo "EXT2 HOME PASS (e2fsck after two boots)"
+	@PATH="$$PATH:/usr/sbin:/sbin" debugfs -R "stat /hello.c" $(BUILD)/home-ext2.img 2>/dev/null | grep -q "mtime:.*2030" \
+		&& echo "EXT2 HOME DATES PASS (hello.c carries the RTC's date)" \
+		|| { echo "EXT2 HOME DATES FAIL: hello.c is not dated 2030"; exit 1; }
 
 # busybox sh typed into the console (W10-S08); skips until `make busybox` ran.
 # W14-S04: a fixed wall clock, so a smoke test can check the date Burrow reads from the RTC.

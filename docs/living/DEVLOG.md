@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19-S02 Writing ext2
+
+**Did:** the writer: allocation from the bitmaps, whole-file data in runs of blocks with indirect blocks in front, directory entries into gaps or new blocks, rename by Linux's rules, a commit after every operation. Seeded random sequences on ext2 and memfs agree, and `e2fsck -fn` accepts every image; the workbench smoke runs again on an ext2 home and `e2fsck` finds it clean.
+
+**Surprise:** that it agreed with memfs and e2fsck on the first run, so I broke it on purpose (group descriptors not written) to see the test bite: `e2fsck` caught it at the first seed. The only failure was the test's own volume running out of inodes.
+
+**Learned:** a checker that someone else wrote is worth more than any number of my own tests: the reader of S01 and the writer here never got to agree on a mistake.
+
+**Next:** W19-S03, users and groups: credentials on processes and the `set*id` calls.
+
 ## 2026-11-04 — W19-S01 Reading ext2
 
 **Did:** `kernel/fs/ext2`, a read-only ext2 reader in six small files, tested only on volumes e2fsprogs made: 1 and 4 KiB blocks, revision 0, holes up to the triple indirect block, hard links, fast and slow symbolic links, an htree directory, owners set by `debugfs`. `vfs.Attr` carries owners, links and inode numbers through `FileInfo.Sys()`, and `stat` reports them. The kernel tells ext2 from FAT by the superblock's magic; disk-smoke reads an ext2 volume on hdc. ADR-0010 records why ext2.

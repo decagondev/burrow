@@ -25,18 +25,24 @@ const (
 	// superblock fields
 	sInodesCount     = 0
 	sBlocksCount     = 4
+	sFreeBlocks      = 12
+	sFreeInodes      = 16
 	sFirstDataBlock  = 20
 	sLogBlockSize    = 24 // block size = 1024 << this
 	sBlocksPerGroup  = 32
 	sInodesPerGroup  = 40
+	sWtime           = 48
 	sMagic           = 56
 	sRevLevel        = 76
+	sFirstIno        = 84
 	sInodeSize       = 88
 	sFeatureIncompat = 96
 	sFeatureROCompat = 100
 	sVolumeName      = 120
 	volumeNameLen    = 16
-	maxLogBlockSize  = 6 // 64 KiB
+	sWantExtraIsize  = 0x15C
+	oldFirstIno      = 11 // revision 0's first inode for files
+	maxLogBlockSize  = 6  // 64 KiB
 
 	// features this reader understands
 	incompatFiletype    = 0x0002 // directory entries carry the file's type
@@ -47,7 +53,12 @@ const (
 
 	// group descriptors
 	groupDescSize = 32
+	bgBlockBitmap = 0
+	bgInodeBitmap = 4
 	bgInodeTable  = 8
+	bgFreeBlocks  = 12 // 16 bits, as the next two
+	bgFreeInodes  = 14
+	bgUsedDirs    = 16
 
 	// inodes
 	oldInodeSize = 128 // revision 0, and the part every revision shares
@@ -57,14 +68,19 @@ const (
 	iAtime       = 8
 	iCtime       = 12
 	iMtime       = 16
+	iDtime       = 20
 	iGID         = 24
 	iLinks       = 26
 	iBlocks      = 28 // in 512-byte units
+	iFlags       = 32
 	iBlock       = 40 // 15 block pointers
 	iFileACL     = 104
 	iSizeHigh    = 108
 	iUIDHigh     = 120
 	iGIDHigh     = 122
+	iExtraIsize  = 128    // where an inode is bigger than revision 0's
+	indexFlag    = 0x1000 // EXT2_INDEX_FL: an htree directory
+	maxNameLen   = 255
 	nPointers    = 15
 	nDirect      = 12
 	fastLinkMax  = 60 // a shorter link target lives in the pointers themselves
@@ -101,6 +117,8 @@ type super struct {
 	inodesPerGroup uint32
 	inodes         uint32
 	inodeSize      int64
+	firstIno       uint32 // the first inode not reserved
+	wantExtra      uint16 // i_extra_isize for new inodes
 	groups         uint32
 	incompat       uint32
 	roCompat       uint32
@@ -119,11 +137,12 @@ func parseSuper(b []byte) (super, error) {
 		blockSize: 1024 << logBS, blocks: le.Uint32(b[sBlocksCount:]),
 		firstDataBlock: le.Uint32(b[sFirstDataBlock:]), blocksPerGroup: le.Uint32(b[sBlocksPerGroup:]),
 		inodesPerGroup: le.Uint32(b[sInodesPerGroup:]), inodes: le.Uint32(b[sInodesCount:]),
-		inodeSize: oldInodeSize,
-		label:     strings.TrimRight(string(b[sVolumeName:sVolumeName+volumeNameLen]), "\x00"),
+		inodeSize: oldInodeSize, firstIno: oldFirstIno,
+		label: strings.TrimRight(string(b[sVolumeName:sVolumeName+volumeNameLen]), "\x00"),
 	}
 	if le.Uint32(b[sRevLevel:]) >= 1 {
 		s.inodeSize = int64(le.Uint16(b[sInodeSize:]))
+		s.firstIno, s.wantExtra = le.Uint32(b[sFirstIno:]), le.Uint16(b[sWantExtraIsize:])
 		s.incompat, s.roCompat = le.Uint32(b[sFeatureIncompat:]), le.Uint32(b[sFeatureROCompat:])
 	}
 	if s.incompat&^knownIncompat != 0 {

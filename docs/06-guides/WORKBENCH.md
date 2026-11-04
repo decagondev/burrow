@@ -38,6 +38,7 @@ poweroff                 end the session; /home is already on the disk
 - **Compile with `tcc -static`:** Burrow has no dynamic loader. `tcc -run` is not available (it needs a dynamic `tcc`).
 - **Typing.** The screen console is a VT100 subset (enough for `vi` and the shell); the terminal you started QEMU from shows the same session on the serial line, and you can type in either.
 - **Outside Burrow,** the home disk is an ordinary FAT32 image: `mtype -i burrow-home.img ::/hello.c` reads a file, `mcopy -i burrow-home.img file.c ::/` puts one in (with QEMU stopped), and `fsck.fat -n burrow-home.img` checks it.
+- **An ext2 home (W19-S02).** A home disk may be ext2 instead: any volume labelled `BURROWHOME` mounts at `/home`, read-write. Make one from a directory with `mke2fs -t ext2 -L BURROWHOME -d workbench burrow-home.img 64M` (delete the FAT image first); `debugfs -R "cat /hello.c" burrow-home.img` reads a file and `e2fsck -fn burrow-home.img` checks it. ext2 keeps owners, modes and links, which W19 puts to use.
 
 ## Qt: qtpad (W15)
 

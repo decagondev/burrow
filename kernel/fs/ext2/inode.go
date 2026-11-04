@@ -25,7 +25,8 @@ type inode struct {
 	ptr          [nPointers]uint32
 	raw          [nPointers * 4]byte // the pointers as stored: a fast link's target
 	atime, ctime uint32
-	mtime        uint32
+	mtime, dtime uint32
+	flags        uint32
 }
 
 func (in *inode) isDir() bool  { return in.mode&modeType == modeDir }
@@ -37,9 +38,8 @@ func (f *FS) inode(ino uint32) (*inode, error) {
 	if ino == 0 || ino > f.sb.inodes {
 		return nil, fmt.Errorf("inode %d out of range", ino)
 	}
-	g, idx := (ino-1)/f.sb.inodesPerGroup, (ino-1)%f.sb.inodesPerGroup
 	b := make([]byte, oldInodeSize)
-	if _, err := f.r.ReadAt(b, f.tables[g]+int64(idx)*f.sb.inodeSize); err != nil {
+	if _, err := f.r.ReadAt(b, f.inodeOffset(ino)); err != nil {
 		return nil, fmt.Errorf("inode %d: %w", ino, err)
 	}
 	in := &inode{
@@ -49,6 +49,7 @@ func (f *FS) inode(ino uint32) (*inode, error) {
 		size: int64(le.Uint32(b[iSize:])), links: le.Uint16(b[iLinks:]),
 		blocks512: le.Uint32(b[iBlocks:]), fileACL: le.Uint32(b[iFileACL:]),
 		atime: le.Uint32(b[iAtime:]), ctime: le.Uint32(b[iCtime:]), mtime: le.Uint32(b[iMtime:]),
+		dtime: le.Uint32(b[iDtime:]), flags: le.Uint32(b[iFlags:]),
 	}
 	if in.isReg() && f.sb.roCompat&roCompatLargeFile != 0 { // directories keep i_dir_acl there
 		in.size |= int64(le.Uint32(b[iSizeHigh:])) << 32
@@ -63,14 +64,25 @@ func (f *FS) inode(ino uint32) (*inode, error) {
 	return in, nil
 }
 
-// linkTarget reads a symbolic link's target. A fast link (shorter than the
-// pointers and with no data block) is the pointers' bytes.
-func (f *FS) linkTarget(in *inode) (string, error) {
+// inodeOffset is where inode ino lives on the disk.
+func (f *FS) inodeOffset(ino uint32) int64 {
+	g, idx := (ino-1)/f.sb.inodesPerGroup, (ino-1)%f.sb.inodesPerGroup
+	return f.tables[g] + int64(idx)*f.sb.inodeSize
+}
+
+// fastLink says whether in is a symbolic link kept in its pointers.
+func (f *FS) fastLink(in *inode) bool {
 	data := in.blocks512
 	if in.fileACL != 0 {
 		data -= uint32(f.sb.blockSize / 512)
 	}
-	if in.size < fastLinkMax && data == 0 {
+	return in.isLink() && in.size < fastLinkMax && data == 0
+}
+
+// linkTarget reads a symbolic link's target. A fast link (shorter than the
+// pointers and with no data block) is the pointers' bytes.
+func (f *FS) linkTarget(in *inode) (string, error) {
+	if f.fastLink(in) {
 		return string(in.raw[:in.size]), nil
 	}
 	if in.size > f.sb.blockSize {

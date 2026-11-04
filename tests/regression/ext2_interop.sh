@@ -4,7 +4,9 @@
 # with debugfs, index a directory with e2fsck -D, and check each volume with
 # e2fsck -fn; here they run with BURROW_EXT2_REQUIRED set, so a missing tool
 # fails instead of skipping. Skips without e2fsprogs (CI has it).
-# S02 adds the writer's half: what the kernel wrote, e2fsck accepts.
+# Since S02 they also write: seeded random operations on ext2 and memfs side
+# by side, the trees compared, and e2fsck -fn on every image the writer
+# changed; debugfs reads back what it wrote.
 #
 # Usage: tests/regression/ext2_interop.sh
 set -euo pipefail
