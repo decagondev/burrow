@@ -35,6 +35,15 @@ flowchart LR
 
 ## Closed
 
+### BUG-0021: The gc_stress selftest's heap limit sat 12 MiB above a normal run
+- Found: 2026-11-04, W17-S01, in the full `make test`: x11-smoke's boot stopped at `[kernel] INFO: selftest FAILED: gc_stress: heap grew to 79 MiB (limit 64 MiB)`; the same image passed twice right after, at 52 MiB.
+- Severity: minor (a flaky test, not a kernel fault: the check runs before any driver, and the GC did free, the heap only peaked higher once).
+- Symptom: once in a long while, a Go image fails its boot selftest, on any image, independent of the change being tested.
+- Root cause: the check churns 1280 MiB through a 16 MiB live window and fails when `HeapSys` passes 64 MiB. With `GOGC=100` a normal run takes 47-55 MiB of heap and 52 from the OS; on Go's single P (BUG-0014) the background mark worker can be late for a cycle when the host is busy, the allocating goroutine runs ahead, and the heap grows before assists catch up. The limit was set from the runs of W6, without room for that.
+- Fix: the limit is 128 MiB (`kernel/selftest/selftest.go`): ten times below what is allocated, so a GC that does not free still fails at once, and more than twice a normal peak, so a late cycle does not.
+- Regression: `TestGCStressLimitLeavesRoom` (`kernel/selftest`) checks that the kernel's limit is at least twice the live window's normal heap and far below the bytes allocated; every Go boot runs the check itself.
+- Lesson: a threshold set from a handful of runs on an idle machine needs a margin argued from the mechanism, not from the numbers seen.
+
 ### BUG-0020: Key codes an X server never read reached the shell after it
 - Found: 2026-11-03, W16-S03, in the full `make test`: after st and Xfbdev exited, the console's shell read `exit` with a stray byte 0x9C in front (the release of Enter in `K_MEDIUMRAW`) and stayed.
 - Severity: minor (since W14-S08: whatever a program in `K_RAW` or `K_MEDIUMRAW` left unread became the console's input).

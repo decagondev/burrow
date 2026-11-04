@@ -27,12 +27,16 @@ type Config struct {
 const mib = 1 << 20
 
 // Kernel is the configuration the Go kernel runs at boot: GC stress of 10x
-// the 128 MiB QEMU machine through a 16 MiB window.
+// the 128 MiB QEMU machine through a 16 MiB window. A normal run peaks at
+// about 52 MiB from the OS (GOGC=100: twice the window, plus spans); the
+// limit leaves room for a late GC cycle on one P and is still ten times
+// below what is allocated, so a GC that never frees fails at once
+// (BUG-0021: 64 MiB failed one run in many at 79).
 func Kernel() Config {
 	return Config{
 		SleepRounds: 10, Sleep: 100 * time.Millisecond, SleepSlack: 0.10,
 		PingPongs: 100000,
-		GCTotal:   1280 * mib, GCWindow: 16 * mib, HeapLimit: 64 * mib,
+		GCTotal:   1280 * mib, GCWindow: 16 * mib, HeapLimit: 128 * mib,
 	}
 }
 
