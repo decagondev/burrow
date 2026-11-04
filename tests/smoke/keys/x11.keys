@@ -56,7 +56,7 @@ wait st says 42
 # report on /dev/tty1; xhello, started from dmenu, prints to the console.
 # Alt+Shift+Enter opens st, Alt+j moves the focus, Alt+2 and Alt+1 switch
 # tags, Alt+p is dmenu, Alt+Shift+q quits dwm.
-type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; for w in dwm st-256color '-n 2 st-256color' dmenu; do /opt/x11/bin/xfocus -w -t 200 $w & done; /opt/x11/bin/dwm; kill %1; wait; echo dwm: gone
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; X=/opt/x11/bin/xfocus; for w in dwm st-256color '-n 2 st-256color'; do $X -w -t 200 $w & done; ($X -w -t 200 dmenu && while $X -w -t 1 dmenu > /dev/null; do :; done; $X -w -t 300 dmenu) & /opt/x11/bin/dwm; kill %1; wait; echo dwm: gone
 key ret
 wait xfocus: dwm
 sleep 1
@@ -94,6 +94,38 @@ sleep 1
 type q
 wait xhello: ok
 sleep 1
+# W16-S05: Doom from dmenu (the dmenu waiter waits for the first to go,
+# then says when the second is up). Doom floats at its fixed size where the
+# fbdev Doom draws (inside dwm's 1-pixel border, so doom.keys' pixels one
+# right and one down): the title, Enter four times into E1M1, Quit Game.
+key alt-p
+wait xfocus: dmenu
+sleep 1
+type doom
+key ret
+wait doom: X window 640x400 at 192,184
+waitpixel 251 561 #ff801c
+waitpixel 832 584 #440101
+screendump build/screen-x11-doom-title.ppm
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+waitpixel 241 576 #8b8b8b
+waitpixel 781 536 #9f9f9f
+screendump build/screen-x11-doom-e1m1.ppm
+key esc
+sleep 1
+key up
+sleep 1
+key ret
+sleep 1
+type y
+sleep 3
+screendump build/screen-x11-doom-gone.ppm
 key alt-shift-q
 wait dwm: gone
 type exit

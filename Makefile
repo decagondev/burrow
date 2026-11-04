@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -336,16 +336,27 @@ x11-census: $(BUILD)/busybox
 	tests/regression/x11-linux.sh $(BUILD) census
 # The X disk (W16-S02): build/x11-root as FAT32, label X11DATA, mounted at
 # /opt/x11 (x11.env joins every program's environment). x11-smoke boots
-# go-dev.img (busybox, for the shell that starts the server) with it.
+# go-dev.img (busybox, for the shell that starts the server) with it. Doom in
+# a window (W16-S05) joins the disk once `make doom` has unpacked the engine
+# and the WAD: scripts/x11-doom.sh, /opt/x11/bin/doom, /opt/x11/share/doom.
 X11_DRIVE := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=1,media=disk
-$(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev user/x11/x11.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+X11_DOOM := $(if $(wildcard $(BUILD)/doom-root/freedoom1.wad),$(BUILD)/x11-root/bin/doom)
+$(BUILD)/x11-root/bin/doom: user/x11/doom/doomgeneric_x11.c scripts/x11-doom.sh scripts/doom-engine.sh $(BUILD)/doom-root/doom $(BUILD)/doom-root/freedoom1.wad $(BUILD)/x11-root/bin/Xfbdev
+	scripts/x11-doom.sh $(BUILD)/x11-root $(BUILD)/doom-root/freedoom1.wad
+$(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev $(X11_DOOM) user/x11/x11.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/x11/x11.env $(BUILD)/x11-root/x11.env
-	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label x11data -size 64 ../$(BUILD)/x11-root
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label x11data -size 96 ../$(BUILD)/x11-root
 x11-smoke:
-	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then \
-		$(MAKE) --no-print-directory x11-smoke-run; else echo "X11 SMOKE SKIP (make x11 busybox ports)"; fi
+	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
+		$(MAKE) --no-print-directory x11-smoke-run; else echo "X11 SMOKE SKIP (make x11 busybox ports doom)"; fi
 x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 240 tests/smoke/keys/x11.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 360 tests/smoke/keys/x11.keys
+# How fast the desktop is (W16-S05): user/x11/xbench times the server's
+# first frame, st, and Doom's timedemo in X against the fbdev one, all in
+# one boot; tests/smoke/x11-budgets.py checks the numbers. Not in make test.
+x11-bench: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11-bench.txt 400 tests/smoke/keys/x11-bench.keys
+	python3 tests/smoke/x11-budgets.py $(BUILD)/smoke-x11-bench.log
 
 # Qt (W15-S01): `make qt` fetches qtbase 6.12.0 and the DejaVu fonts once
 # (scripts/qt.sh, sha256-pinned, ~/.cache/burrow-qt), builds Qt for the host

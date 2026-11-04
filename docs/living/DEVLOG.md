@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W16-S05 Doom in a window, and the desktop timed
+
+**Did:** Doom runs in a dwm window, started from dmenu, with our own Xlib backend (no XKB) built from the same engine as the fbdev Doom; `make x11-smoke` plays the title into E1M1 and quits. `make x11-bench` times the desktop in one boot: the server's first frame 0.8 s, st 1.85 s, Doom 40 fps in X against 125 on fbdev, all inside the new budgets.
+
+**Surprise:** the host census hung all night: dmenu's keys followed a one-second sleep, and with S04's locale data dmenu starts slower under strace, so the keys came before its keyboard grab and it waited forever. On Burrow the same kind of race bit `xfocus`, killed by a `BadWindow` when a dmenu closed while it looked. Nothing in the kernel needed changing for Doom in X.
+
+**Learned:** a test step that can wait for input needs a time limit, and waiting for a window beats a sleep. A frame-rate budget is better as a share of a reference measured in the same boot than as an absolute number.
+
+**Next:** W16-S06, `startx`, `make run-desktop` and the desktop guide.
+
 ## 2026-11-03 — W16-S04 dwm and dmenu
 
 **Did:** dwm manages the desktop on Burrow: two st terminals tiled, focus moved with the keyboard, tags switched, dmenu starting `xhello`, Alt+Shift+q to quit, all in `make x11-smoke` with the bar and the layout checked on screen. The kernel learned `#!` scripts in `execve`; data disks may now set `PATH`; the X disk carries Xlib's locale database.

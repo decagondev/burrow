@@ -1,0 +1,13 @@
+# x11-bench (W16-S05): user/x11/xbench times the desktop in one go, from a
+# busybox shell with no X server up (it starts and stops Xfbdev itself).
+# Not in make test; make x11-bench checks the numbers against budgets.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/xbench; exit
+key ret
+wait xbench: done
+wait burrow>
+type poweroff
+key ret

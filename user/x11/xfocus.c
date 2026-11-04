@@ -40,6 +40,15 @@ static int named(Display *d, Window w, const char *name) {
     return match;
 }
 
+/* gone: a window can be destroyed between XQueryTree and the questions about
+ * it (W16-S05: a dmenu closing), and Xlib's default handler would exit on
+ * that BadWindow. Such a window is simply not the one wanted. */
+static int gone(Display *d, XErrorEvent *e) {
+    (void)d;
+    (void)e;
+    return 0;
+}
+
 /* find returns the newest of the mapped windows named name once there are
  * at least count of them (stacking order: the last child is the newest). */
 static Window find(Display *d, const char *name, int count) {
@@ -102,6 +111,7 @@ int main(int argc, char **argv) {
         printf("xfocus: cannot open display\n");
         return 1;
     }
+    XSetErrorHandler(gone);
     struct timespec pause = {0, TRY_NS};
     for (int i = 0; i < seconds * TRIES_PER_S; i++) {
         Window w = find(d, name, count);

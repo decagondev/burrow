@@ -20,5 +20,9 @@ dwm: now one
 xfocus: dmenu
 xhello: exposed
 xhello: ok
+xfocus: dmenu
+doom: X window 640x400 at 192,184
+ adding /opt/x11/share/doom/freedoom1.wad
+Freedoom: Phase 1
 dwm: gone
 burrow> poweroff

@@ -42,3 +42,25 @@ pixel build/screen-x11-dwm-tag2.ppm 20 3 #222222
 pixel build/screen-x11-dwm-tag2.ppm 600 3 #222222
 pixel build/screen-x11-dwm-tag2.ppm 600 400 #000000
 pixel build/screen-x11-dwm-tag2.ppm 601 401 #ffffff
+# S05: Doom started from dmenu floats at its fixed 640x400 at (192,184),
+# where the fbdev Doom draws, inside dwm's focused border (cyan), so
+# doom.screen's pixels sit one right and one down. Its title, then E1M1's
+# status bar; after Quit Game the terminals are back, the focus on the one
+# it was on before (Alt+j, S04).
+size  build/screen-x11-doom-title.ppm 1024 768
+pixel build/screen-x11-doom-title.ppm 192 184 #005577
+pixel build/screen-x11-doom-title.ppm 833 585 #005577
+pixel build/screen-x11-doom-title.ppm 193 185 #8b0101
+pixel build/screen-x11-doom-title.ppm 251 561 #ff801c
+pixel build/screen-x11-doom-title.ppm 832 584 #440101
+pixel build/screen-x11-doom-title.ppm 190 300 #000000
+size  build/screen-x11-doom-e1m1.ppm 1024 768
+pixel build/screen-x11-doom-e1m1.ppm 192 184 #005577
+pixel build/screen-x11-doom-e1m1.ppm 197 526 #1c1c1c
+pixel build/screen-x11-doom-e1m1.ppm 251 541 #303030
+pixel build/screen-x11-doom-e1m1.ppm 781 536 #9f9f9f
+pixel build/screen-x11-doom-e1m1.ppm 241 576 #8b8b8b
+size  build/screen-x11-doom-gone.ppm 1024 768
+pixel build/screen-x11-doom-gone.ppm 192 184 #000000
+pixel build/screen-x11-doom-gone.ppm 241 576 #000000
+pixel build/screen-x11-doom-gone.ppm 563 600 #005577

@@ -1,0 +1,10 @@
+# Ordered markers for make x11-bench (W16-S05, tests/smoke/keys/x11-bench.keys). Append-only.
+# The numbers vary; tests/smoke/x11-budgets.py checks them.
+mounted at /opt/x11
+xbench: doom-fbdev-fps
+xbench: server-ms
+xbench: st-ms
+xbench: st-ls-ms
+xbench: doom-x11-fps
+xbench: done
+burrow> poweroff
