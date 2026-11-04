@@ -25,6 +25,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/raw"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
@@ -57,6 +58,7 @@ func New(dev netdev.Device, cfg Config) (*Stack, error) {
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol, arp.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6},
 		HandleLocal:        true,
+		RawFactory:         raw.EndpointFactory{}, // raw ICMP sockets: busybox ping (W17-S04)
 	})
 	if err := s.loopback(); err != nil {
 		return nil, err

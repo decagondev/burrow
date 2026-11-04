@@ -230,7 +230,8 @@ func (consoleInfo) Sys() any           { return nil }
 // uname: struct utsname, six 65-byte strings.
 func sysUnameFn(p *Process, a [6]uint64) (int64, bool) {
 	b := make([]byte, 6*65)
-	for i, s := range []string{"Burrow", "burrow", "0.10", "#1 Wave 10", "x86_64", "(none)"} {
+	node, domain := p.sys.host()
+	for i, s := range []string{"Burrow", node, "0.10", "#1 Wave 10", "x86_64", domain} {
 		copy(b[i*65:], s)
 	}
 	return ok(errno(p.mem.CopyOut(a[0], b)))

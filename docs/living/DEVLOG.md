@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17-S04 Names and the outside
+
+**Did:** the name files on the initrd, a settable host name, raw ICMP sockets, busybox with its network applets, and `make net-smoke`: busybox's `wget` fetches files by name and by address from a Python server on the host (the 1 MiB one checked with `md5sum -c`), and `ping` reaches the gateway.
+
+**Surprise:** busybox's ping asks for a raw socket, not the datagram ping socket planned for it; gVisor had raw endpoints ready, so it cost a branch. The only failure on the way was busybox's own: `md5sum -c` is a separate option.
+
+**Next:** W17-S05, servers inside Burrow: busybox `httpd`, `hostfwd`, and a Go `net/http` server.
+
 ## 2026-11-04 — W17-S03 Sockets for user programs
 
 **Did:** `AF_INET` and `AF_INET6` sockets for user programs: TCP and UDP over gVisor's endpoints, as files that poll, block and get interrupted like every other, with Linux's error numbers and the common options. `nettest` passes its 19 checks on Linux and on Burrow.

@@ -17,16 +17,23 @@ import (
 )
 
 const (
-	solIP        = 0
-	solTCP       = 6
-	solIPv6      = 41
-	ipTTL        = 2
-	ipv6Only     = 26
-	tcpNodelay   = 1
-	tcpMaxseg    = 2
-	tcpKeepidle  = 4
-	tcpKeepintvl = 5
-	tcpKeepcnt   = 6
+	solIP    = 0
+	solTCP   = 6
+	solIPv6  = 41
+	ipTTL    = 2
+	ipv6Only = 26
+	// raw ICMP options (W17-S04)
+	solICMPv6      = 58
+	solRaw         = 255
+	icmp6Filter    = 1
+	ipv6Checksum   = 7
+	ipv6Hoplimit   = 52
+	ipMulticastTTL = 33
+	tcpNodelay     = 1
+	tcpMaxseg      = 2
+	tcpKeepidle    = 4
+	tcpKeepintvl   = 5
+	tcpKeepcnt     = 6
 
 	soReuseaddr = 2
 	soBroadcast = 6
@@ -137,6 +144,10 @@ func (s *inetSock) setOption(level, name uint64, v uint32) int64 {
 		err = s.ep.SetSockOptInt(tcpip.IPv4TTLOption, int(int32(v)))
 	case level == solIPv6 && name == ipv6Only && s.family == afInet6:
 		so.SetV6Only(v != 0)
+	case s.typ == sockRaw && (level == solIP && name == ipMulticastTTL || level == solICMPv6 && name == icmp6Filter ||
+		level == solRaw && name == ipv6Checksum || level == solIPv6 && name == ipv6Hoplimit):
+		// accepted, not kept: busybox ping and ping6 set them; replies are
+		// matched by their identifier anyway
 	default:
 		return -int64(syscall.ENOPROTOOPT)
 	}

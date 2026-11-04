@@ -36,7 +36,7 @@ const (
 // inetSock is one AF_INET or AF_INET6 socket.
 type inetSock struct {
 	family int // afInet or afInet6
-	typ    int // sockStream or sockDgram
+	typ    int // sockStream, sockDgram or sockRaw
 	proto  int // IPPROTO_TCP, _UDP, _ICMP or _ICMPV6
 	ep     tcpip.Endpoint
 	wq     *waiter.Queue
@@ -47,7 +47,9 @@ type inetSock struct {
 }
 
 // newInetSock makes a socket's endpoint on st. A datagram socket with
-// IPPROTO_ICMP is a ping socket (S04).
+// IPPROTO_ICMP is a ping socket; SOCK_RAW is ICMP or ICMPv6 only (S04:
+// busybox ping), read with the IPv4 header in front as on Linux. Raw
+// sockets take addresses like datagram ones.
 func newInetSock(st *stack.Stack, family, typ, proto int) (*inetSock, int64) {
 	netProto := tcpip.NetworkProtocolNumber(ipv4.ProtocolNumber)
 	if family == afInet6 {
@@ -63,11 +65,21 @@ func newInetSock(st *stack.Stack, family, typ, proto int) (*inetSock, int64) {
 		transport = icmp.ProtocolNumber4
 	case typ == sockDgram && family == afInet6 && proto == ipprotoICMPv6:
 		transport = icmp.ProtocolNumber6
+	case typ == sockRaw && family == afInet && proto == ipprotoICMP:
+		transport = icmp.ProtocolNumber4
+	case typ == sockRaw && family == afInet6 && proto == ipprotoICMPv6:
+		transport = icmp.ProtocolNumber6
 	default:
 		return nil, -int64(syscall.EPROTONOSUPPORT)
 	}
 	s := &inetSock{family: family, typ: typ, proto: proto, wq: &waiter.Queue{}, changed: make(chan struct{})}
-	ep, err := st.NewEndpoint(transport, netProto, s.wq)
+	var ep tcpip.Endpoint
+	var err tcpip.Error
+	if typ == sockRaw {
+		ep, err = st.NewRawEndpoint(transport, netProto, s.wq, true)
+	} else {
+		ep, err = st.NewEndpoint(transport, netProto, s.wq)
+	}
 	if err != nil {
 		return nil, inetErrno(err)
 	}

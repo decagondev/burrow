@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -236,7 +236,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -472,6 +472,15 @@ $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
+
+# The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
+# files from the host (python3 -m http.server on a free port) and boots
+# go-dev.img on QEMU's user network; busybox wget fetches them by name and
+# by address, ping reaches the gateway. No internet needed.
+net-smoke:
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory net-smoke-run; 	else echo "NET SMOKE SKIP (make busybox ports builds what it needs)"; fi
+net-smoke-run: $(BUILD)/go-dev.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev.img net 120
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
 # with tcc, write and rename a Lua script; power off; boot again and find

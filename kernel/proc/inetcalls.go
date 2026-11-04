@@ -34,7 +34,7 @@ func (p *Process) inetSocket(a [6]uint64) int64 {
 		return -int64(syscall.EAFNOSUPPORT)
 	}
 	typ := int(a[1]) &^ (sockNonblock | sockCloexec)
-	if typ != sockStream && typ != sockDgram {
+	if typ != sockStream && typ != sockDgram && typ != sockRaw {
 		return -int64(syscall.ESOCKTNOSUPPORT)
 	}
 	s, e := newInetSock(st, int(a[0]), typ, int(a[2]))
@@ -90,7 +90,7 @@ func (t *Thread) inetConnect(s *inetSock, f *file, va, n uint64) int64 {
 	switch {
 	case e < 0:
 		return e
-	case unspec && s.typ == sockDgram:
+	case unspec && s.typ != sockStream:
 		s.ep.Disconnect()
 		return 0
 	case unspec:
@@ -184,7 +184,7 @@ func (s *inetSock) shutdown(how uint64) int64 {
 // MSG_NOSIGNAL.
 func (t *Thread) inetSend(s *inetSock, f *file, b []byte, flags, toVA, toLen uint64) int64 {
 	var opts tcpip.WriteOptions
-	if toVA != 0 && s.typ == sockDgram {
+	if toVA != 0 && s.typ != sockStream {
 		to, _, e := t.p.inetAddr(s.family, toVA, toLen)
 		if e < 0 {
 			return e
@@ -206,7 +206,7 @@ func (t *Thread) inetSend(s *inetSock, f *file, b []byte, flags, toVA, toLen uin
 // they came from.
 func (t *Thread) inetRecv(s *inetSock, f *file, n, flags uint64) ([]byte, int, tcpip.FullAddress, int64) {
 	b := make([]byte, min(n, maxIO))
-	opts := tcpip.ReadOptions{Peek: flags&msgPeek != 0, NeedRemoteAddr: s.typ == sockDgram}
+	opts := tcpip.ReadOptions{Peek: flags&msgPeek != 0, NeedRemoteAddr: s.typ != sockStream}
 	block := f.flags&oNonblock == 0 && flags&msgDontwait == 0
 	got, total := 0, 0
 	var from tcpip.FullAddress

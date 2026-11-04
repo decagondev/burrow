@@ -208,3 +208,54 @@ func TestInetIPv6AndErrors(t *testing.T) {
 		t.Errorf("socket without a network = %d", e)
 	}
 }
+
+func TestSethostname(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	if r.call(p, 63, scratch); string(read(p, scratch+65, 6)) != "burrow" {
+		t.Fatalf("nodename %q", read(p, scratch+65, 6))
+	}
+	r.str(p, scratch+1000, "warren")
+	if e := r.call(p, 170, scratch+1000, 6); e != 0 {
+		t.Fatalf("sethostname = %d", e)
+	}
+	if r.call(p, 63, scratch); string(read(p, scratch+65, 7)) != "warren\x00" {
+		t.Errorf("nodename after sethostname %q", read(p, scratch+65, 7))
+	}
+	if e := r.call(p, 170, scratch+1000, 65); e != -int64(syscall.EINVAL) {
+		t.Errorf("a 65-byte name = %d, want EINVAL", e)
+	}
+}
+
+func TestRawICMPSocket(t *testing.T) {
+	r := netRig(t)
+	p := r.spawn()
+	s := r.call(p, 41, afInet, 3, 1) // SOCK_RAW, IPPROTO_ICMP: busybox ping
+	if s < 0 {
+		t.Fatalf("socket(SOCK_RAW, ICMP) = %d", s)
+	}
+	// an echo request to 127.0.0.1: type 8, code 0, checksum, id 0x4242, seq 1
+	msg := []byte{8, 0, 0, 0, 0x42, 0x42, 0, 1, 'b', 'u', 'r', 'r', 'o', 'w'}
+	sum := uint32(0)
+	for i := 0; i < len(msg); i += 2 {
+		sum += uint32(msg[i])<<8 | uint32(msg[i+1])
+	}
+	sum = (sum & 0xffff) + sum>>16
+	ck := ^uint16(sum + sum>>16)
+	msg[2], msg[3] = byte(ck>>8), byte(ck)
+	r.put(p, scratch, msg)
+	if n := r.call(p, 44, uint64(s), scratch, uint64(len(msg)), 0, scratch+3200, r.in4(p, scratch+3200, localhost, 0)); n != int64(len(msg)) {
+		t.Fatalf("sendto = %d", n)
+	}
+	for i := 0; i < 2; i++ { // the request itself loops back first, then the reply
+		n := r.call(p, 45, uint64(s), scratch+100, 128, 0, 0, 0)
+		b := read(p, scratch+100, int(n))
+		if n < 20+8 || b[0]>>4 != 4 {
+			t.Fatalf("recvfrom = %d % x (want an IPv4 header in front)", n, b)
+		}
+		if ihl := int(b[0]&15) * 4; b[ihl] == 0 && b[ihl+4] == 0x42 && b[ihl+5] == 0x42 {
+			return // the echo reply, our identifier
+		}
+	}
+	t.Error("no echo reply on the raw socket")
+}

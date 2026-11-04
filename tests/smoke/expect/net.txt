@@ -1,0 +1,12 @@
+# Ordered markers for the network from busybox (W17-S04, tests/smoke/keys/net.keys,
+# run by tests/smoke/net-smoke.sh). Append-only.
+[net] INFO: 10.0.2.2 answers ping in
+burrow> run /bin/busybox sh
+burrow
+burrow
+burrow fetched this from the host
+1048576 /tmp/big.bin
+/tmp/big.bin: OK
+2 packets transmitted, 2 packets received, 0% packet loss
+net: refused as expected
+burrow> poweroff

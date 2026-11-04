@@ -1,0 +1,11 @@
+# services - well-known ports by name (W17-S04; getservbyname).
+ftp       21/tcp
+ssh       22/tcp
+telnet    23/tcp
+smtp      25/tcp
+domain    53/tcp
+domain    53/udp
+http      80/tcp    www
+ntp       123/udp
+https     443/tcp
+http-alt  8080/tcp  webcache

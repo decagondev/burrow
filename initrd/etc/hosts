@@ -1,0 +1,6 @@
+# hosts - names known without DNS (W17-S04). On QEMU's user network the
+# host is 10.0.2.2: `wget http://host:8000/` reaches a server on the host.
+127.0.0.1   localhost
+::1         localhost
+10.0.2.15   burrow
+10.0.2.2    host
