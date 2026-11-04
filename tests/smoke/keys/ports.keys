@@ -52,5 +52,10 @@ type run /bin/dynhello
 key ret
 wait dynhello: 
 wait burrow> 
+# W19-S03: users and groups (passed as root on the host's Linux first, with --exec)
+type run /bin/credtest
+key ret
+wait credtest: ok
+wait burrow> 
 type poweroff
 key ret

@@ -204,7 +204,7 @@ func TestBuildStack(t *testing.T) {
 	}
 	img := proc.Image{Entry: 0x401000, Phdr: 0x400040, Phent: 56, Phnum: 3}
 	rnd := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	sp, err := proc.BuildStack(m, img, []string{"/bin/hello", "-v"}, []string{"HOME=/"}, rnd)
+	sp, err := proc.BuildStack(m, img, []string{"/bin/hello", "-v"}, []string{"HOME=/"}, rnd, proc.AuxIDs{})
 	if err != nil {
 		t.Fatal(err)
 	}

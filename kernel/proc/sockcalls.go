@@ -79,7 +79,7 @@ func sysSocketpairFn(p *Process, a [6]uint64) (int64, bool) {
 	if e < 0 {
 		return ok(e)
 	}
-	s0, s1 := newSockPair(typ, p.sys, int32(p.PID))
+	s0, s1 := newSockPair(typ, p.sys, p.peerCred())
 	f0, f1 := newFile(s0, nil), newFile(s1, nil)
 	nonblock := 0
 	if a[1]&sockNonblock != 0 {
@@ -144,7 +144,7 @@ func (t *Thread) sendBytes(fd uint64, b []byte, fds []*file, flags uint64, toVA 
 		unrefAll(fds)
 		return e
 	}
-	n, err := s.send(b, fds, int32(t.p.PID), f.flags&oNonblock == 0 && flags&msgDontwait == 0, t.cancel())
+	n, err := s.send(b, fds, t.p.peerCred(), f.flags&oNonblock == 0 && flags&msgDontwait == 0, t.cancel())
 	if err == syscall.EPIPE && flags&msgNosignal == 0 {
 		t.send(sigPIPE, sigInfo{signo: sigPIPE, code: siKernel})
 	}
@@ -160,7 +160,7 @@ type received struct {
 	b    []byte
 	full int
 	fds  []*file
-	pid  int32
+	cred peerCred
 }
 
 // recvBytes reads at most n bytes from fd with flags, or -errno.
@@ -173,12 +173,12 @@ func (t *Thread) recvBytes(fd, n, flags uint64) (received, int64) {
 		return received{}, -int64(syscall.EINVAL)
 	}
 	b := make([]byte, min(n, maxIO))
-	k, full, fds, pid, err := s.recv(b, flags&msgPeek != 0, f.flags&oNonblock == 0 && flags&msgDontwait == 0,
+	k, full, fds, cred, err := s.recv(b, flags&msgPeek != 0, f.flags&oNonblock == 0 && flags&msgDontwait == 0,
 		flags&msgWaitall != 0, t.cancel())
 	if err != nil {
 		return received{}, errno(err)
 	}
-	return received{b[:k], full, fds, pid}, 0
+	return received{b[:k], full, fds, cred}, 0
 }
 
 // sendto(fd, buf, len, flags, addr, addrlen).

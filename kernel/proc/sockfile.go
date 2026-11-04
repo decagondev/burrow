@@ -24,15 +24,15 @@ func (e *sockEnd) ReadCancel(b []byte, cancel <-chan struct{}) (int, error) {
 }
 
 func (e *sockEnd) WriteCancel(b []byte, cancel <-chan struct{}) (int, error) {
-	return e.sendFrom(b, 0, cancel)
+	return e.sendFrom(b, peerCred{}, cancel)
 }
 
-// sendFrom is write(2) by process pid (write passes it: SCM_CREDENTIALS).
-func (e *sockEnd) sendFrom(b []byte, pid int32, cancel <-chan struct{}) (int, error) {
+// sendFrom is write(2) by the process cred names (write passes it: SCM_CREDENTIALS).
+func (e *sockEnd) sendFrom(b []byte, cred peerCred, cancel <-chan struct{}) (int, error) {
 	if e.pair() == nil {
 		return 0, syscall.ENOTCONN
 	}
-	return e.send(b, nil, pid, true, cancel)
+	return e.send(b, nil, cred, true, cancel)
 }
 
 // shutdown(how): SHUT_RD 0, SHUT_WR 1, SHUT_RDWR 2.
@@ -204,7 +204,7 @@ func (e *sockEnd) option(level, name uint64) ([]byte, int64) {
 			v = 1
 		}
 	case soPeercred:
-		return ucred(e.peerPID), 0
+		return ucred(e.peerCred), 0
 	default:
 		return nil, -int64(syscall.ENOPROTOOPT)
 	}
@@ -213,10 +213,12 @@ func (e *sockEnd) option(level, name uint64) ([]byte, int64) {
 	return b[:], 0
 }
 
-// ucred is struct ucred {pid, uid, gid}: everyone is root.
-func ucred(pid int32) []byte {
+// ucred is struct ucred {pid, uid, gid}.
+func ucred(c peerCred) []byte {
 	b := make([]byte, 12)
-	binary.LittleEndian.PutUint32(b, uint32(pid))
+	binary.LittleEndian.PutUint32(b, uint32(c.pid))
+	binary.LittleEndian.PutUint32(b[4:], c.uid)
+	binary.LittleEndian.PutUint32(b[8:], c.gid)
 	return b
 }
 

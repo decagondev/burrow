@@ -93,7 +93,12 @@ func (p *Process) controlFDs(va, n uint64) ([]*file, int64) {
 				fds = append(fds, f.ref())
 			}
 		case typ == scmCredentials && l == cmsgHdrBytes+ucredBytes:
-			// everyone is root: any credentials may be claimed; the receiver sees the sender's pid
+			// W19-S03: a claim must be the sender's own (root may claim any);
+			// the receiver is given the sender's pid and effective ids
+			if !p.mayClaim(b[o+cmsgHdrBytes : o+l]) {
+				unrefAll(fds)
+				return nil, -int64(syscall.EPERM)
+			}
 		default:
 			unrefAll(fds)
 			return nil, -int64(syscall.EINVAL)
@@ -214,7 +219,7 @@ func (p *Process) controlOut(fd uint64, r received, room uint64, cloexec bool) (
 		}
 		return true
 	}
-	if pass && !put(scmCredentials, ucred(r.pid)) {
+	if pass && !put(scmCredentials, ucred(r.cred)) {
 		ctrunc = true
 	}
 	fit := 0

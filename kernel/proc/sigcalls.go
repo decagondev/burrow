@@ -107,7 +107,9 @@ func sysRtSigreturnFn(t *Thread, _ [6]uint64) (int64, bool) {
 }
 
 // kill(pid, sig): pid > 0 one process, 0 our group, -1 everyone else,
-// < -1 group -pid. sig 0 only checks that the target exists.
+// < -1 group -pid. sig 0 only checks that the target exists. Since W19-S03
+// only targets the sender may signal count (mayKill): EPERM when there were
+// targets and none of them.
 func sysKillFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(p.sys.kill(p, int64(int32(a[0])), int(a[1])))
 }
@@ -134,14 +136,22 @@ func (s *System) kill(from *Process, pid int64, sig int) int64 {
 	if len(targets) == 0 {
 		return -int64(syscall.ESRCH)
 	}
-	sender := int32(0)
+	info := sigInfo{signo: int32(sig), code: siUser}
 	if from != nil {
-		sender = int32(from.PID)
+		info.pid, info.uid = int32(from.PID), from.Cred().UID[idReal]
 	}
+	sent := 0
 	for _, t := range targets {
-		if sig != 0 {
-			t.send(sig, sigInfo{signo: int32(sig), code: siUser, pid: sender})
+		if from != nil && !from.mayKill(t, sig) {
+			continue
 		}
+		sent++
+		if sig != 0 {
+			t.send(sig, info)
+		}
+	}
+	if sent == 0 {
+		return -int64(syscall.EPERM)
 	}
 	return 0
 }
@@ -205,8 +215,11 @@ func (s *System) threadKill(from *Thread, tgid int64, tid, sig int) int64 {
 	if target == nil {
 		return -int64(syscall.ESRCH)
 	}
+	if !from.p.mayKill(target.p, sig) {
+		return -int64(syscall.EPERM)
+	}
 	if sig != 0 {
-		target.send(sig, sigInfo{signo: int32(sig), code: siTkill, pid: int32(from.p.PID)})
+		target.send(sig, sigInfo{signo: int32(sig), code: siTkill, pid: int32(from.p.PID), uid: from.p.Cred().UID[idReal]})
 	}
 	return 0
 }

@@ -27,7 +27,7 @@ const (
 // listenQ is a listener's queue of connections nobody accepted yet.
 type listenQ struct {
 	backlog int
-	pid     int32 // who listened: SO_PEERCRED for the clients
+	cred    peerCred // who listened: SO_PEERCRED for the clients
 	pending []*sockEnd
 	changed chan struct{}
 }
@@ -215,7 +215,7 @@ func sysListenFn(p *Process, a [6]uint64) (int64, bool) {
 	}
 	backlog := min(max(int(int32(a[1])), 0), somaxconn)
 	if s.lis == nil {
-		s.lis = &listenQ{pid: int32(p.PID), changed: make(chan struct{})}
+		s.lis = &listenQ{cred: p.peerCred(), changed: make(chan struct{})}
 	}
 	s.lis.backlog = backlog
 	s.lis.notify()

@@ -34,7 +34,16 @@ const (
 //
 //	[rsp] argc, argv..., NULL, envp..., NULL, auxv (type, value)..., AT_NULL
 //	higher: the strings and 16 AT_RANDOM bytes
-func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte) (uint64, error) {
+//
+// AuxIDs are the ids the auxiliary vector reports, and AT_SECURE (W19-S03:
+// set when the effective ids differ from the real ones, so musl ignores
+// LD_LIBRARY_PATH and friends).
+type AuxIDs struct {
+	UID, EUID, GID, EGID uint32
+	Secure               bool
+}
+
+func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte, id AuxIDs) (uint64, error) {
 	if len(argv) == 0 {
 		return 0, errors.New("proc: argv needs at least the program name")
 	}
@@ -67,10 +76,15 @@ func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte) (uint64
 	if err != nil {
 		return 0, err
 	}
+	secure := uint64(0)
+	if id.Secure {
+		secure = 1
+	}
 	aux := []uint64{
 		atPhdr, img.Phdr, atPhent, img.Phent, atPhnum, img.Phnum, atPagesz, PageSize,
 		atBase, img.Base, atEntry, img.Entry, atRandom, rnd, atExecfn, av[0],
-		atUID, 0, atEUID, 0, atGID, 0, atEGID, 0, atSecure, 0, atNull, 0,
+		atUID, uint64(id.UID), atEUID, uint64(id.EUID), atGID, uint64(id.GID), atEGID, uint64(id.EGID),
+		atSecure, secure, atNull, 0,
 	}
 	words := []uint64{uint64(len(av))}
 	words = append(append(words, av...), 0)

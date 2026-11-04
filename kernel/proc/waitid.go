@@ -133,7 +133,8 @@ func siginfo(c *Process) []byte {
 		code, status = cldKilled, uint32(c.termSig)
 	}
 	le.PutUint32(b[8:], code)
-	le.PutUint32(b[16:], uint32(c.PID)) // si_pid; si_uid at 20 stays 0
+	le.PutUint32(b[16:], uint32(c.PID))        // si_pid
+	le.PutUint32(b[20:], c.Cred().UID[idReal]) // si_uid (W19-S03)
 	le.PutUint32(b[24:], status)
 	return b
 }

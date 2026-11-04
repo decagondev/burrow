@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19-S03 Users and groups
+
+**Did:** credentials per process with Linux's rules for the sixteen id calls, set-id `execve` with `AT_SECURE`, `kill`'s permission check, and socket peers that carry real ids instead of root's. `credtest` passes as root on Linux and on Burrow.
+
+**Surprise:** both failures on Linux were the test's: a user may `setresgid` to any id it already holds, and WSL's `/tmp` is `nosuid`, so a set-uid copy there silently runs as its caller. Testing the test on Linux first is what found them. And the plan was wrong twice where Linux is clear: peer credentials are the effective ids, and `kill` looks at the target's real and saved uid.
+
+**Next:** W19-S04: owners on new files, `chmod` and `chown` that change something, and permission checks.
+
 ## 2026-11-04 — W19-S02 Writing ext2
 
 **Did:** the writer: allocation from the bitmaps, whole-file data in runs of blocks with indirect blocks in front, directory entries into gaps or new blocks, rename by Linux's rules, a commit after every operation. Seeded random sequences on ext2 and memfs agree, and `e2fsck -fn` accepts every image; the workbench smoke runs again on an ext2 home and `e2fsck` finds it clean.

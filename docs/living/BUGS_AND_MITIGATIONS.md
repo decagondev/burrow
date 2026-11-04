@@ -31,7 +31,14 @@ flowchart LR
 
 ## Open
 
-*(none)*
+### BUG-0023: The console once waited for ever after gohello exited
+- Found: 2026-11-04, W19-S03, in the full `make test`: `SMOKE FAIL [ports]: timed out after 60s`; the log ends at `gohello: ok` (gohello's last line) with no `burrow>` prompt after it and no kernel message.
+- Severity: minor so far (one hang in 18 runs of `make ports-smoke`: the 16 runs since, alone, all passed).
+- Symptom: a Go user program prints its last line and exits; the console's `run` never returns.
+- Root cause: unknown. Suspected: the exit of a multi-threaded Go program (exit_group while the runtime's threads are in `futex`, `nanosleep` or `tgkill`'s SIGURG preemption) racing with the wait for it. Checked and ruled out: S03's new `p.mu` lookups (`Cred`, `mayKill`) nest no locks, and `send`, which `tgkill` already called, took `p.mu` before them.
+- Fix: none yet. Next time: keep the log of a failing run (`for i in $(seq 20); do make ports-smoke | grep -a SMOKE; grep -q FAIL ... && cp build/smoke-ports.log build/smoke-ports-fail-$i.log; done`), and the kernel's thread list at the hang.
+- Regression: none possible until it reproduces.
+- Lesson: (open)
 
 ## Closed
 

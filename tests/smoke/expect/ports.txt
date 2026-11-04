@@ -156,4 +156,15 @@ burrow> run /bin/dynhello
 dynhello: libgreet says hello from a shared library ok
 dynhello: dlopen libplug.so, plug_answer(7) = 42 ok
 dynhello: ok
+burrow> run /bin/credtest
+credtest: root ok
+credtest: groups ok
+credtest: drop-for-good ok
+credtest: temporary-drop ok
+credtest: setresuid ok
+credtest: setreuid ok
+credtest: fsuid ok
+credtest: kill ok
+credtest: peercred ok
+credtest: ok
 burrow> poweroff

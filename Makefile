@@ -340,7 +340,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -349,6 +349,10 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/forkbench > $(BUILD)/forkbench-linux.log  # W18-S01
 	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
 	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
+	@# W19-S03: credtest needs root on Linux (and a disk without nosuid for --exec)
+	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
+	elif sudo -n true 2>/dev/null; then sudo -n $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
+	else echo "CREDTEST LINUX SKIP (needs root or sudo -n)"; fi
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,

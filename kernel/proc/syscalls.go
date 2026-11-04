@@ -55,7 +55,6 @@ var table = map[uint64]handler{
 	sysFstat: sysFstatFn, sysLseek: sysLseekFn, sysMmap: sysMmapFn, sysMunmap: sysMunmapFn,
 	sysBrk: sysBrkFn, sysPrctl: sysPrctlFn, sysClockGettime: sysClockGettimeFn, sysOpenat: sysOpenatFn,
 	sysGetppid: sysGetppidFn, sysGetpid: pidFn,
-	sysGetuid: zeroFn, sysGetgid: zeroFn, sysGeteuid: zeroFn, sysGetegid: zeroFn, // root
 }
 
 // The calls that need the calling thread (thread.go has the rest).
@@ -111,7 +110,7 @@ func (t *Thread) writeFile(fd uint64, b []byte) int64 {
 	var err error
 	switch w := device(f).(type) {
 	case *sockEnd: // a socket: the chunk carries the writer's pid (SCM_CREDENTIALS)
-		n, err = w.sendFrom(b, int32(p.PID), t.cancel())
+		n, err = w.sendFrom(b, p.peerCred(), t.cancel())
 	case Canceller: // a pipe: may block until a reader makes room
 		n, err = w.WriteCancel(b, t.cancel())
 	case io.Writer: // a device or a writable file

@@ -71,8 +71,8 @@ func (t *Thread) connectTo(s, l *sockEnd, block bool) int64 {
 		if len(q.pending) <= q.backlog {
 			srv := newSockEnd(s.typ, s.sys)
 			s.mu.Lock()
-			srv.name, srv.peerName, srv.peerPID = l.name, s.name, int32(t.p.PID)
-			s.peerName, s.peerPID = l.name, q.pid
+			srv.name, srv.peerName, srv.peerCred = l.name, s.name, t.p.peerCred()
+			s.peerName, s.peerCred = l.name, q.cred
 			join(s, srv)
 			s.mu.Unlock()
 			q.pending = append(q.pending, srv)

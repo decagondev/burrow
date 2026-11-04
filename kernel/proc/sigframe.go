@@ -42,6 +42,7 @@ func scRegs(r *Regs) []*uint64 {
 type sigInfo struct {
 	signo, code int32
 	pid         int32  // kill: the sender
+	uid         uint32 // kill: the sender's real uid (W19-S03)
 	addr        uint64 // faults: the address
 	what        string // faults: for the log ("page fault")
 }
@@ -94,6 +95,7 @@ func (p *Process) pushFrame(r Regs, sig int, act sigaction, oldMask uint64, info
 		le.PutUint64(si[siAddrOffset:], info.addr)
 	} else {
 		le.PutUint32(si[siAddrOffset:], uint32(info.pid))
+		le.PutUint32(si[siAddrOffset+4:], info.uid) // si_uid
 	}
 	if err := p.mem.CopyOut(sp, f); err != nil {
 		return r, err

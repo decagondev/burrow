@@ -112,8 +112,9 @@ type image struct {
 	end       uint64
 }
 
-// prepare loads the ELF in data with its entry stack into a new Mem.
-func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string) (*image, error) {
+// prepare loads the ELF in data with its entry stack into a new Mem; id
+// goes into the auxiliary vector.
+func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string, id AuxIDs) (*image, error) {
 	mem, err := NewMem(s.nu)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string) (*i
 		if len(argv) == 0 {
 			argv = []string{file}
 		}
-		sp, err = BuildStack(mem, img, argv, envp, rnd)
+		sp, err = BuildStack(mem, img, argv, envp, rnd, id)
 	}
 	if err != nil {
 		mem.Close()
@@ -152,7 +153,7 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	im, err := s.prepare("/"+file, prog, argv, envp)
+	im, err := s.prepare("/"+file, prog, argv, envp, AuxIDs{}) // root
 	if err != nil {
 		return nil, err
 	}

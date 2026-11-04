@@ -3,11 +3,16 @@ package proc
 // exec.go - execve(2) (W10-S02; threads since W12-S01): a new program in
 // place of the calling one, same pid, descriptors kept unless close-on-exec.
 // Everything that can fail happens before the old image goes; then the
-// other threads end and the caller becomes the main thread. Never leaves a
-// process half replaced. Docs: POSIX_COVERAGE.md.
+// other threads end and the caller becomes the main thread. A set-user-id
+// or set-group-id program takes its owner's ids as the effective (and
+// saved) ones (W19-S03). Never leaves a process half replaced.
+// Docs: POSIX_COVERAGE.md.
 
 import (
+	"io/fs"
 	"syscall"
+
+	"burrow/kernel/vfs"
 )
 
 // execve: a new program in place of this one (same pid, descriptors stay
@@ -42,7 +47,9 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 		}
 		file = run
 	}
-	im, err := s.prepare("/"+file, prog, argv, envp)
+	cred := p.Cred()
+	id := execCred(&cred, s.files, file)
+	im, err := s.prepare("/"+file, prog, argv, envp, id)
 	if err != nil {
 		return -int64(syscall.ENOEXEC)
 	}
@@ -61,7 +68,7 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	delete(p.threads, t.TID)
 	t.TID, t.fs, t.altSP, t.altSize, t.clearTID = p.PID, 0, 0, 0, 0
 	p.threads[t.TID], p.main = t, t
-	p.mem, p.Path = im.mem, "/"+file
+	p.mem, p.Path, p.cred = im.mem, "/"+file, cred
 	p.brkStart, p.brk, p.mmapNext = im.end, im.end, mmapBase
 	for sig := range p.actions { // handlers do not survive the old program; "ignore" does
 		if p.actions[sig].handler != sigIGN {
@@ -72,6 +79,28 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	p.fds.closeOnExec()
 	old.Close()
 	return 0 // RAX of the new program's first instruction
+}
+
+// execCred is c after execve of file: the set-user-id bit gives the
+// effective uid the file's owner (root when the file system keeps no
+// owners), the set-group-id bit (with group execute; without it marks
+// locking, as Linux reads it) the effective gid; the saved and fs ids follow
+// the effective ones. A script's own bits do not count: file is what runs.
+func execCred(c *Cred, files fs.FS, file string) AuxIDs {
+	if info, err := fs.Stat(files, file); err == nil {
+		a, _ := vfs.AttrOf(info)
+		m := info.Mode()
+		if m&fs.ModeSetuid != 0 {
+			c.UID[idEff] = a.UID
+		}
+		if m&fs.ModeSetgid != 0 && m&0o010 != 0 {
+			c.GID[idEff] = a.GID
+		}
+	}
+	c.UID[idSaved], c.UID[idFS] = c.UID[idEff], c.UID[idEff]
+	c.GID[idSaved], c.GID[idFS] = c.GID[idEff], c.GID[idEff]
+	return AuxIDs{UID: c.UID[idReal], EUID: c.UID[idEff], GID: c.GID[idReal], EGID: c.GID[idEff],
+		Secure: c.UID[idEff] != c.UID[idReal] || c.GID[idEff] != c.GID[idReal]}
 }
 
 // endOthers ends every thread of t's process but t (execve).

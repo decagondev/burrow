@@ -30,7 +30,8 @@ type Process struct {
 	brkStart, brk uint64
 	mmapNext      uint64
 	cwd           string
-	umask         uint32    // kept for umask(2); nothing has permissions to mask yet
+	umask         uint32    // umask(2); applied from W19-S04
+	cred          Cred      // who it is (W19-S03, cred.go); the zero value is root
 	timers        [3]itimer // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
 	ctty          *tty.TTY  // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
 
@@ -172,6 +173,7 @@ func (t *Thread) fork() int64 {
 	p.mu.Lock()
 	c.brkStart, c.brk, c.mmapNext, c.cwd, c.umask = p.brkStart, p.brk, p.mmapNext, p.cwd, p.umask
 	c.ctty = p.ctty
+	c.cred = p.cred.clone()
 	c.actions = p.actions // pending signals are not inherited
 	mask, fs, altSP, altSize := t.sigMask, t.fs, t.altSP, t.altSize
 	p.mu.Unlock()

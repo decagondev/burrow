@@ -40,11 +40,11 @@ type sockPair struct {
 }
 
 // chunk is one write: its bytes, the descriptors passed with it (given
-// out with its first byte), and the sender's pid.
+// out with its first byte), and the sender (W19-S03: its pid and ids).
 type chunk struct {
 	data []byte
 	fds  []*file
-	pid  int32
+	cred peerCred
 }
 
 // sockEnd is one socket. Before it is connected only e.mu guards it.
@@ -56,7 +56,7 @@ type sockEnd struct {
 	mu       sync.Mutex
 	name     string // bound: a path, "\x00..." (abstract) or "" (unnamed)
 	peerName string
-	peerPID  int32 // SO_PEERCRED
+	peerCred peerCred // SO_PEERCRED
 	passcred bool
 	lis      *listenQ // listening
 
@@ -83,9 +83,9 @@ func join(a, b *sockEnd) {
 	b.sp.Store(sp)
 }
 
-func newSockPair(typ int, sys *System, pid int32) (*sockEnd, *sockEnd) {
+func newSockPair(typ int, sys *System, cred peerCred) (*sockEnd, *sockEnd) {
 	a, b := newSockEnd(typ, sys), newSockEnd(typ, sys)
-	a.peerPID, b.peerPID = pid, pid
+	a.peerCred, b.peerCred = cred, cred
 	join(a, b)
 	return a, b
 }
@@ -113,48 +113,48 @@ func unrefAll(fds []*file) {
 // nothing queued it waits, unless block is false (EAGAIN); after the
 // peer's sending side is shut it returns 0. waitAll keeps a stream read
 // going until b is full.
-func (e *sockEnd) recv(b []byte, peek, block, waitAll bool, cancel <-chan struct{}) (n, full int, fds []*file, pid int32, err error) {
+func (e *sockEnd) recv(b []byte, peek, block, waitAll bool, cancel <-chan struct{}) (n, full int, fds []*file, cred peerCred, err error) {
 	sp := e.pair()
 	for {
 		sp.mu.Lock()
 		if e.err != 0 && n == 0 {
 			err, e.err = e.err, 0
 			sp.mu.Unlock()
-			return 0, 0, nil, 0, err
+			return 0, 0, nil, peerCred{}, err
 		}
 		if len(e.queue) > 0 && len(b) > n && (n == 0 || e.queue[0].fds == nil) {
 			if n == 0 {
-				pid = e.queue[0].pid
+				cred = e.queue[0].cred
 			}
 			k, whole, got := e.take(b[n:], peek)
 			n, full, fds = n+k, n+whole, append(fds, got...)
 			sp.notify()
 			if !e.stream() || !waitAll || n == len(b) || peek || got != nil {
 				sp.mu.Unlock()
-				return n, full, fds, pid, nil
+				return n, full, fds, cred, nil
 			}
 		}
 		// Nothing more to take now. A waitAll read held up by a chunk that
 		// carries descriptors returns what it has.
 		if len(e.queue) == 0 && e.shut&shutRcv != 0 || len(b) == 0 || n > 0 && (!waitAll || len(e.queue) > 0) {
 			sp.mu.Unlock()
-			return n, n, fds, pid, nil
+			return n, n, fds, cred, nil
 		}
 		ch := sp.changed
 		sp.mu.Unlock()
 		if !block {
 			if n > 0 {
-				return n, n, fds, pid, nil
+				return n, n, fds, cred, nil
 			}
-			return 0, 0, nil, 0, syscall.EAGAIN
+			return 0, 0, nil, peerCred{}, syscall.EAGAIN
 		}
 		select {
 		case <-ch:
 		case <-cancel:
 			if n > 0 {
-				return n, n, fds, pid, nil
+				return n, n, fds, cred, nil
 			}
-			return 0, 0, nil, 0, syscall.EINTR
+			return 0, 0, nil, peerCred{}, syscall.EINTR
 		}
 	}
 }
@@ -199,7 +199,7 @@ func (e *sockEnd) take(b []byte, peek bool) (int, int, []*file) {
 // send queues b, with fds on its first chunk, at the peer: a stream writes
 // all of it, waiting for room (a part, if a wait is cut short); a datagram
 // goes whole or not at all. send owns fds: what it does not queue it drops.
-func (e *sockEnd) send(b []byte, fds []*file, pid int32, block bool, cancel <-chan struct{}) (int, error) {
+func (e *sockEnd) send(b []byte, fds []*file, cred peerCred, block bool, cancel <-chan struct{}) (int, error) {
 	defer func() { unrefAll(fds) }()
 	if e.stream() && len(b) == 0 {
 		return 0, nil
@@ -226,7 +226,7 @@ func (e *sockEnd) send(b []byte, fds []*file, pid int32, block bool, cancel <-ch
 			if e.stream() {
 				n = min(room, n)
 			}
-			p.queue = append(p.queue, chunk{append([]byte(nil), b[done:done+n]...), fds, pid})
+			p.queue = append(p.queue, chunk{append([]byte(nil), b[done:done+n]...), fds, cred})
 			p.queued += n
 			done += n
 			fds = nil
