@@ -65,7 +65,7 @@ func (c *Cred) allows(info fs.FileInfo, want uint32) bool {
 
 // search checks that c may pass through every directory above name (an
 // io/fs path), the root included: ENOENT, ENOTDIR or EACCES on the first
-// that fails, in path order.
+// that fails, in path order. Only for trees without the walker (lookup.go).
 func (p *Process) search(c *Cred, name string) error {
 	if name == "." || c.root() {
 		return nil
@@ -90,11 +90,9 @@ func (p *Process) search(c *Cred, name string) error {
 	return nil
 }
 
-// permit checks the path to name, then want on name itself.
+// permit checks want on name itself: name comes from the walk, which
+// checked search permission on the way (lookup.go).
 func (p *Process) permit(c *Cred, name string, want uint32) error {
-	if err := p.search(c, name); err != nil {
-		return err
-	}
 	info, err := fs.Stat(p.sys.files, name)
 	if err != nil {
 		return err

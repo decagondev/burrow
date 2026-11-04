@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19-S05 Symbolic and hard links
+
+**Did:** one path walker for the whole VFS, links in memfs, ext2 and tarfs, and the link calls. Every path a program gives is now walked a component at a time, so `..` after a link means what it means on Linux and search permission is checked where a link leads, not only where the text says.
+
+**Surprise:** how little broke. The full `make test` before anything else found one thing: two "directories" that never existed (`/dev/shm`, `/dev/pts`), which the text cleaning had never asked about. And linktest's first run on the host failed for my own reason: a relative test directory makes an "absolute" link relative.
+
+**Learned:** a walker that hands back a link-free path lets every other call stay as it was; the change is one place wide.
+
+**Next:** W19-S06: busybox's login tools, an ext2 root disk, and the M19 demo.
+
 ## 2026-11-04 — W19-S04 Owners and permissions
 
 **Did:** owners on every file system that can keep one (ext2, memfs, the initrd's tar headers), `chmod` and `chown` with Linux's rules, and the permission checks on every path call, `open`, `execve` and `access`. `permtest` passes as root on Linux, then on Burrow on memfs and on ext2; credtest's set-id case runs on Burrow now that chown works.

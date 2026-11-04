@@ -20,11 +20,11 @@ const keptMode = fs.ModePerm | fsattr.SpecialBits
 func (f *FS) newNode(base string, typ fs.FileMode, n fsattr.New) *node {
 	f.lastIno++
 	return &node{name: base, mode: typ | n.Mode&keptMode, modTime: n.Mtime, uid: n.UID, gid: n.GID,
-		ino: f.lastIno, ctime: n.Mtime}
+		ino: f.lastIno, ctime: n.Mtime, links: 1}
 }
 
 func (n *node) attr() fsattr.Attr {
-	links := uint32(1)
+	links := uint32(max(n.links, 1))
 	if n.mode.IsDir() {
 		links = 2
 		for _, c := range n.children {

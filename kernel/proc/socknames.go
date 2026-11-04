@@ -87,8 +87,9 @@ type socketMaker interface {
 
 // sockaddr reads a struct sockaddr_un of n bytes at va: the name as given
 // (path, "\x00..." or "" for a bare family) and its table key (the path
-// resolved to an io/fs path; an abstract name is its own key).
-func (p *Process) sockaddr(va, n uint64) (name, key string, e int64) {
+// resolved to an io/fs path; an abstract name is its own key). follow says
+// whether a final link is followed: connect follows one, bind does not.
+func (p *Process) sockaddr(va, n uint64, follow bool) (name, key string, e int64) {
 	if n < 2 || n > sockaddrMax {
 		return "", "", -int64(syscall.EINVAL)
 	}
@@ -112,7 +113,11 @@ func (p *Process) sockaddr(va, n uint64) (name, key string, e int64) {
 			break
 		}
 	}
-	return string(raw), p.resolve(string(raw)), 0
+	resolved, err := p.resolvePath(string(raw), follow)
+	if err != nil {
+		return "", "", errno(err)
+	}
+	return string(raw), resolved, 0
 }
 
 // sockaddrOf is the struct sockaddr_un for a name, as long as Linux makes it.
@@ -161,7 +166,7 @@ func sysBindFn(p *Process, a [6]uint64) (int64, bool) {
 	if e < 0 {
 		return ok(e)
 	}
-	name, key, e := p.sockaddr(a[1], a[2])
+	name, key, e := p.sockaddr(a[1], a[2], false)
 	switch {
 	case e < 0:
 		return ok(e)

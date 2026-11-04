@@ -13,5 +13,10 @@ type run /bin/permtest /mnt/permtest
 key ret
 wait permtest: ok
 wait burrow> 
+# W19-S05: links on ext2
+type run /bin/linktest /mnt/linktest
+key ret
+wait linktest: ok
+wait burrow> 
 type poweroff
 key ret

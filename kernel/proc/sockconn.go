@@ -21,7 +21,7 @@ func sysConnectFn(t *Thread, a [6]uint64) (int64, bool) {
 	if e < 0 {
 		return ok(e)
 	}
-	name, key, e := p.sockaddr(a[1], a[2])
+	name, key, e := p.sockaddr(a[1], a[2], true)
 	switch {
 	case e < 0:
 		return ok(e)

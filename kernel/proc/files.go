@@ -161,16 +161,8 @@ func (t *fdTable) closeOnExec() {
 	}
 }
 
-// resolve turns a user path into an io/fs path: relative ones start at cwd.
-func (p *Process) resolve(name string) string {
-	if !strings.HasPrefix(name, "/") {
-		p.mu.Lock()
-		name = p.cwd + "/" + name
-		p.mu.Unlock()
-	}
-	return cleanPath(name)
-}
-
+// cleanPath is a path's text cleaned: the fallback of trees without the
+// walker (lookup.go; W19-S05 resolves links and ".." physically).
 func cleanPath(name string) string {
 	if c := strings.TrimPrefix(path.Clean("/"+name), "/"); c != "" {
 		return c

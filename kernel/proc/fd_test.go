@@ -20,6 +20,7 @@ func vfsRig(t *testing.T) (*rig, *vfs.VFS) {
 	root := memfs.New()
 	root.MkdirAll("bin", 0o755, time.Time{})
 	root.MkdirAll("etc", 0o755, time.Time{})
+	root.MkdirAll("dev", 0o755, time.Time{}) // the walker (W19-S05) wants /dev to exist, as devfs makes it
 	root.WriteFile("bin/prog", program(), 0o755, time.Time{})
 	root.WriteFile("etc/motd", []byte("hello file\n"), 0o644, time.Time{})
 	root.Freeze()
@@ -213,7 +214,7 @@ func TestStatAndGetdents(t *testing.T) {
 			off += rec
 		}
 	}
-	if got := strings.Join(names, " "); got != "./4 ../4 bin/4 etc/4 tmp/4" {
+	if got := strings.Join(names, " "); got != "./4 ../4 bin/4 dev/4 etc/4 tmp/4" {
 		t.Errorf("entries %q", got)
 	}
 	if r.call(p, 63, scratch) != 0 {

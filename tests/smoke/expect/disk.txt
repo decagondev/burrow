@@ -27,4 +27,30 @@ permtest: chown-drops-set-uid ok
 permtest: root-chowns ok
 permtest: sticky-root-deletes ok
 permtest: ok
+burrow> run /bin/linktest /mnt/linktest
+linktest: setup ok
+linktest: symlink-readlink ok
+linktest: readlink-of-a-file ok
+linktest: lstat-and-stat ok
+linktest: follow ok
+linktest: nofollow ok
+linktest: fstatat-nofollow ok
+linktest: dangling ok
+linktest: excl-on-a-link ok
+linktest: mkdir-over-a-link ok
+linktest: loop ok
+linktest: dotdot-after-a-link ok
+linktest: absolute-link ok
+linktest: chdir-through-a-link ok
+linktest: trailing-slash-on-a-file ok
+linktest: unlink-a-link ok
+linktest: rename-a-link ok
+linktest: at-forms ok
+linktest: hard-link ok
+linktest: hard-link-shares-data ok
+linktest: hard-link-outlives-a-name ok
+linktest: link-of-a-directory ok
+linktest: link-to-an-existing-name ok
+linktest: cleanup ok
+linktest: ok
 burrow> poweroff

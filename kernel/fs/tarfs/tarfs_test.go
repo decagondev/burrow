@@ -29,7 +29,9 @@ func archive(t *testing.T) []byte {
 	add(&tar.Header{Name: "./", Typeflag: tar.TypeDir, Mode: 0o755}, "")
 	add(&tar.Header{Name: "./etc/", Typeflag: tar.TypeDir, Mode: 0o755}, "")
 	add(&tar.Header{Name: "./etc/motd", Typeflag: tar.TypeReg, Mode: 0o644}, "Welcome to Burrow\n")
+	add(&tar.Header{Name: "./bin/busybox", Typeflag: tar.TypeReg, Mode: 0o755}, "busybox\n")
 	add(&tar.Header{Name: "./bin/sh", Typeflag: tar.TypeSymlink, Linkname: "busybox", Mode: 0o777}, "")
+	add(&tar.Header{Name: "./etc/motd-again", Typeflag: tar.TypeLink, Linkname: "./etc/motd"}, "")
 	add(&tar.Header{Name: "usr/share/doc/README", Typeflag: tar.TypeReg, Mode: 0o644}, "made-up dirs\n")
 	add(&tar.Header{Name: "./etc/shadow", Typeflag: tar.TypeReg, Mode: 0o600, Uid: 0, Gid: 42}, "root:x\n")
 	add(&tar.Header{Name: "./bin/su", Typeflag: tar.TypeReg, Mode: 0o4755}, "su\n")
@@ -46,7 +48,7 @@ func TestConformanceAndContents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := fstest.TestFS(fsys, "etc/motd", "usr/share/doc/README"); err != nil {
+	if err := fstest.TestFS(fsys, "etc/motd", "usr/share/doc/README", "bin/sh", "etc/motd-again"); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := fs.ReadFile(fsys, "etc/motd")
@@ -56,8 +58,14 @@ func TestConformanceAndContents(t *testing.T) {
 	if !bytes.Contains(a, b) || &b[0] == nil {
 		t.Error("motd not found in the archive")
 	}
-	if _, err := fs.Stat(fsys, "bin/sh"); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("symlink should be skipped, Stat = %v", err)
+	if target, err := fsys.ReadLink("bin/sh"); err != nil || target != "busybox" { // W19-S05: links are kept
+		t.Errorf("bin/sh: ReadLink = %q, %v", target, err)
+	}
+	if b, err := fs.ReadFile(fsys, "bin/sh"); err != nil || string(b) != "busybox\n" {
+		t.Errorf("bin/sh opened through the link: %q, %v", b, err)
+	}
+	if info, err := fs.Stat(fsys, "etc/motd-again"); err != nil || info.Sys().(fsattr.Attr).Nlink != 2 {
+		t.Errorf("a hard link: %v, %v", info, err)
 	}
 	if err := fsys.WriteFile("etc/x", nil, 0o644, time.Time{}); !errors.Is(err, fs.ErrPermission) {
 		t.Errorf("tarfs is writable: %v", err)

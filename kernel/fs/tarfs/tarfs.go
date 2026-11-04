@@ -19,8 +19,9 @@ import (
 	"burrow/kernel/fsattr"
 )
 
-// New indexes archive. Links and device nodes are skipped (devfs makes
-// devices; links can come with a VFS that has them).
+// New indexes archive. Since W19-S05 symbolic and hard links are kept (a
+// hard link must come after the file it names, as tar writes them);
+// device nodes are skipped (devfs makes devices).
 func New(archive []byte) (*memfs.FS, error) {
 	fsys := memfs.New()
 	r := bytes.NewReader(archive)
@@ -41,6 +42,14 @@ func New(archive []byte) (*memfs.FS, error) {
 		case tar.TypeDir:
 			if err = fsys.MkdirAll(name, 0o755, h.ModTime); err == nil {
 				err = owned(fsys, name, h)
+			}
+		case tar.TypeSymlink:
+			if err = fsys.MkdirAll(path.Dir(name), 0o755, h.ModTime); err == nil {
+				err = fsys.Symlink(h.Linkname, name, attrs(h))
+			}
+		case tar.TypeLink:
+			if err = fsys.MkdirAll(path.Dir(name), 0o755, h.ModTime); err == nil {
+				err = fsys.Link(clean(h.Linkname), name)
 			}
 		case tar.TypeReg:
 			off := int64(len(archive)) - int64(r.Len()) // tar.Reader sits at the data

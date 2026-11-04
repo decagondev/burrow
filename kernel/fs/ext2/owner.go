@@ -67,13 +67,6 @@ func (f *FS) Chown(name string, uid, gid uint32) error {
 		if err != nil {
 			return err
 		}
-		if uid != fsattr.Keep {
-			in.uid = uid
-		}
-		if gid != fsattr.Keep {
-			in.gid = gid
-		}
-		in.ctime = f.stamp()
-		return f.putInode(in, false)
+		return f.setOwner(in, uid, gid)
 	})
 }

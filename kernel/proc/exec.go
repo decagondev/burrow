@@ -32,7 +32,10 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	if err != nil {
 		return errno(err)
 	}
-	file := p.resolve(name)
+	file, err := p.resolvePath(name, true)
+	if err != nil {
+		return errno(err)
+	}
 	cred := p.Cred()
 	if err := p.permit(&cred, file, mayExec); err != nil { // W19-S04
 		return errno(err)

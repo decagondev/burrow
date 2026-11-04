@@ -23,23 +23,20 @@ func (p *Process) renameAt(olddirfd, oldVA, newdirfd, newVA, flags uint64) int64
 	if flags&^renameNoreplace != 0 {
 		return -int64(syscall.EINVAL)
 	}
-	from, err := p.at(olddirfd, oldVA)
+	from, err := p.atNoFollow(olddirfd, oldVA) // a link is renamed, not its target
 	if err != nil {
 		return errno(err)
 	}
-	to, err := p.at(newdirfd, newVA)
+	to, err := p.atNoFollow(newdirfd, newVA)
 	if err != nil {
 		return errno(err)
 	}
 	c := p.Cred()
-	if err := p.search(&c, from); err != nil {
-		return errno(err)
-	}
-	src, err := fs.Stat(p.sys.files, from)
+	src, err := p.statPath(from, false)
 	if err != nil {
 		return errno(err)
 	}
-	dst, err := fs.Stat(p.sys.files, to)
+	dst, err := p.statPath(to, false)
 	if err == nil && flags&renameNoreplace != 0 {
 		return -int64(syscall.EEXIST)
 	}
@@ -87,10 +84,6 @@ func sysFsyncFn(p *Process, a [6]uint64) (int64, bool) {
 func (p *Process) pathExists(dirfd, nameVA uint64) int64 {
 	name, err := p.at(dirfd, nameVA)
 	if err != nil {
-		return errno(err)
-	}
-	c := p.Cred() // W19-S04: search permission on the way
-	if err := p.search(&c, name); err != nil {
 		return errno(err)
 	}
 	if _, err := fs.Stat(p.sys.files, name); err != nil {

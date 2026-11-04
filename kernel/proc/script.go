@@ -32,7 +32,10 @@ func (p *Process) script(name, file string, head []byte, argv []string) (string,
 	if interp == "" {
 		return "", nil, syscall.ENOEXEC
 	}
-	ifile := p.resolve(interp)
+	ifile, err := p.resolvePath(interp, true)
+	if err != nil {
+		return "", nil, err
+	}
 	_, ihead, err := p.sys.openProgram(ifile)
 	switch {
 	case err != nil:

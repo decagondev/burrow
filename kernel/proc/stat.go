@@ -2,7 +2,8 @@ package proc
 
 // stat.go - the stat family: stat, lstat, fstat, newfstatat, and statx
 // (W14-S03, from the same struct stat). There are no symbolic links yet, so
-// lstat is stat and readlink says "not a link" (-EINVAL). The inode number,
+// lstat is stat and readlink says "not a link" (-EINVAL); since W19-S05
+// lstat and AT_SYMLINK_NOFOLLOW describe a link itself. The inode number,
 // links, owner and times come from the file system's vfs.Attr when it gives
 // one (ext2 since W19-S01); otherwise the owner is root and the inode a hash
 // of the path. Never decides anything from them. Docs: POSIX_COVERAGE.md.
@@ -107,15 +108,12 @@ func (p *Process) statOf(dirfd, nameVA, flags uint64) ([]byte, int64) {
 			return p.fdStat(dirfd)
 		}
 	}
-	name, err := p.at(dirfd, nameVA)
+	follow := flags&atSymlinkNofollw == 0
+	name, err := p.atFollow(dirfd, nameVA, follow)
 	if err != nil {
 		return nil, errno(err)
 	}
-	c := p.Cred() // W19-S04: search permission on the way
-	if err := p.search(&c, name); err != nil {
-		return nil, errno(err)
-	}
-	info, err := fs.Stat(p.sys.files, name)
+	info, err := p.statPath(name, follow)
 	if err != nil {
 		return nil, errno(err)
 	}
@@ -137,6 +135,12 @@ func sysFstatFn(p *Process, a [6]uint64) (int64, bool) {
 // stat and lstat (no symbolic links yet: the same thing).
 func sysStatFn(p *Process, a [6]uint64) (int64, bool) {
 	st, e := p.statOf(atFDCWDArg, a[0], 0)
+	return ok(p.copyStat(st, e, a[1]))
+}
+
+// lstat: a final link is described itself (W19-S05).
+func sysLstatFn(p *Process, a [6]uint64) (int64, bool) {
+	st, e := p.statOf(atFDCWDArg, a[0], atSymlinkNofollw)
 	return ok(p.copyStat(st, e, a[1]))
 }
 
@@ -178,24 +182,40 @@ func statx(st []byte) []byte {
 	return x
 }
 
-// readlink and readlinkat: nothing is a symbolic link, so a path that
-// exists is -EINVAL, as Linux answers for a regular file.
+// readlink and readlinkat (W19-S05): the target, at most size bytes of it
+// and no NUL; -EINVAL for anything but a link.
 func sysReadlinkFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.readlinkAt(atFDCWDArg, a[0], a[2]))
+	return ok(p.readlinkAt(atFDCWDArg, a[0], a[1], a[2]))
 }
 
 func sysReadlinkatFn(p *Process, a [6]uint64) (int64, bool) {
-	return ok(p.readlinkAt(a[0], a[1], a[3]))
+	return ok(p.readlinkAt(a[0], a[1], a[2], a[3]))
 }
 
-func (p *Process) readlinkAt(dirfd, nameVA, size uint64) int64 {
+func (p *Process) readlinkAt(dirfd, nameVA, bufVA, size uint64) int64 {
 	if int64(size) <= 0 {
 		return -int64(syscall.EINVAL)
 	}
-	if e := p.pathExists(dirfd, nameVA); e < 0 {
-		return e
+	name, err := p.atNoFollow(dirfd, nameVA)
+	if err != nil {
+		return errno(err)
 	}
-	return -int64(syscall.EINVAL)
+	rl, ok := p.sys.files.(fs.ReadLinkFS)
+	if !ok {
+		if _, err := fs.Stat(p.sys.files, name); err != nil {
+			return errno(err)
+		}
+		return -int64(syscall.EINVAL)
+	}
+	target, err := rl.ReadLink(name)
+	if err != nil {
+		return errno(err)
+	}
+	b := []byte(target)[:min(uint64(len(target)), size)]
+	if err := p.mem.CopyOut(bufVA, b); err != nil {
+		return errno(err)
+	}
+	return int64(len(b))
 }
 
 func init() {

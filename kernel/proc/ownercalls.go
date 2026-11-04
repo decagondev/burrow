@@ -8,7 +8,8 @@ package proc
 // directory drops the set-user-id bit, and the set-group-id bit when group
 // execute is set, even root's. A file system that keeps no owners says
 // EPERM (vfs). Descriptors without a path (pipes, sockets) accept and
-// change nothing. lchown follows links until W19-S05 has them.
+// change nothing. lchown (and fchownat's AT_SYMLINK_NOFOLLOW) changes a
+// link's own owner (W19-S05).
 // Docs: POSIX_COVERAGE.md.
 
 import (
@@ -34,6 +35,10 @@ func (p *Process) owners() (ownerFS, bool) {
 // descriptor itself (fchmod, fchown, AT_EMPTY_PATH); "" with no error is a
 // descriptor without a path.
 func (p *Process) target(dirfd, nameVA uint64, byFD bool) (string, error) {
+	return p.targetFollow(dirfd, nameVA, byFD, true)
+}
+
+func (p *Process) targetFollow(dirfd, nameVA uint64, byFD, follow bool) (string, error) {
 	if byFD {
 		f := p.fds.get(dirfd)
 		if f == nil {
@@ -41,7 +46,7 @@ func (p *Process) target(dirfd, nameVA uint64, byFD bool) (string, error) {
 		}
 		return f.path, nil
 	}
-	return p.at(dirfd, nameVA)
+	return p.atFollow(dirfd, nameVA, follow)
 }
 
 func (p *Process) chmodAt(name string, bits uint32) int64 {
@@ -49,9 +54,6 @@ func (p *Process) chmodAt(name string, bits uint32) int64 {
 		return 0
 	}
 	c := p.Cred()
-	if err := p.search(&c, name); err != nil {
-		return errno(err)
-	}
 	info, err := fs.Stat(p.sys.files, name)
 	if err != nil {
 		return errno(err)
@@ -70,15 +72,12 @@ func (p *Process) chmodAt(name string, bits uint32) int64 {
 	return errno(o.Chmod(name, mode))
 }
 
-func (p *Process) chownAt(name string, uid, gid uint32) int64 {
+func (p *Process) chownAt(name string, uid, gid uint32, follow bool) int64 {
 	if name == "" {
 		return 0
 	}
 	c := p.Cred()
-	if err := p.search(&c, name); err != nil {
-		return errno(err)
-	}
-	info, err := fs.Stat(p.sys.files, name)
+	info, err := p.statPath(name, follow)
 	if err != nil {
 		return errno(err)
 	}
@@ -89,6 +88,15 @@ func (p *Process) chownAt(name string, uid, gid uint32) int64 {
 	o, ok := p.owners()
 	if !ok {
 		return -int64(syscall.EROFS)
+	}
+	if isLink(info) { // lchown (W19-S05): the link's own owner; no mode to fix
+		l, ok := p.sys.files.(interface {
+			Lchown(string, uint32, uint32) error
+		})
+		if !ok {
+			return -int64(syscall.EPERM)
+		}
+		return errno(l.Lchown(name, uid, gid))
 	}
 	if err := o.Chown(name, uid, gid); err != nil {
 		return errno(err)
@@ -117,25 +125,27 @@ func init() {
 			name, err := p.target(a[0], a[1], false)
 			return ok(orErr(err, func() int64 { return p.chmodAt(name, uint32(a[2])) }))
 		},
-		92: chownFn(false), 94: chownFn(false), // chown, lchown(path, uid, gid)
+		92: chownFn(true), 94: chownFn(false), // chown, lchown(path, uid, gid)
 		93: func(p *Process, a [6]uint64) (int64, bool) { // fchown(fd, uid, gid)
 			name, err := p.target(a[0], 0, true)
-			return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[1]), uint32(a[2])) }))
+			return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[1]), uint32(a[2]), true) }))
 		},
 		260: func(p *Process, a [6]uint64) (int64, bool) { // fchownat(dirfd, path, uid, gid, flags)
 			name, _ := p.mem.CString(a[1], 4096)
-			name, err := p.target(a[0], a[1], name == "" && a[4]&atEmptyPath != 0)
-			return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[2]), uint32(a[3])) }))
+			follow := a[4]&atSymlinkNofollw == 0
+			name, err := p.targetFollow(a[0], a[1], name == "" && a[4]&atEmptyPath != 0, follow)
+			return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[2]), uint32(a[3]), follow) }))
 		},
 	} {
 		table[nr] = h
 	}
 }
 
-func chownFn(_ bool) handler {
+// chownFn is chown (follow) or lchown (not).
+func chownFn(follow bool) handler {
 	return func(p *Process, a [6]uint64) (int64, bool) {
-		name, err := p.target(atFDCWDArg, a[0], false)
-		return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[1]), uint32(a[2])) }))
+		name, err := p.targetFollow(atFDCWDArg, a[0], false, follow)
+		return ok(orErr(err, func() int64 { return p.chownAt(name, uint32(a[1]), uint32(a[2]), follow) }))
 	}
 }
 

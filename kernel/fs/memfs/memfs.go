@@ -38,6 +38,7 @@ type node struct {
 	uid, gid uint32
 	ino      uint64
 	ctime    time.Time
+	links    int // names of a file (hard links, W19-S05); directories count theirs
 }
 
 // New returns an empty, writable tree.
@@ -70,11 +71,14 @@ func (f *FS) Open(name string) (fs.File, error) {
 	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	n, ok := f.lookup(name)
-	if !ok {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	n, err := f.follow(name) // links inside the tree (links.go)
+	if err != nil {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: err}
 	}
 	info := n.info()
+	if name != "." {
+		info.name = base(name) // a hard-linked node has more than one name
+	}
 	if n.mode.IsDir() {
 		return &dir{info: info, entries: n.entries()}, nil
 	}
@@ -150,6 +154,7 @@ func (f *FS) Remove(name string) error {
 		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrExist}
 	}
 	delete(p.children, base)
+	n.links--
 	return nil
 }
 
@@ -244,8 +249,10 @@ func (i *info) Sys() any           { return i.attr }
 
 func (n *node) entries() []fs.DirEntry {
 	out := make([]fs.DirEntry, 0, len(n.children))
-	for _, c := range n.children {
-		out = append(out, fs.FileInfoToDirEntry(c.info()))
+	for name, c := range n.children {
+		i := c.info()
+		i.name = name // the entry's name, not the node's first one
+		out = append(out, fs.FileInfoToDirEntry(i))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
 	return out

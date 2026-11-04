@@ -5,9 +5,10 @@ package proc
 // nothing to tune and is accepted for any open file, and statfs/fstatfs,
 // which name the file system holding a path with Linux's magic number. The
 // sizes are not tracked (blocks and inodes read as 0), as for /proc on
-// Linux. link and linkat answer EPERM for a source that exists: no Burrow
-// file system has hard links, and EPERM is what Linux's vfat says, which
-// sends fontconfig's cache lock to its mkdir fallback. Docs: docs/02-architecture/POSIX_COVERAGE.md.
+// Linux. link and linkat moved to linkcalls.go when Burrow got hard links
+// (W19-S05); on FAT they still say EPERM, as vfat does, which sends
+// fontconfig's cache lock to its mkdir fallback there.
+// Docs: docs/02-architecture/POSIX_COVERAGE.md.
 
 import (
 	"encoding/binary"
@@ -80,21 +81,8 @@ func sysFadviseFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(0)
 }
 
-// link(old, new) and linkat(olddirfd, old, newdirfd, new, flags).
-func sysLinkFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.linkAt(atFDCWDArg, a[0])) }
-
-func sysLinkatFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.linkAt(a[0], a[1])) }
-
-func (p *Process) linkAt(dirfd, oldVA uint64) int64 {
-	if e := p.pathExists(dirfd, oldVA); e < 0 {
-		return e
-	}
-	return -int64(syscall.EPERM)
-}
-
 func init() {
-	for nr, h := range map[uint64]handler{137: sysStatfsFn, 138: sysFstatfsFn, 221: sysFadviseFn,
-		86: sysLinkFn, 265: sysLinkatFn} {
+	for nr, h := range map[uint64]handler{137: sysStatfsFn, 138: sysFstatfsFn, 221: sysFadviseFn} { // links: linkcalls.go
 		table[nr] = h
 	}
 }

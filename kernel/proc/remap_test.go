@@ -59,8 +59,9 @@ func TestStatfsAndFadvise(t *testing.T) {
 	if e := r.call(p, 221, fd, 0, 0, 2); e != 0 { // POSIX_FADV_SEQUENTIAL
 		t.Errorf("fadvise64 = %d", e)
 	}
-	if e := r.call(p, 86, r.str(p, scratch, "/etc/motd"), r.str(p, scratch+128, "/tmp/m")); e != -int64(syscall.EPERM) {
-		t.Errorf("link = %d, want EPERM", e)
+	// W19-S05: links are real now; / and /tmp are different mounts
+	if e := r.call(p, 86, r.str(p, scratch, "/etc/motd"), r.str(p, scratch+128, "/tmp/m")); e != -int64(syscall.EXDEV) {
+		t.Errorf("link across mounts = %d, want EXDEV", e)
 	}
 	if e := r.call(p, 86, r.str(p, scratch, "/nope"), r.str(p, scratch+128, "/tmp/m")); e != -int64(syscall.ENOENT) {
 		t.Errorf("link of nothing = %d, want ENOENT", e)

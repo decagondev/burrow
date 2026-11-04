@@ -10,7 +10,7 @@ import (
 // Linux numbers of the descriptor and path calls (POSIX_COVERAGE.md).
 func init() {
 	for nr, h := range map[uint64]handler{
-		4: sysStatFn, 6: sysStatFn, 21: sysAccessFn, 22: sysPipeFn, 32: sysDupFn, 33: sysDup2Fn,
+		4: sysStatFn, 6: sysLstatFn, 21: sysAccessFn, 22: sysPipeFn, 32: sysDupFn, 33: sysDup2Fn,
 		63: sysUnameFn, 72: sysFcntlFn, 79: sysGetcwdFn, 80: sysChdirFn, 81: sysFchdirFn,
 		83: sysMkdirFn, 84: sysRmdirFn, 87: sysUnlinkFn, 217: sysGetdents64Fn, 258: sysMkdiratFn,
 		262: sysNewfstatatFn, 263: sysUnlinkatFn, 269: sysFaccessatFn, 292: sysDup3Fn,

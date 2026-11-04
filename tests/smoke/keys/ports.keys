@@ -66,5 +66,10 @@ type run /bin/permtest /tmp/permtest
 key ret
 wait permtest: ok
 wait burrow> 
+# W19-S05: symbolic and hard links in /tmp (passed on the host's Linux first)
+type run /bin/linktest /tmp/linktest
+key ret
+wait linktest: ok
+wait burrow> 
 type poweroff
 key ret

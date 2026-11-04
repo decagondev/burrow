@@ -319,11 +319,14 @@ $(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
-disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest
+disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest $(BUILD)/user/linktest
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk $(EXT2_DRIVE)" \
 		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
 	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
+	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/ext2.img >/dev/null \
+		&& echo "EXT2 DISK PASS (e2fsck after permtest and linktest wrote to it)" \
+		|| { echo "EXT2 DISK FAIL: e2fsck rejects build/ext2.img"; exit 1; }
 
 # Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
 # Memory (W14-S01): on a 2 GiB guest, 1.5 GiB touched and checked, then a
@@ -337,7 +340,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -346,6 +349,7 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/forkbench > $(BUILD)/forkbench-linux.log  # W18-S01
 	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
 	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
+	$(BUILD)/user/linktest /tmp/linktest-linux > $(BUILD)/linktest-linux.log  # W19-S05 (an absolute directory)
 	@# W19-S03, S04: credtest and permtest need root on Linux (and a disk without nosuid for --exec)
 	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
 		$(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \

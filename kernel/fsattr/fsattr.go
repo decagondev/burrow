@@ -53,3 +53,13 @@ type Owner interface {
 	Chmod(name string, mode fs.FileMode) error
 	Chown(name string, uid, gid uint32) error
 }
+
+// Linker is a file system that holds links (W19-S05: ext2, memfs). Symlink
+// makes name a symbolic link to target, owned and moded as n says; Link
+// gives oldname's file the name newname too (not a directory: EPERM; an
+// existing newname: EEXIST); Lchown is Chown of a link itself.
+type Linker interface {
+	Symlink(target, name string, n New) error
+	Link(oldname, newname string) error
+	Lchown(name string, uid, gid uint32) error
+}

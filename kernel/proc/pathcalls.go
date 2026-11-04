@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io/fs"
 	"path"
-	"strings"
 	"syscall"
 
 	"burrow/kernel/vfs"
@@ -29,22 +28,7 @@ const (
 	atEmptyPath      = 0x1000
 )
 
-// at resolves name for an *at call: absolute, from the cwd (AT_FDCWD), or
-// from the directory open at dirfd.
-func (p *Process) at(dirfd uint64, nameVA uint64) (string, error) {
-	name, err := p.mem.CString(nameVA, 4096)
-	if err != nil {
-		return "", err
-	}
-	if strings.HasPrefix(name, "/") || int32(dirfd) == atFDCWD {
-		return p.resolve(name), nil
-	}
-	d := p.fds.get(dirfd)
-	if d == nil || d.f == nil || d.path == "" {
-		return "", syscall.EBADF
-	}
-	return cleanPath(d.path + "/" + name), nil
-}
+// at and atNoFollow (lookup.go, W19-S05) resolve the names of these calls.
 
 func sysOpenFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(p.openAt(uint64(atFDCWD&0xFFFFFFFF), a[0], int(a[1]), uint32(a[2])))
@@ -58,7 +42,8 @@ func sysOpenatFn(p *Process, a [6]uint64) (int64, bool) {
 // with the permission checks of perm.go (terminals, pseudo-terminals and
 // /dev/shm are not files of the tree and are not checked).
 func (p *Process) openAt(dirfd, nameVA uint64, flags int, mode uint32) int64 {
-	name, err := p.at(dirfd, nameVA)
+	follow := flags&oNofollow == 0 && flags&(oCreat|oExcl) != oCreat|oExcl // O_EXCL creates the link's own name
+	name, err := p.atFollow(dirfd, nameVA, follow)
 	if err != nil {
 		return errno(err)
 	}
@@ -92,11 +77,11 @@ func (p *Process) openAt(dirfd, nameVA uint64, flags int, mode uint32) int64 {
 	}
 	fsys := p.sys.files
 	c := p.Cred()
-	if err := p.search(&c, name); err != nil {
-		return errno(err)
-	}
-	info, statErr := fs.Stat(fsys, name)
+	info, statErr := p.statPath(name, follow)
 	exists := statErr == nil
+	if exists && isLink(info) && flags&oNofollow != 0 {
+		return -int64(syscall.ELOOP) // O_NOFOLLOW on a link, as Linux
+	}
 	if e := p.mayOpen(&c, name, info, exists, flags); e != 0 {
 		return e
 	}
@@ -198,7 +183,11 @@ func sysFaccessat2Fn(p *Process, a [6]uint64) (int64, bool) {
 const atEaccess = 0x200
 
 func (p *Process) accessAt(dirfd, nameVA uint64, mode uint32, effective bool) int64 {
-	name, err := p.at(dirfd, nameVA)
+	s, err := p.mem.CString(nameVA, 4096)
+	if err != nil {
+		return errno(err)
+	}
+	raw, err := p.rawPath(dirfd, s)
 	if err != nil {
 		return errno(err)
 	}
@@ -206,10 +195,11 @@ func (p *Process) accessAt(dirfd, nameVA uint64, mode uint32, effective bool) in
 	if !effective {
 		c.UID[idFS], c.GID[idFS] = c.UID[idReal], c.GID[idReal]
 	}
+	name, err := p.lookupAs(&c, raw, true) // the walk is searched with the same ids
+	if err != nil {
+		return errno(err)
+	}
 	if mode&7 == 0 {
-		if err := p.search(&c, name); err != nil {
-			return errno(err)
-		}
 		_, err = fs.Stat(p.sys.files, name)
 		return errno(err)
 	}
@@ -274,7 +264,7 @@ func sysMkdiratFn(p *Process, a [6]uint64) (int64, bool) {
 
 func (p *Process) mkdirAt(dirfd, nameVA uint64, mode uint32) int64 {
 	wfs, isW := p.sys.files.(WritableFS)
-	name, err := p.at(dirfd, nameVA)
+	name, err := p.atNoFollow(dirfd, nameVA)
 	switch {
 	case err != nil:
 		return errno(err)
@@ -300,14 +290,14 @@ func sysUnlinkatFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.unlinkAt
 
 func (p *Process) unlinkAt(dirfd, nameVA, flags uint64) int64 {
 	wfs, isW := p.sys.files.(WritableFS)
-	name, err := p.at(dirfd, nameVA)
+	name, err := p.atNoFollow(dirfd, nameVA)
 	if err != nil {
 		return errno(err)
 	}
 	if isShmPath(name) { // shm_unlink (W18-S03)
 		return p.sys.unlinkShm(name)
 	}
-	info, err := fs.Stat(p.sys.files, name)
+	info, err := p.statPath(name, false) // a link goes, not what it points at
 	switch {
 	case err != nil:
 		return errno(err)
