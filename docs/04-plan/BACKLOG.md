@@ -160,7 +160,17 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E18.F02 As a user, I want `execve` to read a program's pages as they are touched, so that big programs start fast. [W18]
 - [x] E18.F03 As a porter, I want shared memory (`MAP_SHARED`, `/dev/shm`, `memfd_create`, SysV `shm*`), so that programs and the X server share buffers. [W18]
 - [x] E18.F04 As a porter, I want dynamic linking (`PT_INTERP`, musl's loader, `dlopen`), so that programs share code and load plugins. [W18]
-- Later: a Unix file system with permissions and symbolic links (ext2) · shared Qt and X libraries · sound (SB16 or AC'97, OSS `/dev/dsp`) · an absolute pointer (USB tablet or virtio-input: no mouse grab, PIT-32).
+- Later: shared Qt and X libraries · sound (SB16 or AC'97, OSS `/dev/dsp`) · an absolute pointer (USB tablet or virtio-input: no mouse grab, PIT-32).
+
+## E19 A multi-user Unix
+*Exit: people log in, files have owners and permissions, links work, and a Unix file system keeps it all.* [W19]
+
+- [ ] E19.F01 As a user, I want ext2 disks read and written (checked by `e2fsck`), so that files keep owners, modes and links across reboots. [W19]
+- [ ] E19.F02 As a porter, I want user and group ids with the `set*id` calls and set-user-id programs, so that `su`, `login` and servers that drop privileges work. [W19]
+- [ ] E19.F03 As a user, I want permissions checked on every path, `open` and `execve`, so that one user cannot change another's files. [W19]
+- [ ] E19.F04 As a porter, I want symbolic and hard links with Linux's path rules (`ELOOP`, `O_NOFOLLOW`, `..` after a link), so that install scripts and build tools work unchanged. [W19]
+- [ ] E19.F05 As a user, I want to boot from an ext2 root disk to a `login:` prompt and manage users with `passwd` and `adduser`, so that Burrow is a multi-user system. [W19]
+- Later: ext3/ext4 (journal, extents) · ACLs and extended attributes · capabilities · `/proc` · ssh (dropbear, with E17).
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [later]

@@ -23,6 +23,7 @@
 | M16 | A desktop | `startx`: dwm tiles st terminals, dmenu starts Doom in a window (done: `make x11-smoke`, `make run-desktop`) | W16 |
 | M17 | On the network | busybox `wget` from the host, a Go program fetching an HTTPS page, `httpd` inside Burrow reached from the host (done: `make net-smoke`, `make run-net`) | W17 |
 | M18 | Bigger programs | Doom in X through MIT-SHM at three quarters of its fbdev rate, a 64 MiB process forks in milliseconds, a dynamic program and `dlopen` (done: `make mem-bench`, `make x11-bench`, `make ports-smoke`) | W18 |
+| M19 | A multi-user Unix | boot an ext2 root disk to `login:`, a user denied `/etc/passwd`, `su` with a password, `adduser`, a symbolic link; all still there after a reboot, `e2fsck` clean (planned: `make unix-smoke`, `make run-unix`) | W19 |
 
 ```mermaid
 flowchart TB
@@ -40,7 +41,7 @@ flowchart TB
     end
     subgraph desk["Desktop"]
         direction LR
-        W14["W14<br/>desktop groundwork"] --> W15["W15<br/>Qt"] --> W16["W16<br/>X11 desktop"] --> W17["W17<br/>networking"] --> W18["W18<br/>foundations"] --> X["later: ext2, sound,<br/>GTK, a browser"]
+        W14["W14<br/>desktop groundwork"] --> W15["W15<br/>Qt"] --> W16["W16<br/>X11 desktop"] --> W17["W17<br/>networking"] --> W18["W18<br/>foundations"] --> W19["W19<br/>a multi-user Unix"] --> X["later: SMP, sound,<br/>GTK, a browser"]
     end
     boot --> core --> unix --> desk
     classDef done fill:#2e7d32,color:#fff;
@@ -54,7 +55,7 @@ Green = done, yellow = next, grey = planned.
 
 ## Critical path and risk
 
-The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. W17 put it on the network: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, servers inside Burrow and HTTPS from a Go program. W18 laid the foundations bigger programs want: copy-on-write fork, lazy `execve`, shared memory with MIT-SHM, dynamic linking. Next is hardening (E12), or the rest of E18 (ext2, shared Qt and X libraries, sound). See [RISKS.md](../living/RISKS.md).
+The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. W17 put it on the network: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, servers inside Burrow and HTTPS from a Go program. W18 laid the foundations bigger programs want: copy-on-write fork, lazy `execve`, shared memory with MIT-SHM, dynamic linking. Next is W19 (E19): users, permissions, links and ext2, booting to a `login:` prompt; then hardening and SMP (E12). See [RISKS.md](../living/RISKS.md).
 
 ## Rough effort (part-time, one person)
 
