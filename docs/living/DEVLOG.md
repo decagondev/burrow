@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18-S03 Shared memory
+
+**Did:** shared objects that own frames, behind `MAP_SHARED|MAP_ANONYMOUS`, `memfd_create` and POSIX `shm_open` under `/dev/shm`; `pread64` and `pwrite64`. `shmtest` passes all 15 checks on Linux and on Burrow.
+
+**Surprise:** the only failures were two calls nobody had needed in eighteen waves: `pread64` and `pwrite64`. Copy-on-write from S01 made the design simple: a shared page is just one that is never cow.
+
+**Next:** W18-S04, SysV shared memory and MIT-SHM.
+
 ## 2026-11-04 — W18-S02 Lazy execve
 
 **Did:** `execve` maps a program's file instead of reading it whole: whole pages fill at first touch (64 KiB at a time), edge pages and the bss are mapped at once. Qt's first frame dropped from 1.8 to about 1.4 s; the X server starts faster; st is unchanged.

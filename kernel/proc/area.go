@@ -30,6 +30,7 @@ type area struct {
 	file       io.ReaderAt // nil: anonymous (zeros)
 	off        int64       // the file offset at start
 	program    bool        // a program's segment (execve): faults read around (W18-S02)
+	shm        *shmObj     // MAP_SHARED of a shared object: its frames, from off (W18-S03)
 }
 
 // slice is the part [lo, hi) of a (inside it), its file offset moved along.
@@ -48,6 +49,12 @@ func (m *Mem) Reserve(va, n uint64, prot Prot, none bool) error {
 // ReserveFile is Reserve for a private mapping of file from offset off.
 func (m *Mem) ReserveFile(va, n uint64, prot Prot, none bool, file io.ReaderAt, off int64) error {
 	return m.reserve(area{start: va, end: va + n, prot: prot, none: none, file: file, off: off})
+}
+
+// ReserveShared is Reserve for a MAP_SHARED mapping of o from offset off:
+// its pages are o's frames, the same in every process that maps them.
+func (m *Mem) ReserveShared(va, n uint64, prot Prot, none bool, o *shmObj, off int64) error {
+	return m.reserve(area{start: va, end: va + n, prot: prot, none: none, shm: o, off: off})
 }
 
 // reserveProgram is ReserveFile for a program's segment (execve, elf.go):
@@ -120,6 +127,19 @@ func (m *Mem) reprotect(lo, hi uint64, prot Prot, none bool) {
 func (m *Mem) fillLocked(p uint64, a area) (page, error) {
 	if a.program {
 		return m.fillAroundLocked(p, a)
+	}
+	if a.shm != nil {
+		pa, err := a.shm.frame((a.off + int64(p-a.start)) / PageSize)
+		if err != nil {
+			return page{}, err
+		}
+		if err := m.nu.Map(m.as, p, pa, PageSize, a.prot); err != nil {
+			return page{}, err
+		}
+		a.shm.ref()
+		pg := page{pa: pa, prot: a.prot, shm: a.shm}
+		m.pages[p] = pg
+		return pg, nil
 	}
 	pa, err := m.nu.PageAlloc()
 	if err != nil {

@@ -128,4 +128,21 @@ burrow> run /bin/forkbench
 forkbench: fork of a 64 MiB process
 forkbench: parent still sees its bytes: yes
 forkbench: ok
+burrow> run /bin/shmtest
+shmtest: anon-shared-child-to-parent ok
+shmtest: anon-shared-parent-to-child ok
+shmtest: anon-private-stays-private ok
+shmtest: memfd-create ok
+shmtest: memfd-ftruncate ok
+shmtest: memfd-size ok
+shmtest: memfd-map-then-read ok
+shmtest: memfd-write-then-map ok
+shmtest: memfd-private-copy ok
+shmtest: memfd-shared-across-fork ok
+shmtest: shm-open-create ok
+shmtest: shm-open-excl ok
+shmtest: shm-open-by-name ok
+shmtest: shm-unlink ok
+shmtest: shm-mapping-outlives-name ok
+shmtest: ok
 burrow> poweroff

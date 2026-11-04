@@ -62,6 +62,18 @@ func (p *Process) openAt(dirfd, nameVA uint64, flags int) int64 {
 		}
 		tf.path, isTTY = name, true
 	}
+	if isShmPath(name) { // POSIX shared memory (W18-S03)
+		f, err := p.sys.openShm(name, flags)
+		if err != nil {
+			return errno(err)
+		}
+		n, err := p.fds.add(f, 0, flags&oCloexec != 0)
+		if err != nil {
+			f.unref()
+			return errno(err)
+		}
+		return int64(n)
+	}
 	if isTTY {
 		tf.flags = flags & (oAccMode | oNonblock)
 		n, err := p.fds.add(tf, 0, flags&oCloexec != 0)
@@ -216,6 +228,9 @@ func (p *Process) unlinkAt(dirfd, nameVA, flags uint64) int64 {
 	name, err := p.at(dirfd, nameVA)
 	if err != nil {
 		return errno(err)
+	}
+	if isShmPath(name) { // shm_unlink (W18-S03)
+		return p.sys.unlinkShm(name)
 	}
 	info, err := fs.Stat(p.sys.files, name)
 	switch {

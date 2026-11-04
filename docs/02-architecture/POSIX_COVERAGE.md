@@ -16,7 +16,8 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 5 | `fstat` | partial | W9 | `st_mode` (`S_IFSOCK` for sockets since W14), `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
 | 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |
-| 9 | `mmap` | partial | W9 | anonymous private memory (demand-zero since W12: a reservation costs nothing, a page gets its frame at first touch; `PROT_NONE` is inaccessible), and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); regular files privately since W14 (`MAP_PRIVATE`, and read-only `MAP_SHARED`, which is the same thing; any page-aligned offset, `PROT_EXEC`, `MAP_FIXED`; pages fill from the file at first touch, past its end they read as zeros, writes stay in the process and fork copies them; the mapping outlives `close`; `-EACCES` on a write-only descriptor, `-ENODEV` for writable `MAP_SHARED`, pipes, the terminal, directories and devices without memory); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored |
+| 9 | `mmap` | partial | W9 | anonymous private memory (demand-zero since W12: a reservation costs nothing, a page gets its frame at first touch; `PROT_NONE` is inaccessible), and device memory with `MAP_SHARED` (`/dev/fb0`, W11: shared by fork, never freed; `-EFAULT` if a syscall is handed a pointer into it); regular files privately since W14 (`MAP_PRIVATE`, and read-only `MAP_SHARED`, which is the same thing; any page-aligned offset, `PROT_EXEC`, `MAP_FIXED`; pages fill from the file at first touch, past its end they read as zeros, writes stay in the process and fork copies them; the mapping outlives `close`; `-EACCES` on a write-only descriptor, `-ENODEV` for writable `MAP_SHARED`, pipes, the terminal, directories and devices without memory); `PROT_NONE` pages are readable; a hint without `MAP_FIXED` is ignored; since W18 `MAP_SHARED|MAP_ANONYMOUS` (an unnamed shared object fork shares) and `MAP_SHARED` of `/dev/shm` files and memfds, writable (`kernel/proc/shm.go`); fork shares private pages copy-on-write (`cow.go`); writable `MAP_SHARED` of other files stays `-ENODEV` |
+| 17, 18 | `pread64` `pwrite64` | done | W18 | at an offset, the description's own unmoved, on any file that can (tarfs, memfs, FAT, `/tmp` and FAT writes, shared objects); `-ESPIPE` for pipes, sockets and terminals |
 | 10 | `mprotect` | partial | W12 | pages and areas; pages already touched stay readable under `PROT_NONE` |
 | 11 | `munmap` | done | W9 |  |
 | 12 | `brk` | done | W9 | heap after the highest segment |
@@ -74,7 +75,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 80, 81 | `chdir` `fchdir` | done | W10 |  |
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |
 | 86, 265 | `link` `linkat` | stub | W16 | no file system has hard links: `-EPERM` for a source that exists (as Linux's vfat), else its error |
-| 87 | `unlink` | done | W10 | `-EISDIR` for directories |
+| 87 | `unlink` | done | W10 | `-EISDIR` for directories; since W18 under `/dev/shm` it is `shm_unlink`: the object lives on while open or mapped |
 | 89, 267 | `readlink` `readlinkat` | done | W14 | there are no symbolic links: `-EINVAL` for a path that exists, else its error |
 | 102, 104, 107, 108 | `getuid` `getgid` `geteuid` `getegid` | partial | W9 | everyone is root (0) |
 | 109 | `setpgid` | done | W10 | self or a child in the same session |
@@ -100,7 +101,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 231 | `exit_group` | done | W9 |  |
 | 232, 281 | `epoll_wait` `epoll_pwait` | partial | W12 | level- and edge-triggered, `EPOLLONESHOT`, `EPOLLRDHUP`; the signal mask of `epoll_pwait` is ignored; never restarted |
 | 233 | `epoll_ctl` | done | W12 | `ADD MOD DEL` on pipes, the terminal, devices, eventfds; `-EPERM` for regular files |
-| 257 | `openat` | done | W10 | `AT_FDCWD` or a directory fd; since W16 `/dev/ptmx` makes a pseudo-terminal pair (`kernel/tty/pty.go`: the slave's output reaches the master processed by `OPOST`/`ONLCR`, echo never waits, program output waits while 64 KiB are unread; the master reads `EIO` once every slave is closed, and closing the master hangs the slave up: end of file, `EIO` on write, `SIGHUP`) and `/dev/pts/N` opens its slave |
+| 257 | `openat` | done | W10 | `AT_FDCWD` or a directory fd; since W16 `/dev/ptmx` makes a pseudo-terminal pair (`kernel/tty/pty.go`: the slave's output reaches the master processed by `OPOST`/`ONLCR`, echo never waits, program output waits while 64 KiB are unread; the master reads `EIO` once every slave is closed, and closing the master hangs the slave up: end of file, `EIO` on write, `SIGHUP`) and `/dev/pts/N` opens its slave; since W18 `/dev/shm/<name>` opens POSIX shared memory (`shm_open`: `O_CREAT O_EXCL O_TRUNC`; a name per system, not listed in `/dev/shm`) |
 | 258, 263 | `mkdirat` `unlinkat` | done | W10 | `AT_REMOVEDIR` |
 | 262 | `newfstatat` | done | W10 | `AT_EMPTY_PATH` |
 | 269, 439 | `faccessat` `faccessat2` | partial | W10 | existence only |
@@ -111,6 +112,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 292 | `dup3` | done | W10 | `O_CLOEXEC` |
 | 293 | `pipe2` | done | W10 | `O_CLOEXEC`, `O_NONBLOCK` (`-EAGAIN`; checked again in W14) |
 | 318 | `getrandom` | partial | W14 | never blocks; `GRND_NONBLOCK` `GRND_RANDOM` `GRND_INSECURE`; the bytes come from `kernel/random`, a ChaCha8 generator seeded once from RDRAND or the TSC: **not for cryptography** |
+| 319 | `memfd_create` | done | W18 | `MFD_CLOEXEC`, `MFD_ALLOW_SEALING` accepted (no seals kept); read, write, `pread`/`pwrite`, `ftruncate`, `fstat` and `mmap` shared or private on the same frames |
 | 324 | `membarrier` | stub | W14 | `MEMBARRIER_CMD_QUERY` answers 0 (no commands); others `-EINVAL` |
 | 332 | `statx` | done | W14 | the basic fields from the same data as `newfstatat` (`STATX_BASIC_STATS`, no birth time); `AT_EMPTY_PATH` |
 

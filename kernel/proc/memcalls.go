@@ -40,7 +40,8 @@ const (
 )
 
 // mmap: anonymous private memory (W9), device memory with MAP_SHARED
-// (/dev/fb0, W11) and private mappings of regular files (W14-S05).
+// (/dev/fb0, W11), private mappings of regular files (W14-S05), and shared
+// anonymous memory and shared objects with MAP_SHARED (W18-S03).
 func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 	addr, n, prot, flags := a[0], a[1], a[2], a[3]
 	if n == 0 || n > mmapMaxSize {
@@ -62,7 +63,13 @@ func sysMmapFn(p *Process, a [6]uint64) (int64, bool) {
 		if _, isDev := device(f).(Mappable); isDev {
 			return ok(p.mmapDevice(a[4], a[5], n, flags, pr, flags&mapFixed != 0, addr))
 		}
+		if sf, isShm := f.f.(*shmFile); isShm && flags&mapShared != 0 { // W18-S03
+			return ok(p.mmapShared(sf.o, a[5], n, pr, prot&7 == 0, flags&mapFixed != 0, addr))
+		}
 		return ok(p.mmapFile(f, a[5], n, flags, prot, pr, addr))
+	}
+	if flags&mapShared != 0 { // shared anonymous memory: an unnamed object fork shares (W18-S03)
+		return ok(p.mmapShared(newShmObj(p.sys.nu, "", int64(n)), 0, n, pr, prot&7 == 0, flags&mapFixed != 0, addr))
 	}
 	addr, e := p.pickAddr(addr, n, flags&mapFixed != 0)
 	if e != 0 {

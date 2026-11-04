@@ -317,13 +317,14 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
 	$(BUILD)/user/ptytest > $(BUILD)/ptytest-linux.log  # W16-S03
 	$(BUILD)/user/nettest > $(BUILD)/nettest-linux.log  # W17-S03
 	$(BUILD)/user/forkbench > $(BUILD)/forkbench-linux.log  # W18-S01
+	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,

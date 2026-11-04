@@ -46,12 +46,27 @@ func (w *wfile) Write(b []byte) (int, error) {
 	if w.append {
 		w.off = int64(len(w.data))
 	}
-	end := w.off + int64(len(b))
+	n, err := w.writeAtLocked(b, w.off)
+	w.off += int64(n)
+	return n, err
+}
+
+// WriteAt is pwrite (W18-S03): at off, the offset unmoved.
+func (w *wfile) WriteAt(b []byte, off int64) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if off < 0 {
+		return 0, fs.ErrInvalid
+	}
+	return w.writeAtLocked(b, off)
+}
+
+func (w *wfile) writeAtLocked(b []byte, off int64) (int, error) {
+	end := off + int64(len(b))
 	if end > int64(len(w.data)) {
 		w.data = append(w.data, make([]byte, end-int64(len(w.data)))...)
 	}
-	copy(w.data[w.off:], b)
-	w.off = end
+	copy(w.data[off:], b)
 	if err := w.fsys.WriteFile(w.name, append([]byte(nil), w.data...)); err != nil {
 		return 0, err
 	}

@@ -8,7 +8,7 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 42 files, 4 directories
+[initrd] INFO: tarfs: 43 files, 4 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok

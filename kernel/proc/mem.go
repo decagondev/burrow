@@ -26,9 +26,10 @@ type Mem struct {
 
 type page struct {
 	pa     uint64
-	prot   Prot // what the program may do; the mapping may allow less (cow)
-	device bool // device memory (a framebuffer): never freed, shared by fork
-	cow    bool // the frame may be shared: mapped read-only until a write
+	prot   Prot    // what the program may do; the mapping may allow less (cow)
+	device bool    // device memory (a framebuffer): never freed, shared by fork
+	cow    bool    // the frame may be shared: mapped read-only until a write
+	shm    *shmObj // the frame is this shared object's (W18-S03): never cow, never freed here
 }
 
 func NewMem(nu Nucleus) (*Mem, error) {

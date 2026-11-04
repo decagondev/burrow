@@ -66,6 +66,10 @@ func (pg page) hwProt() Prot {
 // releaseLocked gives up pg's frame (m.mu held): freed if this was its
 // last owner. Device frames are never freed.
 func (m *Mem) releaseLocked(pg page) {
+	if pg.shm != nil { // the object's frame: it decides
+		pg.shm.unref()
+		return
+	}
 	if !pg.device && m.refs.release(pg.pa) {
 		m.nu.PageFree(pg.pa)
 	}
@@ -117,7 +121,10 @@ func (m *Mem) breakLocked(va uint64, pg page) (page, error) {
 // shareInto gives child c the page at va (fork): device memory as it is,
 // every private page as a cow share of the same frame, in both. m.mu held.
 func (m *Mem) shareInto(c *Mem, va uint64, pg page) error {
-	if pg.device { // shared, as Linux shares MAP_SHARED memory
+	if pg.device || pg.shm != nil { // shared, as Linux shares MAP_SHARED memory
+		if pg.shm != nil {
+			pg.shm.ref()
+		}
 		c.pages[va] = pg
 		return c.nu.Map(c.as, va, pg.pa, PageSize, pg.prot)
 	}
