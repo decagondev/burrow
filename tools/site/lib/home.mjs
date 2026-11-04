@@ -7,9 +7,9 @@ import { esc, codeBlock } from './md.mjs';
 
 // The layers from the top of the stack down, and the waves that build each.
 const STRATA = [
-  { cls: 's-desk', name: 'Desktop', lang: 'C++, C + musl', waves: ['W14', 'W15'], text: 'A mouse, Unix sockets and file mappings below toolkits; then Qt widgets drawn on the framebuffer.' },
+  { cls: 's-desk', name: 'Desktop', lang: 'C++, C + musl', waves: ['W14', 'W15', 'W16'], text: 'A mouse, Unix sockets and file mappings below toolkits; then Qt widgets on the framebuffer and an X11 desktop with dwm.' },
   { cls: 's-user', name: 'User space', lang: 'C, C++, Go, Lua + musl', waves: ['W9', 'W10', 'W11', 'W12', 'W13'], text: 'Shell, busybox, DOOM, compilers and editors talking to the kernel through the Linux system-call ABI.' },
-  { cls: 's-go', name: 'Go kernel', lang: 'Go', waves: ['W6', 'W7', 'W8'], text: 'The stock Go runtime in ring 0: drivers, files, processes and POSIX policy.' },
+  { cls: 's-go', name: 'Go kernel', lang: 'Go', waves: ['W6', 'W7', 'W8', 'W17'], text: 'The stock Go runtime in ring 0: drivers, files, processes, POSIX policy and a TCP/IP stack.' },
   { cls: 's-nucleus', name: 'Nucleus', lang: 'C + assembly', waves: ['W4', 'W5'], text: 'Threads, memory, interrupts and the system-call gate that lets Go run.' },
   { cls: 's-loader', name: 'C loader', lang: 'C', waves: ['W3'], text: 'Verifies every input, reads the disk and hands over a description of the machine.' },
   { cls: 's-stage2', name: 'Stage 2', lang: 'NASM', waves: ['W2'], text: 'Memory map, A20, protected mode, paging, long mode, then calls C.' },
@@ -44,8 +44,12 @@ function stratum(s, ws) {
 </li>`;
 }
 
-export function homeBody(pr) {
+export function homeBody(pr, shots = []) {
   const q = pr.quality;
+  const shotWaves = [...new Set(shots.map((s) => s.wave).filter(Boolean))];
+  const gallery = shots.length
+    ? `<div><dt>Screenshots</dt><dd><a href="gallery.html">${shots.length} screens from the smoke tests</a>, ${shotWaves[0]} to ${shotWaves[shotWaves.length - 1]}</dd></div>`
+    : '';
   const cur = pr.waves.find((w) => w.status !== 'done') || pr.waves[pr.waves.length - 1];
   const last = pr.devlog[0] || { title: '', date: '' };
   const strata = STRATA.map((s) => stratum(s, pr.waves)).join('\n');
@@ -53,8 +57,8 @@ export function homeBody(pr) {
 <section class="hero">
   <div class="hero-text">
     <h1>Burrow</h1>
-    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, and is growing toward a desktop.</p>
-    <p class="hero-actions"><a class="btn primary" href="docs/02-architecture/ARCHITECTURE.html">Read the architecture</a><a class="btn" href="progress.html">See progress</a></p>
+    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, runs an X11 desktop, and is learning to talk to the network.</p>
+    <p class="hero-actions"><a class="btn primary" href="docs/02-architecture/ARCHITECTURE.html">Read the architecture</a><a class="btn" href="progress.html">See progress</a>${shots.length ? '<a class="btn" href="gallery.html">See screenshots</a>' : ''}</p>
   </div>
   <div class="strata-wrap">
     <p class="strata-caption">Each layer is built on the one beneath it. Work starts at the bottom and digs upward toward user space.</p>
@@ -75,6 +79,7 @@ ${strata}
     <div><dt>Bugs</dt><dd><a href="docs/living/BUGS_AND_MITIGATIONS.html">${q.bugsOpen} open, ${q.bugsClosed} closed</a>, ${q.pitfalls} pitfalls anticipated</dd></div>
     <div><dt>Automated tests</dt><dd>${q.cTests} C unit tests, ${q.goTests} Go tests, ${q.ktests} in-kernel tests, ${q.markers} boot markers, ${q.regressions} regression cases</dd></div>
     <div><dt>Decisions recorded</dt><dd><a href="docs/03-decisions/index.html">${q.adrs} architecture decision records</a></dd></div>
+    ${gallery}
   </dl>
 </section>
 

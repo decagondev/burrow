@@ -24,13 +24,20 @@ Edit `tools/site/site.config.json`:
 
 ## Keep it current
 
-Nothing on the site is typed in by hand except the home page's layer descriptions (`STRATA` in `tools/site/lib/home.mjs`). After a session:
+Nothing on the site is typed in by hand except the home page's layer descriptions (`STRATA` in `tools/site/lib/home.mjs`) and the gallery's captions (`CAPTIONS` in `scripts/screens_to_gallery.py`). After a session:
 
 - **Progress, home page and wave banners** count `[x]`, `[~]` and `[ ]` on the `### [ ] Wn-Snn` slice headings of every wave listed in `docs/04-plan/waves/README.md`, and the checkboxes in `BACKLOG.md`. An epic without checkboxes counts as done when every wave its `*Exit:*` line names is done. The first wave that is not done is the current one.
 - **Milestones** come from the table in `ROADMAP.md`; a milestone is done when its wave is.
 - **Devlog entries** appear as a timeline when they use the `## YYYY-MM-DD — title` heading; **bug entries** become cards when they use `### BUG-NNNN:` under `## Open` or `## Closed`.
 - **Test counts** are read from the test tree: `RUN(` lines in `tests/unit/c/test_main.c`, `func Test` in Go, ordered markers in `tests/smoke/expect/*.txt`, `[ktest]` lines in `tests/ktest/expect/*.txt`, `case_run REG-` in `tests/regression/run_all.sh`.
 - **A new wave** needs a row in the waves table and, if it starts a new layer, an entry in `STRATA`.
+- **The Gallery** shows every screen the smoke tests save (each `screendump build/screen-<name>.ppm` step in `tests/smoke/keys/*.keys`). The site cannot read `build/`, so after a test run refresh the committed copies:
+
+  ```sh
+  python3 scripts/screens_to_gallery.py   # build/screen-*.ppm -> docs/gallery/*.png, thumbs/, gallery.json
+  ```
+
+  It writes a full-size PNG and a half-size thumbnail per screen (about 1 MB in all) and `docs/gallery/gallery.json`: the caption (from `CAPTIONS` in the script, else the dump's comments in `tests/smoke/expect/<test>.screen`), what the test checks, the test, and the slice that introduced the screen: the first commit whose diff adds the dump's name, read by its `Wn-Snn:` subject, linked to that slice's heading in its wave file. A screen whose commit has no slice id gets its wave from the keys file's header and no slice link. A dump that is missing or half written keeps its last PNG; screens no keys file names any more are removed. Commit `docs/gallery/` with the slice that adds a screen. A new screen deserves a line in `CAPTIONS`.
 
 Then run `make site` and publish `build/site`.
 
@@ -54,10 +61,11 @@ All links are relative, so the site also works under a sub-path such as `https:/
 | `tools/site/lib/md.mjs` | Markdown rendering: heading ids (GitHub-compatible), code highlighting, Mermaid figures, checkbox markers |
 | `tools/site/lib/plan.mjs` | Reading the plan and the test tree into numbers (`progress.json` in the output) |
 | `tools/site/lib/home.mjs` | The home page's strata and the Progress page |
+| `tools/site/lib/gallery.mjs` | The Gallery page from `docs/gallery/gallery.json`; copies the images into the output at their repository paths |
 | `tools/site/lib/source.mjs` | The code browser: a page per tracked text file, an index per top-level directory |
 | `tools/site/lib/layout.mjs` | The page shell: header, sidebar, table of contents, pager, dialogs |
 | `tools/site/assets/site.css` | Both colour schemes, layout, diagrams, tables |
-| `tools/site/assets/site.js` | Theme toggle, search, table of contents, copy buttons, diagram rendering and the zoomable viewer |
+| `tools/site/assets/site.js` | Theme toggle, search, table of contents, copy buttons, diagram rendering and the zoomable viewer (diagrams and gallery screenshots) |
 | `tools/site/check-links.mjs` | Link and anchor checker |
 
 New Markdown files appear automatically (under "More" in the sidebar until you add them to `NAV` in `build.mjs`). Links between Markdown files, to source files and to directories are rewritten to the matching pages; a link to something the site does not have becomes plain text. `CLAUDE.md` is left out.

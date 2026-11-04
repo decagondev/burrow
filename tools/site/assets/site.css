@@ -292,6 +292,7 @@ dialog { color: var(--text); }
 .lb-stage.dragging { cursor: grabbing; }
 .lb-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .lb-canvas svg { max-width: none !important; display: block; }
+.lb-canvas img { max-width: none; display: block; user-select: none; }
 .lb-help { margin: 0; padding: .45rem 1rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface); }
 
 /* ---------- search ---------- */
@@ -402,6 +403,29 @@ dialog { color: var(--text); }
 .kind-bugs .entry h3 { margin-top: 0; }
 .kind-bugs .entry ul { padding-left: 1.1rem; }
 
+/* ---------- gallery: the devlog's timeline, one card per screenshot ---------- */
+.kind-gallery .prose > .shots { max-width: 60rem; }
+.shot-wave { color: var(--muted); font-size: .92rem; }
+.shots { list-style: none; padding: 0; margin: 0 0 1rem; }
+.shot { position: relative; margin: 0 0 1.5rem 1.4rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface); display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: 1.1rem 1.35rem; align-items: start; scroll-margin-top: calc(var(--topbar-h) + 1rem); }
+.shot::before { content: ""; position: absolute; left: -1.4rem; top: -1.5rem; bottom: -1.5rem; width: 2px; background: var(--border); margin-left: .45rem; }
+.shot::after { content: ""; position: absolute; left: -1.33rem; top: 1.4rem; width: .8rem; height: .8rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--bg); }
+.shot:target { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.shot-img { display: block; border: 1px solid var(--border-strong); border-radius: var(--radius-s); overflow: hidden; background: #000; cursor: zoom-in; line-height: 0; }
+.shot-img:hover, .shot-img:focus-visible { border-color: var(--accent); }
+.shot-img img { display: block; width: 100%; height: auto; }
+.shot-text > * { margin: 0 0 .5rem; }
+.shot-text > :last-child { margin-bottom: 0; }
+.shot-when { font-size: .85rem; color: var(--muted); font-family: var(--font-mono); }
+.prose .shot-slice { font-size: 1.05rem; line-height: 1.35; margin: 0 0 .5rem; }
+.shot-caption { color: var(--text); }
+.shot-meta { font-size: .88rem; color: var(--muted); }
+.shot-meta .mono { font-size: .82rem; }
+.shot-checks { font-size: .9rem; color: var(--text-2); }
+.shot-checks summary { cursor: pointer; color: var(--accent); }
+.shot-checks ul { padding-left: 1.1rem; margin: .4rem 0; }
+.shot-checks p { margin: .3rem 0 0; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 1240px) {
   .layout, .kind-home .layout, .kind-source .layout { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
@@ -426,6 +450,11 @@ dialog { color: var(--text); }
   .stratum-side { grid-column: 2; justify-items: start; grid-auto-flow: column; justify-content: start; gap: .75rem; margin-top: .4rem; }
   .pager { grid-template-columns: 1fr; }
   .overall { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .shot { grid-template-columns: minmax(0, 1fr); margin-left: 1.1rem; padding: .75rem; }
+  .shot::before { left: -1.1rem; margin-left: .3rem; }
+  .shot::after { left: -1.15rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

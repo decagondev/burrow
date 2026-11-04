@@ -339,18 +339,46 @@
     state.s = ns;
     applyT();
   }
+  function showInViewer(node, w, h, title, kind) {
+    state.w = w; state.h = h;
+    node.style.width = `${w}px`;
+    node.style.height = `${h}px`;
+    canvas.replaceChildren(node);
+    $('.lb-title', lb).textContent = title;
+    lb.setAttribute('aria-label', `${kind} viewer`);
+    const help = $('.lb-help', lb);
+    help.dataset.text ||= help.textContent;
+    help.textContent = kind === 'Screenshot' ? 'Drag to pan, scroll or use + and − to zoom, 0 to fit, Left and Right for the other screenshots, Esc to close.' : help.dataset.text;
+    if (!lb.open) lb.showModal();
+    requestAnimationFrame(fit);
+  }
   function openViewer(fig) {
     const svg = $('.diagram-view svg', fig);
     if (!svg || !lb) return;
-    const clone = svg.cloneNode(true);
-    ({ w: state.w, h: state.h } = svgSize(svg));
-    clone.style.width = `${state.w}px`;
-    clone.style.height = `${state.h}px`;
-    canvas.replaceChildren(clone);
-    $('.lb-title', lb).textContent = fig.dataset.title || 'Diagram';
-    lb.showModal();
-    requestAnimationFrame(fit);
+    const { w, h } = svgSize(svg);
+    shotAt = -1;
+    showInViewer(svg.cloneNode(true), w, h, fig.dataset.title || 'Diagram', 'Diagram');
   }
+
+  /* Screenshots (the Gallery page) open full size in the same viewer;
+   * Left and Right step through them. Without script the link opens the PNG. */
+  const shots = $$('a[data-image]');
+  let shotAt = -1;
+  function openShot(i) {
+    if (!lb || i < 0 || i >= shots.length) return;
+    shotAt = i;
+    const a = shots[i];
+    const img = new Image();
+    img.src = a.href;
+    img.alt = $('img', a)?.alt || '';
+    img.draggable = false;
+    showInViewer(img, Number(a.dataset.w) || 1024, Number(a.dataset.h) || 768, `${a.dataset.title || 'Screenshot'} (${i + 1} of ${shots.length})`, 'Screenshot');
+  }
+  shots.forEach((a, i) => a.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || !lb) return;
+    e.preventDefault();
+    openShot(i);
+  }));
   if (lb) {
     $('.lb-tools', lb).addEventListener('click', (e) => {
       const z = e.target.closest('button')?.dataset.zoom;
@@ -376,7 +404,9 @@
       if (e.key === '+' || e.key === '=') zoomAt(1.25, r.width / 2, r.height / 2);
       if (e.key === '-') zoomAt(0.8, r.width / 2, r.height / 2);
       if (e.key === '0') fit();
+      if (shotAt >= 0 && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) openShot(shotAt + (e.key === 'ArrowRight' ? 1 : -1));
     });
+    lb.addEventListener('close', () => { if (shotAt >= 0) shots[shotAt]?.focus(); shotAt = -1; });
     window.addEventListener('resize', () => { if (lb.open) fit(); });
   }
 }());

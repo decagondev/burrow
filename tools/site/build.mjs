@@ -1,6 +1,7 @@
 // build.mjs - generate the static documentation site (make site): every
 // Markdown file becomes a page, the plan becomes the Progress page and the
-// home page's strata, and every tracked text file gets a code-browser page.
+// home page's strata, the screenshot manifest (docs/gallery) becomes the
+// Gallery page, and every tracked text file gets a code-browser page.
 // Output goes to build/site (or the directory given as the first argument);
 // the repository is only read, never written.
 // Docs: docs/06-guides/PUBLISHING_THE_SITE.md.
@@ -13,6 +14,7 @@ import { page, rel } from './lib/layout.mjs';
 import { progress } from './lib/plan.mjs';
 import { homeBody, progressBody, pill, bar } from './lib/home.mjs';
 import { sourceFiles, sourcePage, sourceUrl, dirPage, overviewPage, topOf, dirUrl } from './lib/source.mjs';
+import { loadGallery, copyGallery, galleryBody } from './lib/gallery.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -66,7 +68,7 @@ if (more.length) groups.push({ name: 'More', files: more });
 
 const tops = [...new Set(srcFiles.map(topOf).filter(Boolean))].sort();
 const nav = {
-  top: [{ title: 'Home', url: 'index.html' }, { title: 'Progress', url: 'progress.html' }],
+  top: [{ title: 'Home', url: 'index.html' }, { title: 'Progress', url: 'progress.html' }, { title: 'Gallery', url: 'gallery.html' }],
   groups: [
     ...groups.map((g) => ({ name: g.name, items: g.files.map((f) => ({ title: NAV_TITLE[f] || pages.get(f).title, url: pages.get(f).url })) })),
     { name: 'Source code', items: [{ title: 'All source', url: 'source/index.html' }, ...tops.map((t) => ({ title: `${t}/`, url: dirUrl(t), mono: true }))] },
@@ -127,7 +129,12 @@ for (const pg of pages.values()) {
 }
 
 // Computed pages.
-out.push({ url: 'index.html', title: site.title, kind: 'home', body: homeBody(pr), heads: [] });
+const shots = loadGallery(ROOT);
+out.push({ url: 'index.html', title: site.title, kind: 'home', body: homeBody(pr, shots), heads: [] });
+const fromRoot = resolver('index', 'gallery.html');
+const gal = galleryBody(shots, (p) => (/\.png$/.test(p) ? p : fromRoot(p)), (h) => (site.repoUrl ? `${site.repoUrl}/commit/${h}` : null));
+out.push({ url: 'gallery.html', title: 'Gallery', kind: 'gallery', body: gal.body, heads: gal.heads });
+search.unshift({ t: 'Gallery', u: 'gallery.html', g: 'Project status', h: gal.heads.map((h) => [h.text, h.id]), x: `gallery screenshots screen ${gal.text}` });
 out.push({ url: 'progress.html', title: 'Progress', kind: 'progress', body: progressBody(pr, slug), heads: ['Milestones', 'Waves', 'Epics', 'Quality signals'].map((t, k) => ({ depth: 2, id: ['milestones', 'waves', 'epics', 'quality'][k], text: t })) });
 search.unshift({ t: 'Progress', u: 'progress.html', g: 'Project status', h: [['Milestones', 'milestones'], ['Waves', 'waves'], ['Epics', 'epics'], ['Quality signals', 'quality']], x: 'progress milestones waves epics slices bugs tests' });
 out.push({ url: '404.html', title: 'Page not found', kind: 'doc', body: '<h1>Page not found</h1><p>This address does not match any page. It may have been renamed when the docs changed.</p><p><a href="index.html">Go to the home page</a> or press <kbd>/</kbd> to search.</p>', heads: [] });
@@ -149,6 +156,7 @@ const write = (p, s) => { fs.mkdirSync(path.dirname(path.join(OUT, p)), { recurs
 for (const p of out) write(p.url, page(site, nav, p));
 fs.cpSync(path.join(HERE, 'assets'), path.join(OUT, 'assets'), { recursive: true });
 fs.copyFileSync(path.join(HERE, 'node_modules/mermaid/dist/mermaid.min.js'), path.join(OUT, 'assets/mermaid.min.js'));
+copyGallery(ROOT, OUT, shots);
 write('assets/search-index.js', `window.SEARCH_INDEX=${JSON.stringify(search)};\n`);
 write('progress.json', `${JSON.stringify(pr, null, 2)}\n`);
 write('.nojekyll', '');
