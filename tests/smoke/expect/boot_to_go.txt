@@ -8,7 +8,7 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 33 files, 4 directories
+[initrd] INFO: tarfs: 34 files, 4 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -30,6 +30,8 @@ BURROW:GO:SELFTEST:OK
 [serial] INFO: receive interrupts on irq 4
 [driver] INFO: started: [ata bga e1000 pci ps2 rtc serial]
 [e1000] INFO: 10.0.2.2 is at 52:55:0a:00:02:02
+[net] INFO: eth0 10.0.2.15/24, gateway 10.0.2.2
+[net] INFO: 10.0.2.2 answers ping in
 [block] INFO: hda sector 1: boot manifest "BRWMNFST" found
 [fat] INFO: hdb: FAT32 volume "BURROWDATA" mounted at /mnt
 [console] INFO: ready
@@ -115,5 +117,12 @@ $ exit
 burrow> ps
   PID  PPID  PGID STATE    COMMAND
     1     0     1 kernel   init
+burrow> net
+    inet 127.0.0.1/8
+eth0: mtu 1500 ether 52:54:00:12:34:56
+    inet 10.0.2.15/24
+route 10.0.2.0/24 direct dev eth0
+route 0.0.0.0/0 via 10.0.2.2 dev eth0
+card: rx
 burrow> poweroff
 [console] INFO: poweroff

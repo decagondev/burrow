@@ -37,7 +37,7 @@ const NAV_TITLE = { 'README.md': 'Project overview', 'docs/README.md': 'How the 
 
 const tracked = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 })
   .split('\0').filter((f) => f && !/^\.(?!github)/.test(f) && fs.existsSync(path.join(ROOT, f)));
-const mdFiles = tracked.filter((f) => f.endsWith('.md') && !SKIP_MD.has(f)).sort();
+const mdFiles = tracked.filter((f) => f.endsWith('.md') && !SKIP_MD.has(f) && !/(^|\/)vendor\//.test(f)).sort();
 const pageUrl = (f) => (f === 'README.md' ? 'overview.html' : f.endsWith('README.md') ? f.replace(/README\.md$/, 'index.html') : f.replace(/\.md$/, '.html'));
 const srcFiles = sourceFiles(ROOT).filter((f) => tracked.includes(f));
 const srcSet = new Set(srcFiles);

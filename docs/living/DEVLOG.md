@@ -14,6 +14,18 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17-S02 TCP/IP in the kernel
+
+**Did:** gVisor's TCP/IP stack, pinned and vendored (ADR-0009), in `kernel/netstack`: loopback and eth0 from `/etc/net.conf`, routes, ping, and a `net` console command. The gateway answers ping at boot; host tests run TCP between two stacks on a fake cable. Also BUG-0021, a boot selftest threshold that failed one run in many.
+
+**Surprise:** the stack was the easy part: gVisor's channel and ethernet endpoints made the bridge to the card two short pumps, and its tests passed at the first run. The catch was in `go.mod`: requiring gVisor raised the module's Go version, and with it the runtime's GODEBUG defaults; the first boot showed a `prctl` the shim had never seen.
+
+**Learned:** a module's `go` line is also a runtime setting; pin the GODEBUG defaults when only the language version has to move.
+
+**Next:** W17-S03, sockets for user programs.
+
+Links: ADR-0009, BUG-0021
+
 ## 2026-11-04 — W17-S01 An e1000 driver
 
 **Did:** a Go driver for the Intel 82540EM: reset, the MAC from the EEPROM, receive and transmit rings in nucleus frames, interrupts as wake-ups; a `netdev` registry where it appears as `eth0`; and an ARP check at boot that gets an answer from QEMU's gateway (`make go-smoke`). Host tests run the driver against a fake card that really walks the rings.

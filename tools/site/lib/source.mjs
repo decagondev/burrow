@@ -1,7 +1,8 @@
 // source.mjs - the code browser: one highlighted page with line numbers per
 // tracked text file, an index page per top-level directory, and an overview.
 // Markdown files are not here (they are pages); binary files are skipped.
-// It never reads files git does not track.
+// Vendored Go modules (kernel/vendor, W17) are not ours to show. It never
+// reads files git does not track.
 // Docs: docs/06-guides/PUBLISHING_THE_SITE.md.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +29,7 @@ export function language(file) {
 export function sourceFiles(root) {
   const all = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 << 20 }).split('\0').filter(Boolean);
   return all.filter((f) => {
-    if (f.endsWith('.md') || /(^|\/)(fonts|node_modules)\//.test(f) || f.endsWith('.woff2')) return false;
+    if (f.endsWith('.md') || /(^|\/)(fonts|node_modules|vendor)\//.test(f) || f.endsWith('.woff2')) return false;
     const p = path.join(root, f);
     if (!fs.existsSync(p) || fs.statSync(p).size > 400_000) return false;
     return !fs.readFileSync(p).includes(0);

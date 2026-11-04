@@ -42,6 +42,14 @@ func addCommands(con *console.Console, k *kernel) {
 				fmt.Fprintln(out, d)
 			}
 		}})
+	con.Add(console.Command{Name: "net", Help: "network interfaces, addresses, routes and counters",
+		Run: func(_ []string, out io.Writer) {
+			if k.net == nil {
+				fmt.Fprintln(out, "no network")
+				return
+			}
+			k.net.Show(out)
+		}})
 	con.Add(console.Command{Name: "uptime", Help: "time since the Go kernel started",
 		Run: func(_ []string, out io.Writer) {
 			fmt.Fprintf(out, "up %v\n", time.Since(k.boot).Round(time.Millisecond))

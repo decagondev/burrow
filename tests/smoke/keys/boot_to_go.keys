@@ -69,5 +69,8 @@ key ret
 type ps
 key ret
 screendump build/screen-boot_to_go-end.ppm
+type net
+key ret
+wait card: rx
 type poweroff
 key ret

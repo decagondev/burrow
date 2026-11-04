@@ -12,3 +12,4 @@ An ADR records one significant decision: context, options, choice, consequences.
 | [0006](ADR-0006-linux-abi-userland.md) | Linux x86-64 syscall ABI + musl for user space | Accepted |
 | [0007](ADR-0007-test-strategy.md) | Serial markers + QEMU debug-exit as the test interface | Accepted |
 | [0008](ADR-0008-disk-manifest.md) | Raw disk + manifest, filesystem later | Accepted |
+| [0009](ADR-0009-gvisor-tcpip.md) | gVisor's TCP/IP stack in the kernel, vendored | Accepted |

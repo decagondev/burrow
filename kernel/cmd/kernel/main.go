@@ -34,6 +34,7 @@ import (
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
+	"burrow/kernel/netstack"
 	"burrow/kernel/proc"
 	"burrow/kernel/random"
 	"burrow/kernel/selftest"
@@ -53,6 +54,7 @@ type kernel struct {
 	input   chan byte // keyboard and serial bytes
 	env     []string  // added to every program's environment (a Qt disk's qt.env)
 	con     *console.Console
+	net     *netstack.Stack // TCP/IP (W17-S02); nil if it did not start
 }
 
 func main() {
@@ -111,7 +113,7 @@ func main() {
 		DMAPage:   dmaPage,
 		SetClock:  amd64.SetRealtime,
 	})
-	checkNetwork(log)
+	k.startNetwork(log)
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))
 	k.mountData(log.With("fat"))
