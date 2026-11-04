@@ -24,3 +24,21 @@ pixel build/screen-x11-st.ppm 3 165 #e5e5e5
 pixel build/screen-x11-st.ppm 27 163 #cccccc
 pixel build/screen-x11-st.ppm 900 600 #000000
 pixel build/screen-x11-st.ppm 901 601 #ffffff
+# S04: dwm with two terminals tiled, the second (focused) as master: the bar
+# (tag 1 and the title in dwm's cyan #005577, tag 3 in its grey #222222),
+# the master's focused border (cyan) and the other terminal's (#444444),
+# and the root weave in the gap between them
+size  build/screen-x11-dwm.ppm 1024 768
+pixel build/screen-x11-dwm.ppm 20 3 #005577
+pixel build/screen-x11-dwm.ppm 600 3 #005577
+pixel build/screen-x11-dwm.ppm 66 3 #222222
+pixel build/screen-x11-dwm.ppm 555 600 #005577
+pixel build/screen-x11-dwm.ppm 563 600 #444444
+pixel build/screen-x11-dwm.ppm 300 600 #000000
+# tag 2: selected in the bar, and nothing on it but the root weave
+size  build/screen-x11-dwm-tag2.ppm 1024 768
+pixel build/screen-x11-dwm-tag2.ppm 36 3 #005577
+pixel build/screen-x11-dwm-tag2.ppm 20 3 #222222
+pixel build/screen-x11-dwm-tag2.ppm 600 3 #222222
+pixel build/screen-x11-dwm-tag2.ppm 600 400 #000000
+pixel build/screen-x11-dwm-tag2.ppm 601 401 #ffffff

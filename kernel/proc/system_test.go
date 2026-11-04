@@ -40,9 +40,11 @@ func newRig(t *testing.T) *rig {
 	nu := proctest.New()
 	r := &rig{t: t, nu: nu, console: &syncBuf{}, log: &syncBuf{}}
 	files := fstest.MapFS{
-		"bin/prog": {Data: program(), Mode: 0o755},
-		"etc/motd": {Data: []byte("hello file\n"), Mode: 0o644},
-		"etc/text": {Data: []byte("#!/bin/sh\n"), Mode: 0o755},
+		"bin/prog":   {Data: program(), Mode: 0o755},
+		"etc/motd":   {Data: []byte("hello file\n"), Mode: 0o644},
+		"etc/text":   {Data: []byte("#!/bin/sh\n"), Mode: 0o755},
+		"bin/script": {Data: []byte("#! /bin/prog  -a b \necho hi\n"), Mode: 0o755},
+		"bin/nested": {Data: []byte("#!/bin/script\n"), Mode: 0o755},
 	}
 	r.sys = proc.NewSystem(nu, files, r.console, klog.New(r.log, klog.Info))
 	go r.sys.Serve()

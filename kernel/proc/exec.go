@@ -33,6 +33,9 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	if err != nil {
 		return errno(err)
 	}
+	if file, data, argv, err = p.script(name, file, data, argv); err != nil { // "#!" (W16-S04)
+		return errno(err)
+	}
 	im, err := s.prepare("/"+file, data, argv, envp)
 	if err != nil {
 		return -int64(syscall.ENOEXEC)

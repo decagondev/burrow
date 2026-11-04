@@ -1,0 +1,9 @@
+#!/bin/busybox sh
+# dmenu_path for Burrow (W16-S04): the programs in $PATH's directories, one
+# a line, sorted, for dmenu_run. Upstream's caches the list under
+# $HOME/.cache (read-only here: / is the initrd) and needs stest; busybox's
+# ls and sort do the same. Docs: docs/04-plan/waves/WAVE-16-x11-desktop.md.
+IFS=:
+for dir in $PATH; do
+	[ -d "$dir" ] && /bin/busybox ls -1 "$dir"
+done | /bin/busybox sort -u

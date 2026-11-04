@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-03 — W16-S04 dwm and dmenu
+
+**Did:** dwm manages the desktop on Burrow: two st terminals tiled, focus moved with the keyboard, tags switched, dmenu starting `xhello`, Alt+Shift+q to quit, all in `make x11-smoke` with the bar and the layout checked on screen. The kernel learned `#!` scripts in `execve`; data disks may now set `PATH`; the X disk carries Xlib's locale database.
+
+**Surprise:** nothing in dwm itself needed Burrow's help; the gaps were around it. dmenu dies without an input method, and Xlib has none without its locale files, the same cause as S03's missing st title. And dmenu_run is a shell script, which Burrow's `execve` had never been asked to run.
+
+**Next:** W16-S05, Doom in a window.
+
 ## 2026-11-03 — W16-S03 st on a pseudo-terminal
 
 **Did:** pseudo-terminals: a pair in `kernel/tty` over the existing line discipline, `/dev/ptmx` and `/dev/pts/N`, a controlling terminal per process, `SIGWINCH` on a new size. `ptytest` passes on Linux and on Burrow; st runs busybox `sh` under Xfbdev, a line typed through X runs in it, and its screen is checked.

@@ -1,6 +1,7 @@
 /* dwm-config.h - dwm's config.h for Burrow (W16): upstream's config.def.h with
- * "monospace" at a pixel size (DejaVu Sans Mono through fontconfig), copied
- * over config.h by scripts/x11-apps.sh. Docs: WAVE-16-x11-desktop.md. */
+ * "monospace" at a pixel size (DejaVu Sans Mono through fontconfig) and st
+ * running busybox sh as the terminal (W16-S04), copied over config.h by
+ * scripts/x11-apps.sh. Docs: WAVE-16-x11-desktop.md. */
 /* See LICENSE file for copyright and license details. */
 
 /* appearance */
@@ -61,7 +62,7 @@ static const Layout layouts[] = {
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
 static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
-static const char *termcmd[]  = { "st", NULL };
+static const char *termcmd[]  = { "st", "-e", "/bin/busybox", "sh", NULL }; /* Burrow: busybox, not the W10 /bin/sh */
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */

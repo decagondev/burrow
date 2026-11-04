@@ -30,13 +30,14 @@ XVFB=$!
 trap 'kill $XVFB 2>/dev/null || true' EXIT
 for _ in $(seq 50); do xdotool getdisplaygeometry > /dev/null 2>&1 && break; sleep 0.1; done
 
+STEP_S=60 # no step may take longer: a client that never sees its keys fails, not hangs
 run() { # label, then the command: traced when taking the census
   local label=$1
   shift
   if [ -n "$CENSUS" ]; then
-    strace -f -qq -o "$B/x11-run/$label.strace" "$@"
+    timeout --foreground "$STEP_S" strace -f -qq -o "$B/x11-run/$label.strace" "$@"
   else
-    "$@"
+    timeout --foreground "$STEP_S" "$@"
   fi
 }
 fail() { echo "X11 LINUX FAIL: $*"; exit 1; }
@@ -57,8 +58,10 @@ rm -f "$B/x11-run/st.ok"
 run st "$X/bin/st" -e "$B/busybox" sh -c "echo st-ran-a-shell > $B/x11-run/st.ok" > "$B/x11-run/st.out" 2>&1 || true
 grep -q st-ran-a-shell "$B/x11-run/st.ok" 2>/dev/null || fail "st's shell left nothing: $(cat "$B/x11-run/st.out")"
 
-# dmenu: three lines, Down, Return: the second comes back.
-(sleep 1; xdotool key Down Return) &
+# dmenu: three lines, Down, Return: the second comes back. The keys wait for
+# dmenu's window (it grabs the keyboard before mapping it): a fixed sleep lost
+# them once Xlib's locale data made dmenu start slower under strace (W16-S04).
+(timeout "$STEP_S" xdotool search --sync --class dmenu > /dev/null && sleep 0.3; xdotool key Down Return) &
 picked=$(printf 'one\ntwo\nthree\n' | run dmenu "$X/bin/dmenu")
 [ "$picked" = two ] || fail "dmenu picked '$picked'"
 

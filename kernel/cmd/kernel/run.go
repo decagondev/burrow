@@ -5,10 +5,29 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
+	"strings"
 	"time"
 
 	"burrow/kernel/vfs"
 )
+
+// withEnv is base with each KEY=VALUE of extra in place of base's KEY, or
+// added: a data disk's .env may change PATH (W16-S04: dwm starts st and
+// dmenu_run by name), and getenv takes the first match, so no duplicates.
+func withEnv(base, extra []string) []string {
+	env := append([]string(nil), base...)
+	for _, kv := range extra {
+		key, _, _ := strings.Cut(kv, "=")
+		i := slices.IndexFunc(env, func(e string) bool { return strings.HasPrefix(e, key+"=") })
+		if i >= 0 {
+			env[i] = kv
+		} else {
+			env = append(env, kv)
+		}
+	}
+	return env
+}
 
 // runProgram starts a user program in the foreground, like a shell: the
 // terminal belongs to its process group until it exits.
@@ -17,7 +36,7 @@ func runProgram(k *kernel, args []string, out io.Writer) {
 		fmt.Fprintln(out, "usage: run <program> [args...]")
 		return
 	}
-	env := append([]string{"PATH=/bin", "HOME=/", "TERM=dumb"}, k.env...)
+	env := withEnv([]string{"PATH=/bin", "HOME=/", "TERM=dumb"}, k.env)
 	p, err := k.procs.Spawn(vfs.Clean(args[0]), args, env)
 	if err != nil {
 		fmt.Fprintf(out, "run: %s: %v\n", args[0], err)

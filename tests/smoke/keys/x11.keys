@@ -50,6 +50,52 @@ screendump build/screen-x11-st.ppm
 type exit
 key ret
 wait st says 42
+# W16-S04: dwm manages the windows. Waiters started first say on the serial
+# line when dwm's bar, the first and the second st and dmenu are up (dwm
+# focuses windows itself, so they only wait); the shells in the terminals
+# report on /dev/tty1; xhello, started from dmenu, prints to the console.
+# Alt+Shift+Enter opens st, Alt+j moves the focus, Alt+2 and Alt+1 switch
+# tags, Alt+p is dmenu, Alt+Shift+q quits dwm.
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; for w in dwm st-256color '-n 2 st-256color' dmenu; do /opt/x11/bin/xfocus -w -t 200 $w & done; /opt/x11/bin/dwm; kill %1; wait; echo dwm: gone
+key ret
+wait xfocus: dwm
+sleep 1
+key alt-shift-ret
+wait xfocus: st-256color
+sleep 1
+type W=one; echo dwm: one > /dev/tty1
+key ret
+wait dwm: one
+key alt-shift-ret
+wait xfocus: st-256color #2
+sleep 1
+type W=two; echo dwm: two > /dev/tty1
+key ret
+wait dwm: two
+sleep 1
+screendump build/screen-x11-dwm.ppm
+key alt-j
+sleep 1
+type echo dwm: now $W > /dev/tty1
+key ret
+wait dwm: now one
+key alt-2
+sleep 1
+screendump build/screen-x11-dwm-tag2.ppm
+key alt-1
+sleep 1
+key alt-p
+wait xfocus: dmenu
+sleep 1
+type xhello
+key ret
+wait xhello: exposed
+sleep 1
+type q
+wait xhello: ok
+sleep 1
+key alt-shift-q
+wait dwm: gone
 type exit
 key ret
 wait burrow>

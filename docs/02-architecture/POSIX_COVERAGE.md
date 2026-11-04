@@ -51,7 +51,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 56 | `clone` | partial | W12 | threads (`CLONE_VM`, `CLONE_FS`, `CLONE_FILES`, `CLONE_SIGHAND` and `CLONE_THREAD` together; `SETTLS PARENT_SETTID CHILD_SETTID CHILD_CLEARTID`) and the fork shape; `CLONE_VM` without `CLONE_THREAD` (vfork, posix_spawn) copies like fork |
 | 57 | `fork` | partial | W10 | memory copied eagerly (copy-on-write later); descriptors share their open file descriptions |
 | 58 | `vfork` | partial | W10 | a full fork (the parent is not suspended) |
-| 59 | `execve` | partial | W10 | static ELF only (`-ENOEXEC` otherwise, no `#!` scripts yet); descriptors stay open except `FD_CLOEXEC` |
+| 59 | `execve` | partial | W10 | static ELF, and since W16 `#!` scripts (`kernel/proc/script.go`, as Linux's binfmt_script: the interpreter, one argument, the script's path, then argv after argv[0]; one level: an interpreter that is a script is `-ENOEXEC`); `-ENOEXEC` for anything else; descriptors stay open except `FD_CLOEXEC` |
 | 60 | `exit` | done | W12 | ends the calling thread (clearing and waking its `clear_child_tid`); the last thread ends the process |
 | 62 | `kill` | done | W10 | pid > 0, 0, -1, < -1; signal 0 checks existence |
 | 61 | `wait4` | partial | W10 | pid > 0, -1, 0, < -1; `WNOHANG`; Linux status words; `rusage` is not filled |

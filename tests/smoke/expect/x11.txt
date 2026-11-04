@@ -1,6 +1,6 @@
 # Ordered markers for the X desktop on Burrow (W16, tests/smoke/keys/x11.keys). Append-only.
 mounted at /opt/x11
-opt/x11/x11.env: 2 variables for every program
+opt/x11/x11.env: 4 variables for every program
 xhello: connected to :0
 xhello: core font fixed, Xft font DejaVu Sans
 xhello: exposed
@@ -11,4 +11,14 @@ st: shell up
 xfocus: st-256color
 st: typed
 st says 42
+xfocus: dwm
+xfocus: st-256color
+dwm: one
+xfocus: st-256color #2
+dwm: two
+dwm: now one
+xfocus: dmenu
+xhello: exposed
+xhello: ok
+dwm: gone
 burrow> poweroff

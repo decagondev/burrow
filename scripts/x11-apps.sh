@@ -60,7 +60,15 @@ suckless dmenu 5.3
 for p in dwm/dwm st/st dmenu/dmenu dmenu/stest; do
   x86_64-linux-musl-strip -o "$OUT/bin/$(basename "$p")" "$CACHE/build/$p"
 done
-cp "$CACHE/build/dmenu/dmenu_run" "$CACHE/build/dmenu/dmenu_path" "$OUT/bin/"
+# Xlib's locale database (1.9 MB), found through XLOCALEDIR in x11.env:
+# without it XOpenIM fails, which dmenu cannot do without, and UTF-8
+# window titles cannot be set (W16-S04).
+rm -rf "$OUT/share/X11/locale" && mkdir -p "$OUT/share/X11"
+cp -R "$SYS/share/X11/locale" "$OUT/share/X11/locale"
+# dmenu_run and dmenu_path are ours (busybox scripts; upstream caches in
+# $HOME, read-only on Burrow). W16-S04.
+cp "$ROOT/user/x11/dmenu_run" "$ROOT/user/x11/dmenu_path" "$OUT/bin/"
+chmod 755 "$OUT/bin/dmenu_run" "$OUT/bin/dmenu_path"
 echo "x11: dwm, st, dmenu"
 
 # Our own X programs.

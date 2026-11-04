@@ -1,19 +1,23 @@
 /* xfocus.c - wait for a window and give it the keyboard (W16-S03): waits
- * up to thirty seconds for a mapped top-level window whose WM_NAME or
- * WM_CLASS is the argument, then XSetInputFocus on it, as `xdotool search --sync ...
- * windowfocus` does on the host. Without a window manager TinyX's focus is
- * PointerRoot, so keys go to whatever is under the pointer: typed before a
- * slow client has mapped its window, they reach the root and are lost;
- * xfocus's line says when typing is safe. dwm (S04) focuses windows itself.
- * Prints "xfocus: <name>", or "xfocus: no window named <name>" (exit 1).
+ * for a mapped top-level window whose WM_NAME or WM_CLASS is the argument,
+ * then XSetInputFocus on it, as `xdotool search --sync ... windowfocus`
+ * does on the host. Without a window manager TinyX's focus is PointerRoot,
+ * so keys go to whatever is under the pointer: typed before a slow client
+ * has mapped its window, they reach the root and are lost; xfocus's line
+ * says when typing is safe. Under dwm (S04), which focuses windows itself,
+ * -w only waits; -n N waits for the Nth such window, -t S for S seconds
+ * (30). Prints "xfocus: <name>" ("xfocus: <name> #N" for N > 1), or
+ * "xfocus: no window named <name>" and the windows there are (exit 1).
  * Docs: docs/04-plan/waves/WAVE-16-x11-desktop.md. */
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 
-enum { TRIES = 300, TRY_NS = 100000000 }; /* 300 x 0.1 s */
+enum { TRY_NS = 100000000, TRIES_PER_S = 10, DEFAULT_S = 30 }; /* a look every 0.1 s */
 
 /* named: w's WM_NAME (its raw bytes, whatever the encoding) or either half
  * of its WM_CLASS is name. The class needs no locale data: st's title goes
@@ -36,16 +40,23 @@ static int named(Display *d, Window w, const char *name) {
     return match;
 }
 
-static Window find(Display *d, const char *name) {
+/* find returns the newest of the mapped windows named name once there are
+ * at least count of them (stacking order: the last child is the newest). */
+static Window find(Display *d, const char *name, int count) {
     Window root, parent, *kids = NULL, found = 0;
     unsigned int n = 0;
+    int seen = 0;
     if (!XQueryTree(d, DefaultRootWindow(d), &root, &parent, &kids, &n))
         return 0;
-    for (unsigned int i = 0; i < n && !found; i++) {
+    for (unsigned int i = 0; i < n; i++) {
         XWindowAttributes a;
-        if (named(d, kids[i], name) && XGetWindowAttributes(d, kids[i], &a) && a.map_state == IsViewable)
+        if (named(d, kids[i], name) && XGetWindowAttributes(d, kids[i], &a) && a.map_state == IsViewable) {
             found = kids[i];
+            seen++;
+        }
     }
+    if (seen < count)
+        found = 0;
     if (kids)
         XFree(kids);
     return found;
@@ -70,27 +81,44 @@ static void list(Display *d) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: xfocus <window name>\n");
+    int wait_only = 0, count = 1, seconds = DEFAULT_S, opt;
+    while ((opt = getopt(argc, argv, "wn:t:")) != -1) {
+        if (opt == 'w')
+            wait_only = 1;
+        else if (opt == 'n')
+            count = atoi(optarg);
+        else if (opt == 't')
+            seconds = atoi(optarg);
+        else
+            optind = argc + 1;
+    }
+    if (optind != argc - 1 || count < 1 || seconds < 1) {
+        fprintf(stderr, "usage: xfocus [-w] [-n count] [-t seconds] <window name or class>\n");
         return 2;
     }
+    const char *name = argv[optind];
     Display *d = XOpenDisplay(NULL);
     if (!d) {
         printf("xfocus: cannot open display\n");
         return 1;
     }
     struct timespec pause = {0, TRY_NS};
-    for (int i = 0; i < TRIES; i++) {
-        Window w = find(d, argv[1]);
+    for (int i = 0; i < seconds * TRIES_PER_S; i++) {
+        Window w = find(d, name, count);
         if (w) {
-            XSetInputFocus(d, w, RevertToPointerRoot, CurrentTime);
-            XSync(d, False);
-            printf("xfocus: %s\n", argv[1]);
+            if (!wait_only) {
+                XSetInputFocus(d, w, RevertToPointerRoot, CurrentTime);
+                XSync(d, False);
+            }
+            if (count > 1)
+                printf("xfocus: %s #%d\n", name, count);
+            else
+                printf("xfocus: %s\n", name);
             return 0;
         }
         nanosleep(&pause, NULL);
     }
-    printf("xfocus: no window named %s\n", argv[1]);
+    printf("xfocus: no window named %s\n", name);
     list(d);
     return 1;
 }

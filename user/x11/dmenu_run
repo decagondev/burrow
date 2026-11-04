@@ -1,0 +1,5 @@
+#!/bin/busybox sh
+# dmenu_run for Burrow (W16-S04): upstream's three commands with busybox as
+# the shell that runs the chosen line (Burrow's /bin/sh is the small W10
+# shell). dwm starts it on Mod+p. Docs: docs/04-plan/waves/WAVE-16-x11-desktop.md.
+/opt/x11/bin/dmenu_path | /opt/x11/bin/dmenu "$@" | /bin/busybox sh &
