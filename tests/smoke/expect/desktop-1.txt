@@ -1,0 +1,16 @@
+# Ordered markers for the desktop's first boot (W16-S06, tests/smoke/keys/desktop-1.keys). Append-only.
+# The pixels are checked by desktop-1.screen.
+[fat] INFO: hdb: FAT32 volume "BURROWHOME" mounted at /home (read-write)
+[fat] INFO: hdc: FAT32 volume "X11DATA" mounted at /opt/x11 (read-write)
+startx: /home/.xinitrc
+xfocus: dwm
+xfocus: st-256color
+written with vi on the desktop
+xfocus: st-256color #2
+desktop: two in /home
+xfocus: dmenu
+doom: X window 640x400 at 192,184
+ adding /opt/x11/share/doom/freedoom1.wad
+startx: done
+desktop: console back
+burrow> poweroff

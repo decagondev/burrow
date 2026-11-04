@@ -19,6 +19,9 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M11: DOOM (doomgeneric + Freedoom on /dev/fb0 and /dev/input/event0) | **done: `make doom doom-smoke`, 100 fps in `make doom-bench`** |
 | M12: ports (threads, a Go program, Lua, C++, a C compiler on Burrow) | **done: `gohello`, Lua, C++, `tcc` on Burrow** ([PORTING.md](docs/06-guides/PORTING.md)) |
 | M13: a workbench (vi on screen, writable FAT32, a persistent /home) | **done: `make run-dev`** ([WORKBENCH.md](docs/06-guides/WORKBENCH.md)) |
+| M14: desktop groundwork (a mouse, Unix sockets, a clock, file mmap, console modes) | **done: `make desk-smoke`** |
+| M15: Qt widget programs on /dev/fb0 | **done: `make run-qt`, `qtpad`** |
+| M16: an X11 desktop (TinyX, dwm, st, dmenu, Doom in a window) | **done: `make run-desktop`, then `startx`** ([DESKTOP.md](docs/06-guides/DESKTOP.md)) |
 
 ## Quick start
 

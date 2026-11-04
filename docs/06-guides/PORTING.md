@@ -64,3 +64,32 @@ XDG_RUNTIME_DIR=/tmp
 ```
 
 What Qt needed from Burrow that nothing else had: `waitid` (QProcess) and `FIONREAD` on pipes (BUG-0016); the census of its system calls on Linux (`make qt-census`, `tests/regression/census-qt.txt`) found everything else already there, but a census counts calls, not ioctl requests. Qt is LGPLv3/GPL: a static program must come with what lets you relink it, which here is Qt's pinned source download and `scripts/qt.sh`.
+
+## X11 (W16)
+
+The desktop is an X server and its clients built static for musl: `scripts/x11.sh` (`make x11`) fetches pinned sources once into `~/.cache/burrow-x11`, builds each library into a sysroot there with the ports' musl cross compiler, and puts the programs into `build/x11-root`, the tree that becomes the X disk at `/opt/x11` ([DESKTOP.md](DESKTOP.md) is how to use it). The libraries, in build order: zlib 1.3.1, expat 2.6.4, FreeType 2.13.3, xorgproto 2024.1, xtrans 1.5.2, libXau 1.0.12, libXdmcp 1.1.5, libpthread-stubs 0.5, xcb-proto and libxcb 1.17.0, libX11 1.8.12, libXext 1.3.6, libXrender 0.9.12, libXinerama 1.1.5, fontconfig 2.15.0, libXft 2.3.9, and for the server libfontenc 1.1.8 and libXfont 1.5.4 (version 1: TinyX predates libXfont2). Then TinyX (`Xfbdev`, a 2024 commit of tinycorelinux/tinyx), dwm 6.5, st 0.9.2 and dmenu 5.3 with `user/x11/*-config.h`, and Doom's engine with an X backend of ours (`scripts/x11-doom.sh`).
+
+Every autotools package is configured the same way, so nothing probes the host's libraries:
+
+```
+--host=x86_64-linux-musl --prefix=<sysroot> --disable-shared --enable-static
+CC=x86_64-linux-musl-gcc PKG_CONFIG_LIBDIR=<sysroot>/lib/pkgconfig:<sysroot>/share/pkgconfig PKG_CONFIG_PATH=
+CC_FOR_BUILD=gcc            (libX11's makekeys runs on the host; xcb-proto needs the host's python3)
+```
+
+Beyond that, per package: `--enable-malloc0returnsnull` for libX11, libXext, libXrender and libXinerama (it cannot be probed when cross compiling); FreeType with zlib only (`--with-png=no --with-bzip2=no --with-harfbuzz=no --with-brotli=no`); libX11 `--disable-xf86bigfont`; libXfont `--disable-fc --disable-snfformat --enable-freetype`; fontconfig `--sysconfdir=/opt/x11/etc --with-default-fonts=/opt/x11/fonts/ttf --with-cache-dir=/tmp/fontconfig --disable-cache-build`, installed into a staging tree because its configuration belongs on the X disk, not in the sysroot. TinyX is `autoreconf`ed in a copy, patched (`user/x11/patches/`, each patch says why) and configured `--disable-xvesa --enable-xfbdev --disable-xdmcp --disable-xdm-auth-1 --with-default-font-path=/opt/x11/fonts/misc`, then linked `-all-static`. The suckless programs use their own Makefiles with `LIBS="-static <the X libraries>"`; static linking needs the whole chain spelled out: `-lXft -lfontconfig -lexpat -lfreetype -lz -lXrender -lXinerama -lXext -lX11 -lxcb -lXau -lXdmcp`.
+
+Fonts: the server needs the core fonts `fixed` and `cursor`, made from font-misc-misc and font-cursor-misc's BDF files with the host's `bdftopcf` and `mkfontdir`; their aliases are rewritten from ISO 8859-1 to ISO 10646-1 names, because upstream derives the 8859 sets with `ucs2any` and the build does not. Xft's fonts are DejaVu (W15's download), found through `user/x11/fonts.conf`. Xlib's locale database goes on the disk too (`XLOCALEDIR`): without it `XOpenIM` fails, which dmenu does not survive, and UTF-8 window titles cannot be set.
+
+Off, and why: shared libraries (Burrow has no dynamic loader), XKB (TinyX has none; doomgeneric's own Xlib backend needs it, so Doom has ours), MIT-SHM, GLX and Xvideo (not in TinyX's build; images go through the socket), xvesa (no VESA BIOS calls in a 64-bit kernel), XDMCP and its authentication (no network, no display manager), fontconfig's cache build (it would run the target's `fc-cache` on the host), and the libraries' documentation.
+
+The environment (`user/x11/x11.env`, on the X disk; the kernel adds it to every program's environment, replacing a default of the same name):
+
+```
+DISPLAY=:0
+PATH=/opt/x11/bin:/bin
+XLOCALEDIR=/opt/x11/share/X11/locale
+FONTCONFIG_FILE=/opt/x11/etc/fonts/fonts.conf
+```
+
+What X needed from Burrow: interval timers and `SIGALRM` (the server's scheduler), `KDGKBENT` (the server reads the keymap from the console), a mousedev-exact `/dev/input/mice` (BUG-0018), `statfs`, `fadvise64`, `mremap` and `link` answering `-EPERM` (fontconfig), pseudo-terminals with controlling terminals (st), ioctl requests read as 32 bits (BUG-0019), and `#!` scripts in `execve` (dmenu_run). `make x11-census` runs the clients against the host's Xvfb under strace and compares their calls with `tests/regression/census-x11.txt`; the server cannot run on WSL's console, so Burrow's own unimplemented-call log is its census. Licences: the X libraries are MIT-style, TinyX's changes GPLv3 on an MIT base, dwm, st and dmenu MIT/X; the pinned downloads and the scripts are what lets you rebuild them.

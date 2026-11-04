@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W16 done: an X11 desktop (M16)
+
+**Did:** the wave in six slices. The X stack built static for musl and tried on the host's Xvfb first, with a census of its calls (S01); TinyX's `Xfbdev` on Burrow serving a first client, which needed interval timers, the console keymap and a mouse that answers exactly like mousedev (S02, BUG-0018); st on pseudo-terminals, new kernel work with a controlling terminal per process (S03, BUG-0019, BUG-0020); dwm and dmenu, which needed `#!` scripts in `execve` and Xlib's locale data (S04); Doom in a window with our own backend, and `make x11-bench` (S05); `startx`, `make run-desktop`, `make desktop-smoke` and the guide (S06). The M16 demo is `make desktop-smoke`: `startx`, two terminals, `vi` in one, Doom from dmenu, quit, the console back, and a second boot finds the home disk as it was.
+
+**Surprise:** again how little the big programs asked of the kernel; the pseudo-terminal pair was the only large piece. Most of the time went into what sits between a program and a test: windows that map seconds after the keys meant for them, an X error from a window that closed while being looked at, a census run that waited all night for keys that came too early.
+
+**Learned:** wait for the thing, not for a time, and give every wait a limit.
+
+**Next:** W17, networking (e1000, gVisor's `tcpip`, `AF_INET` sockets); its download needs a go-ahead first.
+
+## 2026-11-04 — W16-S06 startx and the desktop guide
+
+**Did:** `startx` (a busybox script on the X disk), a default session and `workbench/.xinitrc`, `make run-desktop`, `make desktop-smoke` in `make test` (two boots: the desktop session, then the home disk checked), `DESKTOP.md`, and PORTING.md's X11 section.
+
+**Surprise:** the whole session passed on its first run; the only change it needed elsewhere was `xfocus` waiting for the server, so the waiters can start before it.
+
+**Next:** W17.
+
 ## 2026-11-04 — W16-S05 Doom in a window, and the desktop timed
 
 **Did:** Doom runs in a dwm window, started from dmenu, with our own Xlib backend (no XKB) built from the same engine as the fbdev Doom; `make x11-smoke` plays the title into E1M1 and quits. `make x11-bench` times the desktop in one boot: the server's first frame 0.8 s, st 1.85 s, Doom 40 fps in X against 125 on fbdev, all inside the new budgets.

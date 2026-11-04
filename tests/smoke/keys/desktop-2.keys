@@ -1,0 +1,14 @@
+# The desktop (W16-S06), second boot on the same home disk: the file vi
+# saved under X is there, and the session script is as the build made it.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type cd /home; cat desk.txt; head -1 .xinitrc; ls
+key ret
+wait README.txt
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

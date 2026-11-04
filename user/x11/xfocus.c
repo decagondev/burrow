@@ -8,6 +8,8 @@
  * -w only waits; -n N waits for the Nth such window, -t S for S seconds
  * (30). Prints "xfocus: <name>" ("xfocus: <name> #N" for N > 1), or
  * "xfocus: no window named <name>" and the windows there are (exit 1).
+ * The time limit covers waiting for the server too, so a waiter may start
+ * before startx (S06).
  * Docs: docs/04-plan/waves/WAVE-16-x11-desktop.md. */
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -106,14 +108,17 @@ int main(int argc, char **argv) {
         return 2;
     }
     const char *name = argv[optind];
-    Display *d = XOpenDisplay(NULL);
+    struct timespec pause = {0, TRY_NS};
+    int i = 0;
+    Display *d = NULL;
+    for (; i < seconds * TRIES_PER_S && !(d = XOpenDisplay(NULL)); i++) /* the server may be starting (S06) */
+        nanosleep(&pause, NULL);
     if (!d) {
         printf("xfocus: cannot open display\n");
         return 1;
     }
     XSetErrorHandler(gone);
-    struct timespec pause = {0, TRY_NS};
-    for (int i = 0; i < seconds * TRIES_PER_S; i++) {
+    for (; i < seconds * TRIES_PER_S; i++) {
         Window w = find(d, name, count);
         if (w) {
             if (!wait_only) {

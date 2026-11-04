@@ -11,3 +11,9 @@ file to start again from these starter files).
   ./hello 30              run what you compiled
   lua hello.lua           run a Lua script
   exit                    back to the console; poweroff ends the session
+
+The desktop (make run-desktop): X with dwm, st terminals, dmenu and Doom.
+  run /opt/x11/bin/startx   start it (your session is /home/.xinitrc)
+  Alt+Shift+Enter           a terminal        Alt+p   dmenu: type doom
+  Alt+j / Alt+k             next / previous   Alt+Shift+c  close a window
+  Alt+Shift+q               leave X: the console comes back

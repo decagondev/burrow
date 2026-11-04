@@ -1,0 +1,66 @@
+# The desktop (W16-S06), first boot: go-dev.img with a fresh home disk on
+# hdb (workbench/, so /home/.xinitrc is the session) and the X disk on hdc.
+# Waiters start before startx (xfocus waits for the server too) and say on
+# the serial line when dwm, each st and dmenu are up; the terminals report
+# on /dev/tty1. Two terminals, vi saves a file in the first, the second
+# shows .xinitrc's /home, Doom from dmenu to its title and out through the
+# menu, Alt+Shift+q, and startx hands the console back.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type X=/opt/x11/bin/xfocus; for w in dwm st-256color '-n 2 st-256color' dmenu; do $X -w -t 300 $w & done; startx; echo desktop: console back
+key ret
+wait startx: /home/.xinitrc
+wait xfocus: dwm
+sleep 1
+key alt-shift-ret
+wait xfocus: st-256color
+sleep 1
+type vi desk.txt
+key ret
+sleep 3
+type i
+type written with vi on the desktop
+key esc
+sleep 1
+type :wq
+key ret
+sleep 2
+type cat desk.txt > /dev/tty1
+key ret
+wait written with vi on the desktop
+key alt-shift-ret
+wait xfocus: st-256color #2
+sleep 1
+type echo desktop: two in $(pwd) > /dev/tty1
+key ret
+wait desktop: two in /home
+key alt-p
+wait xfocus: dmenu
+sleep 1
+type doom
+key ret
+wait doom: X window 640x400 at 192,184
+waitpixel 251 561 #ff801c
+waitpixel 832 584 #440101
+screendump build/screen-desktop-doom.ppm
+key esc
+sleep 1
+key up
+sleep 1
+key ret
+sleep 1
+type y
+sleep 3
+screendump build/screen-desktop.ppm
+key alt-shift-q
+wait startx: done
+wait desktop: console back
+sleep 2
+screendump build/screen-desktop-back.ppm
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

@@ -1,0 +1,25 @@
+# Pixels of the desktop's first boot (W16-S06, tests/smoke/keys/desktop-1.keys).
+# Append-only.
+# Doom from dmenu over the two terminals: floating at (192,184) in dwm's
+# focused border (cyan), its title one pixel right and down of doom.screen's
+size  build/screen-desktop-doom.ppm 1024 768
+pixel build/screen-desktop-doom.ppm 192 184 #005577
+pixel build/screen-desktop-doom.ppm 833 585 #005577
+pixel build/screen-desktop-doom.ppm 193 185 #8b0101
+pixel build/screen-desktop-doom.ppm 251 561 #ff801c
+pixel build/screen-desktop-doom.ppm 832 584 #440101
+# after Quit Game: dwm's bar (tag 1 and the title cyan, tag 3 grey), the
+# master terminal focused (cyan border), the other one's border (#444444),
+# st's black where Doom was
+size  build/screen-desktop.ppm 1024 768
+pixel build/screen-desktop.ppm 20 3 #005577
+pixel build/screen-desktop.ppm 600 3 #005577
+pixel build/screen-desktop.ppm 66 3 #222222
+pixel build/screen-desktop.ppm 555 600 #005577
+pixel build/screen-desktop.ppm 563 600 #444444
+pixel build/screen-desktop.ppm 192 184 #000000
+# after Alt+Shift+q: startx stopped the server and the console is back
+# (the band and the paper)
+size  build/screen-desktop-back.ppm 1024 768
+pixel build/screen-desktop-back.ppm 10 40 #007d9c
+pixel build/screen-desktop-back.ppm 500 500 #1e1e28

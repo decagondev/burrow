@@ -1,0 +1,5 @@
+# xinitrc - the session startx runs when the home disk has no .xinitrc
+# (W16-S06; it lives at /opt/x11/etc/xinitrc). The session lasts as long as
+# this script: dwm runs until Alt+Shift+q, then startx stops the server.
+# Docs: docs/06-guides/DESKTOP.md.
+exec /opt/x11/bin/dwm

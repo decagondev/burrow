@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -236,7 +236,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke ktest regress
+test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -343,14 +343,38 @@ X11_DRIVE := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=1,media=d
 X11_DOOM := $(if $(wildcard $(BUILD)/doom-root/freedoom1.wad),$(BUILD)/x11-root/bin/doom)
 $(BUILD)/x11-root/bin/doom: user/x11/doom/doomgeneric_x11.c scripts/x11-doom.sh scripts/doom-engine.sh $(BUILD)/doom-root/doom $(BUILD)/doom-root/freedoom1.wad $(BUILD)/x11-root/bin/Xfbdev
 	scripts/x11-doom.sh $(BUILD)/x11-root $(BUILD)/doom-root/freedoom1.wad
-$(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev $(X11_DOOM) user/x11/x11.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+$(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev $(X11_DOOM) user/x11/x11.env user/x11/startx user/x11/xinitrc $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/x11/x11.env $(BUILD)/x11-root/x11.env
+	cp user/x11/startx $(BUILD)/x11-root/bin/startx && chmod 755 $(BUILD)/x11-root/bin/startx
+	cp user/x11/xinitrc $(BUILD)/x11-root/etc/xinitrc
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label x11data -size 96 ../$(BUILD)/x11-root
 x11-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory x11-smoke-run; else echo "X11 SMOKE SKIP (make x11 busybox ports doom)"; fi
 x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/x11.txt 360 tests/smoke/keys/x11.keys
+# The desktop (W16-S06): run-dev's image and home disk with the X disk on
+# the secondary channel (hdc): `run /opt/x11/bin/startx` at the console.
+# desktop-smoke: two boots on a fresh test home (never $(HOME_IMG)): startx
+# runs workbench/.xinitrc, two terminals, vi saves a file in one, Doom from
+# dmenu, quit, the console back; the second boot finds the file and the
+# session script untouched, then fsck.fat checks the disk.
+X11_DRIVE_HDC := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=2,media=disk
+run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC) -serial mon:stdio -display $(DEV_DISPLAY)
+desktop-smoke:
+	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
+		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom)"; fi
+desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
+	rm -f $(BUILD)/home-desktop.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-desktop.img -label burrowhome -size 64 ../workbench
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-1.txt 360 tests/smoke/keys/desktop-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-2.txt 90 tests/smoke/keys/desktop-2.keys
+	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-desktop.img >/dev/null && echo "DESKTOP HOME PASS (fsck.fat after a desktop session)"; \
+	else echo "DESKTOP HOME SKIP (no fsck.fat)"; fi
 # How fast the desktop is (W16-S05): user/x11/xbench times the server's
 # first frame, st, and Doom's timedemo in X against the fbdev one, all in
 # one boot; tests/smoke/x11-budgets.py checks the numbers. Not in make test.

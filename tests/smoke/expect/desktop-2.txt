@@ -1,0 +1,6 @@
+# Ordered markers for the desktop's second boot (W16-S06, tests/smoke/keys/desktop-2.keys). Append-only.
+[fat] INFO: hdb: FAT32 volume "BURROWHOME" mounted at /home (read-write)
+written with vi on the desktop
+# .xinitrc - your X session (/home/.xinitrc), run by startx. It lasts as
+README.txt
+burrow> poweroff
