@@ -124,4 +124,8 @@ nettest: ipv6-loopback ok
 nettest: bulk ok
 nettest: 16 MiB over loopback in
 nettest: ok
+burrow> run /bin/forkbench
+forkbench: fork of a 64 MiB process
+forkbench: parent still sees its bytes: yes
+forkbench: ok
 burrow> poweroff

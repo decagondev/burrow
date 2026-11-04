@@ -82,7 +82,7 @@ func (m *Mem) move(from, to, n uint64) error {
 		if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
 			return err
 		}
-		if err := m.nu.Map(m.as, p-from+to, pg.pa, PageSize, pg.prot); err != nil {
+		if err := m.nu.Map(m.as, p-from+to, pg.pa, PageSize, pg.hwProt()); err != nil {
 			return err
 		}
 		delete(m.pages, p)

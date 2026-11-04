@@ -145,8 +145,17 @@ func (m *Mem) FaultIn(va uint64, write bool) Fault {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p := pageDown(va)
-	if _, backed := m.pages[p]; backed || va >= UserTop {
-		return FaultSignal // the page is there: a protection fault
+	if va >= UserTop {
+		return FaultSignal
+	}
+	if pg, backed := m.pages[p]; backed {
+		if !write || !pg.cow || pg.prot&ProtWrite == 0 {
+			return FaultSignal // the page is there: a protection fault
+		}
+		if _, err := m.breakLocked(p, pg); err != nil { // a write to a shared page (W18-S01)
+			return FaultNoMem
+		}
+		return FaultResume
 	}
 	a, ok := m.areaAt(va)
 	if !ok || a.none || write && a.prot&ProtWrite == 0 {
@@ -195,13 +204,10 @@ func (m *Mem) Protect(va, n uint64, prot Prot, none bool) error {
 		if !ok || pg.prot == prot {
 			continue
 		}
-		if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
+		pg.prot = prot // a cow page stays mapped read-only (hwProt)
+		if err := m.remapLocked(p, pg); err != nil {
 			return err
 		}
-		if err := m.nu.Map(m.as, p, pg.pa, PageSize, prot); err != nil {
-			return err
-		}
-		pg.prot = prot
 		m.pages[p] = pg
 	}
 	return nil
@@ -226,9 +232,15 @@ func (m *Mem) Zero(va, n uint64) {
 			continue
 		}
 		if _, inArea := m.areaAt(p); inArea && m.nu.Unmap(m.as, p, PageSize) == nil {
-			m.nu.PageFree(pg.pa)
+			m.releaseLocked(pg)
 			delete(m.pages, p)
 			continue
+		}
+		if pg.cow { // clearing a shared frame would clear it for its other owners
+			var err error
+			if pg, err = m.breakLocked(p, pg); err != nil {
+				continue
+			}
 		}
 		clear(m.nu.Frame(pg.pa))
 	}

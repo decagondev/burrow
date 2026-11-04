@@ -37,5 +37,10 @@ type run /bin/nettest
 key ret
 wait nettest: ok
 wait burrow> 
+# W18-S01: fork of a 64 MiB process, copy-on-write (passed on the host's Linux first)
+type run /bin/forkbench
+key ret
+wait forkbench: ok
+wait burrow> 
 type poweroff
 key ret

@@ -218,7 +218,9 @@ func (s *System) handle(r Request) {
 	case r.Nr == InterruptNr: // stopped so that a pending signal can run
 		t.stopped(false, 0, sigInfo{}, 0)
 		return
-	case r.IsFault() && r.Vector() == 14 && r.Args[2]&pfPresent == 0:
+	case r.IsFault() && r.Vector() == 14 && (r.Args[2]&pfPresent == 0 || r.Args[2]&pfWrite != 0):
+		// not present: a first touch; present and written: maybe a
+		// copy-on-write page (W18-S01). FaultIn tells which.
 		switch t.p.mem.FaultIn(r.Args[0], r.Args[2]&pfWrite != 0) {
 		case FaultResume:
 			s.nu.Reply(t.nt, 0) // a first touch of demand-zero memory: resume

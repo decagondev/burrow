@@ -12,19 +12,23 @@ var ErrFault = errors.New("proc: bad user address")
 
 // Mem is one process's memory: an address space in the nucleus, the
 // frames proc allocated for it page by page, and the areas whose pages get
-// frames when first touched (area.go). Safe for concurrent use.
+// frames when first touched (area.go). Since W18 a frame may be shared
+// with other processes of the family (copy-on-write fork, cow.go). Safe
+// for concurrent use.
 type Mem struct {
 	mu    sync.Mutex
 	nu    Nucleus
 	as    uint64
 	pages map[uint64]page // page-aligned va -> its frame
 	areas []area          // sorted, disjoint
+	refs  *frameRefs      // owners of shared frames, one table per family
 }
 
 type page struct {
 	pa     uint64
-	prot   Prot
+	prot   Prot // what the program may do; the mapping may allow less (cow)
 	device bool // device memory (a framebuffer): never freed, shared by fork
+	cow    bool // the frame may be shared: mapped read-only until a write
 }
 
 func NewMem(nu Nucleus) (*Mem, error) {
@@ -32,7 +36,7 @@ func NewMem(nu Nucleus) (*Mem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proc: new address space: %w", err)
 	}
-	return &Mem{nu: nu, as: as, pages: map[uint64]page{}}, nil
+	return &Mem{nu: nu, as: as, pages: map[uint64]page{}, refs: newFrameRefs()}, nil
 }
 
 // Space is the nucleus handle (for StartThread).
@@ -56,11 +60,8 @@ func (m *Mem) MapAnon(va, n uint64, prot Prot) error {
 				return ErrFault // device memory is never widened or replaced here
 			}
 			if old.prot|prot != old.prot { // widen: remap the same frame
-				if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
-					return err
-				}
 				old.prot |= prot
-				if err := m.nu.Map(m.as, p, old.pa, PageSize, old.prot); err != nil {
+				if err := m.remapLocked(p, old); err != nil {
 					return err
 				}
 				m.pages[p] = old
@@ -120,9 +121,7 @@ func (m *Mem) unmapLocked(va, n uint64) error {
 		if err := m.nu.Unmap(m.as, p, PageSize); err != nil {
 			return err
 		}
-		if !pg.device {
-			m.nu.PageFree(pg.pa)
-		}
+		m.releaseLocked(pg)
 		delete(m.pages, p)
 	}
 	return nil
@@ -142,8 +141,10 @@ func (m *Mem) Mapped(va, n uint64) bool {
 	return true
 }
 
-// access walks [va, va+len(buf)) page by page; each needs `need` in its prot.
-func (m *Mem) access(va uint64, n int, need Prot, each func(frame []byte, off, done, k int)) error {
+// access walks [va, va+len(buf)) page by page; each needs `need` in its
+// prot. writes: the kernel writes the pages, so a cow page is made this
+// process's own first (W18-S01).
+func (m *Mem) access(va uint64, n int, need Prot, writes bool, each func(frame []byte, off, done, k int)) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for done := 0; done < n; {
@@ -163,6 +164,12 @@ func (m *Mem) access(va uint64, n int, need Prot, each func(frame []byte, off, d
 		if !ok || pg.prot&need != need || pg.device || cur >= UserTop { // device memory: not through the physmap
 			return ErrFault
 		}
+		if writes && pg.cow {
+			var err error
+			if pg, err = m.breakLocked(pageDown(cur), pg); err != nil {
+				return err
+			}
+		}
 		off := int(cur % PageSize)
 		k := min(n-done, PageSize-off)
 		each(m.nu.Frame(pg.pa), off, done, k)
@@ -173,17 +180,17 @@ func (m *Mem) access(va uint64, n int, need Prot, each func(frame []byte, off, d
 
 // CopyIn reads user memory into dst.
 func (m *Mem) CopyIn(va uint64, dst []byte) error {
-	return m.access(va, len(dst), 0, func(f []byte, off, done, k int) { copy(dst[done:done+k], f[off:off+k]) })
+	return m.access(va, len(dst), 0, false, func(f []byte, off, done, k int) { copy(dst[done:done+k], f[off:off+k]) })
 }
 
 // CopyOut writes src to user memory the process may write.
 func (m *Mem) CopyOut(va uint64, src []byte) error {
-	return m.access(va, len(src), ProtWrite, func(f []byte, off, done, k int) { copy(f[off:off+k], src[done:done+k]) })
+	return m.access(va, len(src), ProtWrite, true, func(f []byte, off, done, k int) { copy(f[off:off+k], src[done:done+k]) })
 }
 
 // load writes into any mapped page (the ELF loader filling read-only code).
 func (m *Mem) load(va uint64, src []byte) error {
-	return m.access(va, len(src), 0, func(f []byte, off, done, k int) { copy(f[off:off+k], src[done:done+k]) })
+	return m.access(va, len(src), 0, true, func(f []byte, off, done, k int) { copy(f[off:off+k], src[done:done+k]) })
 }
 
 // CString reads a NUL-terminated string of at most max bytes.
@@ -214,37 +221,22 @@ func (m *Mem) Pages() []uint64 {
 	return out
 }
 
-// Clone copies m page by page into a new address space (fork, W10: an
-// eager copy; copy-on-write would share frames until a write fault).
+// Clone makes the child's memory for fork: the same areas, and every page
+// shared with m copy-on-write (W18-S01; until then an eager copy, W10).
 func (m *Mem) Clone() (*Mem, error) {
 	c, err := NewMem(m.nu)
 	if err != nil {
 		return nil, err
 	}
+	c.refs = m.refs
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c.areas = append([]area(nil), m.areas...)
 	for va, pg := range m.pages {
-		if pg.device { // shared, as Linux shares MAP_SHARED memory
-			if err := c.nu.Map(c.as, va, pg.pa, PageSize, pg.prot); err != nil {
-				c.Close()
-				return nil, err
-			}
-			c.pages[va] = pg
-			continue
-		}
-		pa, err := c.nu.PageAlloc()
-		if err != nil {
+		if err := m.shareInto(c, va, pg); err != nil {
 			c.Close()
 			return nil, err
 		}
-		copy(c.nu.Frame(pa), m.nu.Frame(pg.pa))
-		if err := c.nu.Map(c.as, va, pa, PageSize, pg.prot); err != nil {
-			c.nu.PageFree(pa)
-			c.Close()
-			return nil, err
-		}
-		c.pages[va] = page{pa: pa, prot: pg.prot}
 	}
 	return c, nil
 }
@@ -258,9 +250,7 @@ func (m *Mem) Close() error {
 		return err
 	}
 	for va, pg := range m.pages {
-		if !pg.device {
-			m.nu.PageFree(pg.pa)
-		}
+		m.releaseLocked(pg)
 		delete(m.pages, va)
 	}
 	m.areas = nil

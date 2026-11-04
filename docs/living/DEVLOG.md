@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18-S01 Copy-on-write fork
+
+**Did:** the W18 plan, then copy-on-write fork, all in Go: frames counted per family, pages shared read-only after fork, copied at the first write by the program or the kernel. Fork of a 64 MiB process: 324 ms before, 86 ms now; a waiting child no longer costs 58 MB.
+
+**Surprise:** the unit tests passed and the first boot died: the dispatcher had never sent a fault on a present page to Go, because until now such a fault was always a real one. The fake nucleus exercised `FaultIn` directly and could not notice.
+
+**Learned:** test new fault handling through the dispatcher, with the error code the hardware gives.
+
+**Next:** W18-S02, lazy `execve`.
+
 ## 2026-11-04 — W17 done: on the network (M17)
 
 **Did:** the wave in six slices. A Go driver for the e1000 with rings in nucleus frames (S01); gVisor's TCP/IP stack vendored into the kernel, with loopback, `/etc/net.conf` and a `net` command (S02, ADR-0009); `AF_INET` and `AF_INET6` sockets as files over its endpoints, checked by `nettest` on Linux and on Burrow (S03); names, raw ICMP for `ping`, busybox's network applets and `make net-smoke` (S04); servers inside Burrow reached through forwarded ports, busybox `httpd` and Go's `net/http` (S05); `gofetch` over TLS, `make run-net`, `make net-bench` and the guide (S06). The M17 demo: `wget` from the host, `gofetch https://example.com/` with its certificate checked, `httpd` inside Burrow serving the host.
