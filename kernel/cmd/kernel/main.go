@@ -27,6 +27,7 @@ import (
 	"burrow/kernel/driver"
 	_ "burrow/kernel/drivers/ata" // drivers register themselves in init()
 	_ "burrow/kernel/drivers/bga"
+	_ "burrow/kernel/drivers/e1000"
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	_ "burrow/kernel/drivers/rtc"
@@ -107,8 +108,10 @@ func main() {
 		Scancodes: keys.Feed,
 		Mouse:     mouse,
 		MapMMIO:   amd64.MapMMIO,
+		DMAPage:   dmaPage,
 		SetClock:  amd64.SetRealtime,
 	})
+	checkNetwork(log)
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))
 	k.mountData(log.With("fat"))

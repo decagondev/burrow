@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17-S01 An e1000 driver
+
+**Did:** a Go driver for the Intel 82540EM: reset, the MAC from the EEPROM, receive and transmit rings in nucleus frames, interrupts as wake-ups; a `netdev` registry where it appears as `eth0`; and an ARP check at boot that gets an answer from QEMU's gateway (`make go-smoke`). Host tests run the driver against a fake card that really walks the rings.
+
+**Surprise:** nothing on the nucleus side: frames with physical addresses and any ISA interrupt line were already there from W7 and W9. And every QEMU boot has had an e1000 all along; the PCI scan has listed it since W8.
+
+**Next:** W17-S02, gVisor's TCP/IP stack in the kernel.
+
 ## 2026-11-04 — W16 done: an X11 desktop (M16)
 
 **Did:** the wave in six slices. The X stack built static for musl and tried on the host's Xvfb first, with a census of its calls (S01); TinyX's `Xfbdev` on Burrow serving a first client, which needed interval timers, the console keymap and a mouse that answers exactly like mousedev (S02, BUG-0018); st on pseudo-terminals, new kernel work with a controlling terminal per process (S03, BUG-0019, BUG-0020); dwm and dmenu, which needed `#!` scripts in `execve` and Xlib's locale data (S04); Doom in a window with our own backend, and `make x11-bench` (S05); `startx`, `make run-desktop`, `make desktop-smoke` and the guide (S06). The M16 demo is `make desktop-smoke`: `startx`, two terminals, `vi` in one, Doom from dmenu, quit, the console back, and a second boot finds the home disk as it was.

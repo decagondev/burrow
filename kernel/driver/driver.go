@@ -36,6 +36,10 @@ type Env struct {
 	Dev   *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
+	// DMAPage hands out one zeroed 4 KiB page a device may read and write:
+	// its physical address and its bytes. Never Go heap: those pages move
+	// and are filled on first touch (W17-S01, PIT-44).
+	DMAPage func() (pa uint64, mem []byte, err error)
 	// SetClock, if set, sets the wall clock (the RTC driver calls it once).
 	SetClock func(time.Time)
 }

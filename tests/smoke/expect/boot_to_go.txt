@@ -20,13 +20,16 @@ BURROW:GO:SELFTEST:OK
 [ata] INFO: hda: "QEMU HARDDISK"
 [ata] INFO: hdb: "QEMU HARDDISK"
 [bga] INFO: 1024x768x32 linear framebuffer at 0xfd000000
+[e1000] INFO: eth0: 52:54:00:12:34:56, link up, irq 11
 [pci] INFO: 00:00.0 8086:1237 host bridge
 [pci] INFO: 00:01.1 8086:7010 ide controller
+[pci] INFO: 00:03.0 8086:100e ethernet (class 02.00.00, irq 11)
 [ps2] INFO: keyboard ready on irq 1
 [ps2] INFO: mouse ready on irq 12
 [rtc] INFO: wall clock 20
 [serial] INFO: receive interrupts on irq 4
-[driver] INFO: started: [ata bga pci ps2 rtc serial]
+[driver] INFO: started: [ata bga e1000 pci ps2 rtc serial]
+[e1000] INFO: 10.0.2.2 is at 52:55:0a:00:02:02
 [block] INFO: hda sector 1: boot manifest "BRWMNFST" found
 [fat] INFO: hdb: FAT32 volume "BURROWDATA" mounted at /mnt
 [console] INFO: ready

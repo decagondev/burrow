@@ -15,16 +15,26 @@ type ConfigSpace interface {
 	Read32(bus, dev, fn, off uint8) uint32
 }
 
+// ConfigWriter also writes one (W17-S01: bus mastering for DMA).
+type ConfigWriter interface {
+	ConfigSpace
+	Write32(bus, dev, fn, off uint8, v uint32)
+}
+
 const (
 	portAddress uint16 = 0xCF8
 	portData    uint16 = 0xCFC
 	enableBit          = 1 << 31
 
-	offID     = 0x00 // vendor 15:0, device 31:16
-	offClass  = 0x08 // revision 7:0, prog-if 15:8, subclass 23:16, class 31:24
-	offHeader = 0x0C // header type 23:16 (bit 23 = multi-function)
-	offBAR0   = 0x10 // six base address registers, 4 bytes each
-	offIRQ    = 0x3C // interrupt line 7:0
+	offID      = 0x00 // vendor 15:0, device 31:16
+	offCommand = 0x04 // command 15:0, status 31:16 (its bits clear when written as 1)
+
+	cmdMemory    = 1 << 1
+	cmdBusMaster = 1 << 2
+	offClass     = 0x08 // revision 7:0, prog-if 15:8, subclass 23:16, class 31:24
+	offHeader    = 0x0C // header type 23:16 (bit 23 = multi-function)
+	offBAR0      = 0x10 // six base address registers, 4 bytes each
+	offIRQ       = 0x3C // interrupt line 7:0
 
 	noVendor = 0xFFFF
 )
@@ -35,6 +45,18 @@ type PortConfig struct{ IO hal.PortIO32 }
 func (p PortConfig) Read32(bus, dev, fn, off uint8) uint32 {
 	p.IO.Out32(portAddress, Address(bus, dev, fn, off))
 	return p.IO.In32(portData)
+}
+
+func (p PortConfig) Write32(bus, dev, fn, off uint8, v uint32) {
+	p.IO.Out32(portAddress, Address(bus, dev, fn, off))
+	p.IO.Out32(portData, v)
+}
+
+// EnableBusMaster lets d reach memory itself (DMA) and answer at its memory
+// BARs; the status half is written as zero, so no status bit is cleared.
+func EnableBusMaster(cw ConfigWriter, d Device) {
+	cmd := cw.Read32(d.Bus, d.Dev, d.Fn, offCommand) & 0xFFFF
+	cw.Write32(d.Bus, d.Dev, d.Fn, offCommand, cmd|cmdMemory|cmdBusMaster)
 }
 
 // Address is the value written to 0xCF8 for one word.

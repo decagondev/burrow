@@ -261,3 +261,8 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-41 | W16 | TinyX's input is 2006 Linux: the console keymap through `KDGKBENT`, its own mouse protocol detection | answer as Linux did then; W14's `/dev/input/mice` already speaks the IntelliMouse handshake |
 | PIT-42 | W16 | No XKB: Qt 6's xcb platform, GTK3 and XKB-built clients will not run on TinyX | ship only programs built without XKB; the 1.20-branch kdrive is E16, later |
 | PIT-43 | W16 | Fork copies eagerly, and every st and dmenu forks a program | measured in W16-S05; copy-on-write fork is E18 |
+| PIT-44 | W17 | DMA needs physical addresses that stay put; Go memory is virtual and filled on first touch (BUG-0012) | done in W17-S01: rings and buffers are nucleus frames (`driver.Env.DMAPage`), never Go heap |
+| PIT-45 | W17 | The e1000's PCI INTx line reaches the 8259 as an ISA line (QEMU: 11) and may be shared | done in W17-S01: the line comes from PCI config space; the handler reads the cause register (ICR), so a shared line costs one read |
+| PIT-46 | W17 | gVisor's module pulls in more than the stack, and grows the kernel | vendor a pinned version, import only `pkg/tcpip` and what it needs; watch the kernel's size and the runtime census (W17-S02) |
+| PIT-47 | W17 | The stack's goroutines and timers share Go's one P with the syscall dispatcher (BUG-0014) | measure a busy socket against syscall latency in W17-S03 |
+| PIT-48 | W17 | Tests must not need the internet | every check in `make test` talks to the host through QEMU's user network (10.0.2.2) or `hostfwd`; HTTPS only in `make run-net` |
