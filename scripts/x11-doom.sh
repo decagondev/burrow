@@ -36,7 +36,7 @@ done
 "$CC" $CFLAGS -I"$SYS/include" -DDOOM_WAD="\"/opt/x11/share/doom/$(basename "$WAD")\"" \
   -c "$BACKEND" -o "$BUILD/doomgeneric_x11.o"
 "$CC" -static -o "$OUT/bin/doom" "${objs[@]}" "$BUILD/doomgeneric_x11.o" \
-  -L"$SYS/lib" -lX11 -lxcb -lXau -lXdmcp -lm
+  -L"$SYS/lib" -lXext -lX11 -lxcb -lXau -lXdmcp -lm
 "$(dirname "$CC")/x86_64-linux-musl-strip" "$OUT/bin/doom"
 cp "$WAD" "$OUT/share/doom/"
 # The fbdev Doom (scripts/doom.sh) beside it: make x11-bench compares the two.

@@ -9,6 +9,10 @@
  * X's autorepeat (a release and a press with the same time) is filtered by
  * peeking at the queue instead of XkbSetDetectableAutoRepeat.
  *
+ * When the server offers MIT-SHM (W18-S04: Burrow has SysV shared memory),
+ * the frame goes into a segment both sides map and XShmPutImage only names
+ * it; otherwise every frame crosses the socket with XPutImage.
+ *
  * The window asks for a fixed size (min = max), so dwm floats it instead of
  * tiling it narrower than the frame, centred where the fbdev Doom draws.
  * Must never block on X while the engine expects a frame: events are read
@@ -29,6 +33,9 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
+#include <X11/extensions/XShm.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 #include "doomgeneric.h"
 #include "doomkeys.h"
@@ -39,6 +46,8 @@ static Display *dpy;
 static Window win;
 static GC gc;
 static XImage *image;
+static XShmSegmentInfo shminfo; /* MIT-SHM (W18-S04): the frame in a segment the server reads */
+static int use_shm, shm_failed;
 static Atom wm_delete;
 static uint64_t start_ms;
 
@@ -77,6 +86,45 @@ static void name_window(void) {
     XSetWMProtocols(dpy, win, &wm_delete, 1);
 }
 
+/* shm_refused notes the server refusing XShmAttach (BadAccess, say)
+ * instead of letting Xlib's default handler end the program. */
+static int shm_refused(Display *d, XErrorEvent *e) {
+    (void)d;
+    (void)e;
+    shm_failed = 1;
+    return 0;
+}
+
+/* shm_image makes the frame's image in a SysV segment the server attaches
+ * too (W18-S04), or returns NULL when MIT-SHM is not there or fails. */
+static XImage *shm_image(Visual *visual) {
+    if (!XShmQueryExtension(dpy))
+        return NULL;
+    XImage *im = XShmCreateImage(dpy, visual, DEPTH_TRUECOLOR, ZPixmap, NULL, &shminfo, DOOMGENERIC_RESX,
+                                 DOOMGENERIC_RESY);
+    if (!im)
+        return NULL;
+    shminfo.shmid = shmget(IPC_PRIVATE, (size_t)im->bytes_per_line * im->height, IPC_CREAT | 0600);
+    shminfo.shmaddr = im->data = shminfo.shmid < 0 ? (char *)-1 : shmat(shminfo.shmid, NULL, 0);
+    shminfo.readOnly = False;
+    if (im->data == (char *)-1) {
+        XDestroyImage(im);
+        return NULL;
+    }
+    XErrorHandler old = XSetErrorHandler(shm_refused);
+    XShmAttach(dpy, &shminfo);
+    XSync(dpy, False); /* the server has attached it, or refused */
+    XSetErrorHandler(old);
+    shmctl(shminfo.shmid, IPC_RMID, NULL); /* gone once both sides detach */
+    if (shm_failed) {
+        shmdt(shminfo.shmaddr);
+        im->data = NULL;
+        XDestroyImage(im);
+        return NULL;
+    }
+    return im;
+}
+
 void DG_Init(void) {
     dpy = XOpenDisplay(NULL);
     if (!dpy)
@@ -99,11 +147,19 @@ void DG_Init(void) {
         if (e.type == MapNotify)
             break;
     }
-    image = XCreateImage(dpy, visual, DEPTH_TRUECOLOR, ZPixmap, 0, (char *)DG_ScreenBuffer, DOOMGENERIC_RESX,
-                         DOOMGENERIC_RESY, IMAGE_PAD_BITS, 0);
+    image = shm_image(visual);
+    use_shm = image != NULL;
+    if (use_shm && image->bytes_per_line == DOOMGENERIC_RESX * 4) { /* Doom draws into the segment itself */
+        free(DG_ScreenBuffer);
+        DG_ScreenBuffer = (pixel_t *)image->data;
+    }
+    if (!image)
+        image = XCreateImage(dpy, visual, DEPTH_TRUECOLOR, ZPixmap, 0, (char *)DG_ScreenBuffer, DOOMGENERIC_RESX,
+                             DOOMGENERIC_RESY, IMAGE_PAD_BITS, 0);
     if (!image)
         die("XCreateImage failed");
     printf("doom: X window %dx%d at %d,%d\n", DOOMGENERIC_RESX, DOOMGENERIC_RESY, x, y);
+    printf("doom: drawing %s\n", use_shm ? "through MIT-SHM" : "with XPutImage (no MIT-SHM)");
     fflush(stdout);
     start_ms = now_ms();
 }
@@ -167,8 +223,17 @@ static void pump_events(void) {
 
 void DG_DrawFrame(void) {
     pump_events();
-    XPutImage(dpy, win, gc, image, 0, 0, 0, 0, DOOMGENERIC_RESX, DOOMGENERIC_RESY);
-    XFlush(dpy);
+    if (!use_shm) {
+        XPutImage(dpy, win, gc, image, 0, 0, 0, 0, DOOMGENERIC_RESX, DOOMGENERIC_RESY);
+        XFlush(dpy);
+        return;
+    }
+    if ((char *)DG_ScreenBuffer != image->data) /* rows padded: copy them into the segment */
+        for (int y = 0; y < DOOMGENERIC_RESY; y++)
+            memcpy(image->data + (size_t)y * image->bytes_per_line, DG_ScreenBuffer + (size_t)y * DOOMGENERIC_RESX,
+                   DOOMGENERIC_RESX * 4);
+    XShmPutImage(dpy, win, gc, image, 0, 0, 0, 0, DOOMGENERIC_RESX, DOOMGENERIC_RESY, False);
+    XSync(dpy, False); /* the server has read the frame before the next one is written */
 }
 
 void DG_SleepMs(uint32_t ms) {

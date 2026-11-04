@@ -144,5 +144,12 @@ shmtest: shm-open-excl ok
 shmtest: shm-open-by-name ok
 shmtest: shm-unlink ok
 shmtest: shm-mapping-outlives-name ok
+shmtest: sysv-shmget ok
+shmtest: sysv-shmat ok
+shmtest: sysv-two-processes ok
+shmtest: sysv-ipc-stat ok
+shmtest: sysv-rmid-while-attached ok
+shmtest: sysv-shmdt ok
+shmtest: sysv-gone-after-rmid ok
 shmtest: ok
 burrow> poweroff

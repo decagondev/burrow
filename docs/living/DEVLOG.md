@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18-S04 SysV shared memory and MIT-SHM
+
+**Did:** `shmget`, `shmat`, `shmdt` and `shmctl` over S03's shared objects, attachments kept in each process's memory so fork and exit need no extra code; Doom's X backend draws through MIT-SHM. Doom in X: 37 fps before, 95 now, three quarters of the fbdev rate.
+
+**Surprise:** TinyX had MIT-SHM all along; W16's docs said it was not built, but it was only failing for want of `shmat`. The last few frames a second came from letting Doom render into the shared segment instead of copying a frame into it.
+
+**Next:** W18-S05, dynamic linking.
+
 ## 2026-11-04 — W18-S03 Shared memory
 
 **Did:** shared objects that own frames, behind `MAP_SHARED|MAP_ANONYMOUS`, `memfd_create` and POSIX `shm_open` under `/dev/shm`; `pread64` and `pwrite64`. `shmtest` passes all 15 checks on Linux and on Burrow.

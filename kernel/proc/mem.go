@@ -19,9 +19,10 @@ type Mem struct {
 	mu    sync.Mutex
 	nu    Nucleus
 	as    uint64
-	pages map[uint64]page // page-aligned va -> its frame
-	areas []area          // sorted, disjoint
-	refs  *frameRefs      // owners of shared frames, one table per family
+	pages map[uint64]page     // page-aligned va -> its frame
+	areas []area              // sorted, disjoint
+	refs  *frameRefs          // owners of shared frames, one table per family
+	sysv  map[uint64]*sysvSeg // SysV segments attached here, by address (W18-S04)
 }
 
 type page struct {
@@ -233,6 +234,13 @@ func (m *Mem) Clone() (*Mem, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c.areas = append([]area(nil), m.areas...)
+	for at, g := range m.sysv { // the child is attached too (shm_nattch counts it)
+		if c.sysv == nil {
+			c.sysv = map[uint64]*sysvSeg{}
+		}
+		c.sysv[at] = g
+		g.attach(0)
+	}
 	for va, pg := range m.pages {
 		if err := m.shareInto(c, va, pg); err != nil {
 			c.Close()
@@ -253,6 +261,10 @@ func (m *Mem) Close() error {
 	for va, pg := range m.pages {
 		m.releaseLocked(pg)
 		delete(m.pages, va)
+	}
+	for at, g := range m.sysv { // exit and execve detach every SysV segment
+		delete(m.sysv, at)
+		g.detach(0)
 	}
 	m.areas = nil
 	return nil

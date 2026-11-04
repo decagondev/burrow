@@ -58,7 +58,7 @@ dmenu lists every program in `$PATH` (`/opt/x11/bin:/bin`, set by `/opt/x11/x11.
 TinyX is a small X server from 2006, and Burrow's build switches more off:
 
 - **No XKB.** Programs that require the keyboard extension fail or fall back; this is why Doom has its own X backend (`user/x11/doom/`).
-- **No GLX or Xvideo, and no MIT-SHM yet.** TinyX builds MIT-SHM, but Burrow has no SysV shared memory until W18, so images go through the socket: Doom gets about a third of its fbdev frame rate in a window (`make x11-bench`), still above its 35 tics a second.
+- **No GLX or Xvideo.** MIT-SHM works since W18 (SysV shared memory): Doom draws through it at about three quarters of its fbdev frame rate; programs that do not use it send images through the socket, as before: Doom gets about a third of its fbdev frame rate in a window (`make x11-bench`), still above its 35 tics a second.
 - **No XINERAMA.** dmenu says so on start and carries on; one screen is all there is.
 - **One display, one screen** at 1024x768x24, no resizing (RandR) and no display manager; clients connect over the Unix socket `/tmp/.X11-unix/X0` (Burrow has no TCP until W17).
 - **Fonts:** the core font `fixed` (and the cursor font), plus DejaVu through Xft and fontconfig for st, dmenu and dwm's bar.

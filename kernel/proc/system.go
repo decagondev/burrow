@@ -37,6 +37,7 @@ type System struct {
 	net                  *stack.Stack        // TCP/IP for inet sockets (W17-S03; nil: none)
 	hostname, domainname string              // uname's names (hostname.go; "" until set)
 	shmNames             shmTab              // /dev/shm (shm.go, W18-S03)
+	sysv                 sysvTab             // SysV shared memory segments (sysv.go, W18-S04)
 	vt                   *vt.VT              // its keyboard and display modes (SetVT), or nil
 	init                 *Process            // pid 1 (kernel-side, no thread)
 

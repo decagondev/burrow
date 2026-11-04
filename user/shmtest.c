@@ -3,8 +3,10 @@
  * boots Burrow. Covers MAP_SHARED|MAP_ANONYMOUS across fork (both ways),
  * memfd_create (ftruncate, the same bytes through write, read and a
  * mapping; MAP_PRIVATE of it is a private copy), POSIX shm_open between
- * two processes and shm_unlink, and MAP_PRIVATE anonymous memory staying
- * private after fork (copy-on-write, W18-S01). Prints "shmtest: <name> ok"
+ * two processes and shm_unlink, MAP_PRIVATE anonymous memory staying
+ * private after fork (copy-on-write, W18-S01), and System V segments
+ * (W18-S04: shmget, shmat in two processes, IPC_STAT, IPC_RMID while
+ * attached, shmdt). Prints "shmtest: <name> ok"
  * per check, then "shmtest: ok"; a failed check prints FAIL.
  * Docs: docs/04-plan/waves/WAVE-18-foundations.md. */
 #define _GNU_SOURCE
@@ -12,7 +14,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ipc.h>
 #include <sys/mman.h>
+#include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -103,11 +107,35 @@ static void posix_shm(void) {
     munmap(m, 4096);
 }
 
+static void sysv(void) {
+    int id = shmget(IPC_PRIVATE, 8192, IPC_CREAT | 0600);
+    check("sysv-shmget", id >= 0);
+    char *m = shmat(id, NULL, 0);
+    check("sysv-shmat", m != (void *)-1);
+    strcpy(m, "zeroed then written");
+    pid_t pid = fork();
+    if (pid == 0) { /* the child is attached through fork, and attaches again */
+        char *m2 = shmat(id, NULL, 0);
+        strcpy(m2 + 4096, "from the child");
+        shmdt(m2);
+        _exit(m2 == (void *)-1 || strcmp(m, "zeroed then written") != 0);
+    }
+    int st;
+    waitpid(pid, &st, 0);
+    check("sysv-two-processes", WIFEXITED(st) && WEXITSTATUS(st) == 0 && strcmp(m + 4096, "from the child") == 0);
+    struct shmid_ds ds;
+    check("sysv-ipc-stat", shmctl(id, IPC_STAT, &ds) == 0 && ds.shm_segsz == 8192 && ds.shm_nattch == 1);
+    check("sysv-rmid-while-attached", shmctl(id, IPC_RMID, NULL) == 0 && strcmp(m, "zeroed then written") == 0);
+    check("sysv-shmdt", shmdt(m) == 0);
+    check("sysv-gone-after-rmid", shmat(id, NULL, 0) == (void *)-1);
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     anon_shared();
     memfd();
     posix_shm();
+    sysv();
     printf("shmtest: %s\n", failures ? "FAIL" : "ok");
     return failures != 0;
 }
