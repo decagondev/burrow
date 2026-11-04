@@ -138,19 +138,19 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 ## E16 X11 and GTK
 *Exit: an X server with a window manager, then GTK programs.* [W16, then later]
-- [ ] E16.F01 As a user, I want an X server on the framebuffer (TinyX `Xfbdev`) with the console's keyboard and mouse, so that many programs can share the screen. [W16]
-- [ ] E16.F02 As a porter, I want the X libraries (Xlib, xcb, Xft, fontconfig, core fonts) static for musl, so that X programs build like the other ports. [W16]
-- [ ] E16.F03 As a user, I want pseudo-terminals (`/dev/ptmx`, `/dev/pts`), so that terminal emulators can run a shell. [W16]
-- [ ] E16.F04 As a user, I want dwm, st and dmenu started by `startx`, so that I have a tiling desktop. [W16]
-- [ ] E16.F05 As a user, I want Doom in an X window, so that games and the desktop mix. [W16]
+- [x] E16.F01 As a user, I want an X server on the framebuffer (TinyX `Xfbdev`) with the console's keyboard and mouse, so that many programs can share the screen. [W16]
+- [x] E16.F02 As a porter, I want the X libraries (Xlib, xcb, Xft, fontconfig, core fonts) static for musl, so that X programs build like the other ports. [W16]
+- [x] E16.F03 As a user, I want pseudo-terminals (`/dev/ptmx`, `/dev/pts`), so that terminal emulators can run a shell. [W16]
+- [x] E16.F04 As a user, I want dwm, st and dmenu started by `startx`, so that I have a tiling desktop. [W16]
+- [x] E16.F05 As a user, I want Doom in an X window, so that games and the desktop mix. [W16]
 - Later: the 1.20-branch kdrive `Xfbdev` (XKB, XInput 2: GTK3 needs XInput 2) · GTK3 · Qt's `xcb` platform · MIT-SHM (needs E18).
 
 ## E17 Networking
 *Exit: user programs on Burrow talk TCP/IP to the host and the internet.* [W17]
-- [ ] E17.F01 As a user, I want a network card (e1000) driven from Go, so that Burrow can send and receive frames. [W17]
-- [ ] E17.F02 As a user, I want TCP/IP in the kernel (gVisor's `tcpip`, pinned), so that Burrow speaks IPv4 and IPv6. [W17]
-- [ ] E17.F03 As a porter, I want `AF_INET`/`AF_INET6` sockets with Linux semantics, so that wget, Go's `net/http` and servers work unchanged. [W17]
-- [ ] E17.F04 As a user, I want names (`/etc/resolv.conf`, `/etc/hosts`) and DNS, so that programs reach hosts by name. [W17]
+- [x] E17.F01 As a user, I want a network card (e1000) driven from Go, so that Burrow can send and receive frames. [W17]
+- [x] E17.F02 As a user, I want TCP/IP in the kernel (gVisor's `tcpip`, pinned), so that Burrow speaks IPv4 and IPv6. [W17]
+- [x] E17.F03 As a porter, I want `AF_INET`/`AF_INET6` sockets with Linux semantics, so that wget, Go's `net/http` and servers work unchanged. [W17]
+- [x] E17.F04 As a user, I want names (`/etc/resolv.conf`, `/etc/hosts`) and DNS, so that programs reach hosts by name. [W17]
 - Later: DHCP · virtio-net · a browser (NetSurf, framebuffer or X) · ssh (dropbear) · TLS for C programs (mbedTLS).
 
 ## E18 Foundations for bigger programs

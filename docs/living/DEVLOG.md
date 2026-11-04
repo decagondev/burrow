@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17-S05 Servers inside Burrow
+
+**Did:** servers inside Burrow reached from the host through QEMU's forwarded ports: busybox `httpd` serving `/home` for 50 connections, restarted on the same port at once, and a new Go program, `goserve`, serving it with `net/http`; the host checks every byte (`tests/smoke/fetch.py`, in `make net-smoke`).
+
+**Surprise:** not one kernel change; the sockets of S03 were enough for a forking C server and Go's epoll-driven one. All three failures on the way were in the test: httpd's log level, a fetcher that waited to see the server down when the restart was too quick to notice, and ash's job numbers.
+
+**Next:** W17-S06, `make run-net`, `gofetch` over TLS, `make net-bench` and the networking guide.
+
 ## 2026-11-04 — W17-S04 Names and the outside
 
 **Did:** the name files on the initrd, a settable host name, raw ICMP sockets, busybox with its network applets, and `make net-smoke`: busybox's `wget` fetches files by name and by address from a Python server on the host (the 1 MiB one checked with `md5sum -c`), and `ping` reaches the gateway.

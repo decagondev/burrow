@@ -1,0 +1,17 @@
+# Ordered markers for servers inside Burrow (W17-S05, tests/smoke/keys/net-serve.keys,
+# run by tests/smoke/net-serve.sh; the host's side is checked by tests/smoke/fetch.py). Append-only.
+[fat] INFO: hdb: FAT32 volume "BURROWHOME" mounted at /home (read-write)
+burrow> run /bin/busybox sh
+net: httpd up
+url:/hello.c
+response:200
+url:/phase1-done
+response:404
+net: httpd again
+url:/home/hello.c
+url:/phase2-done
+goserve: serving /home on [::]:8081
+goserve: GET /hello.c 200
+goserve: GET /phase3-done 404
+net: servers done
+burrow> poweroff

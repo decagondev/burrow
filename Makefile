@@ -476,11 +476,17 @@ run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots
 # go-dev.img on QEMU's user network; busybox wget fetches them by name and
-# by address, ping reaches the gateway. No internet needed.
+# by address, ping reaches the gateway. Then servers inside Burrow (S05):
+# tests/smoke/net-serve.sh forwards two host ports (hostfwd) to busybox
+# httpd and goserve on a fresh test home, and tests/smoke/fetch.py fetches
+# through them, many short connections and a restart. No internet needed.
 net-smoke:
 	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory net-smoke-run; 	else echo "NET SMOKE SKIP (make busybox ports builds what it needs)"; fi
 net-smoke-run: $(BUILD)/go-dev.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev.img net 120
+	rm -f $(BUILD)/home-net.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev.img $(BUILD)/home-net.img 240
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
 # with tcc, write and rename a Lua script; power off; boot again and find

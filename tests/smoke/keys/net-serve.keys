@@ -1,0 +1,27 @@
+# Servers inside Burrow (W17-S05), run by tests/smoke/net-serve.sh: the
+# host (tests/smoke/fetch.py) reaches 8080 and 8081 through QEMU's hostfwd
+# and ends each phase with a request the server logs on the console:
+# busybox httpd serves /home, is killed and restarted on the same port at
+# once (SO_REUSEADDR) serving / (so the host can tell the new one by
+# /home/hello.c), then goserve (Go's net/http) serves /home.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type httpd -f -vv -p 8080 -h /home & echo net: httpd up
+key ret
+wait url:/phase1-done
+type kill $!; wait; httpd -f -vv -p 8080 -h / & echo net: httpd again
+key ret
+wait url:/phase2-done
+type kill $!; wait; /bin/goserve -addr :8081 -dir /home &
+key ret
+wait goserve: GET /phase3-done 404
+type kill $!; wait; echo net: servers done
+key ret
+wait net: servers done
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret
