@@ -150,6 +150,16 @@ MUSL_GCC ?= musl-gcc
 $(BUILD)/user/%: user/%.c $(BUILD)/uapi/.stamp | $(BUILD)/user
 	@command -v $(MUSL_GCC) >/dev/null || { echo "$(MUSL_GCC) not found: install musl-tools (sudo apt install musl-tools) or set MUSL_GCC=..."; exit 1; }
 	$(MUSL_GCC) -static -Os -isystem $(BUILD)/uapi -o $@ $<
+# Dynamic linking (W18-S05): user/dyn/ builds with musl-gcc without -static
+# against the host's musl, whose loader (its libc.so) goes on the initrd as
+# /lib/ld-musl-x86_64.so.1 with the libraries: libgreet.so is linked by
+# dynhello, libplug.so opened by it with dlopen.
+MUSL_LOADER ?= /usr/lib/x86_64-linux-musl/libc.so
+DYN_LIBS    := $(BUILD)/user/lib/libgreet.so $(BUILD)/user/lib/libplug.so
+$(BUILD)/user/lib/lib%.so: user/dyn/lib%.c | $(BUILD)/user
+	mkdir -p $(dir $@) && $(MUSL_GCC) -shared -fPIC -Os -o $@ $<
+$(BUILD)/user/dynhello: user/dyn/dynhello.c $(DYN_LIBS)
+	$(MUSL_GCC) -Os -o $@ $< -L$(BUILD)/user/lib -lgreet
 # Linux UAPI headers (linux/, asm/, asm-generic/) for programs that use the
 # device interfaces (fbdev, evdev, W11): links to the host's linux-libc-dev
 # (links, not copies: some names differ only in case, which a Windows-backed
@@ -167,10 +177,12 @@ $(BUILD)/uapi/.stamp: | $(BUILD)
 # as ustar reproducibly (sorted names, owner 0, mtime 0, modes 644/755
 # whatever the checkout says), mounted at / by the Go kernel (kernel/fs/tarfs).
 INITRD_FILES := $(shell find initrd -type f)
-$(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) | $(BUILD)
-	rm -rf $(BUILD)/initrd-root && mkdir -p $(BUILD)/initrd-root/bin
+$(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) $(BUILD)/user/dynhello $(DYN_LIBS) | $(BUILD)
+	rm -rf $(BUILD)/initrd-root && mkdir -p $(BUILD)/initrd-root/bin $(BUILD)/initrd-root/lib
 	cp -R initrd/. $(BUILD)/initrd-root/
-	cp $(USER_BINS) $(BUILD)/initrd-root/bin/
+	cp $(USER_BINS) $(BUILD)/user/dynhello $(BUILD)/initrd-root/bin/
+	cp $(MUSL_LOADER) $(BUILD)/initrd-root/lib/ld-musl-x86_64.so.1
+	cp $(DYN_LIBS) $(BUILD)/initrd-root/lib/
 	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
 		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-root -cf $@ .
 
@@ -317,7 +329,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -325,6 +337,7 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/nettest > $(BUILD)/nettest-linux.log  # W17-S03
 	$(BUILD)/user/forkbench > $(BUILD)/forkbench-linux.log  # W18-S01
 	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
+	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,

@@ -23,10 +23,16 @@ import (
 // PIEBase is where a static-PIE (ET_DYN) program is loaded.
 const PIEBase = 0x400000
 
+// InterpBase is where a dynamic program's interpreter (musl's loader) is
+// loaded: below the stack, far from what mmap hands out (W18-S05).
+const InterpBase = 0x7F00_0000_0000
+
 // Image is what loading an ELF tells the entry stack and brk.
 type Image struct {
 	Entry, Phdr, Phent, Phnum uint64
 	End                       uint64 // page-aligned end of the highest segment: brk starts here
+	Interp                    string // PT_INTERP: the loader to start instead (W18-S05)
+	Base, Start               uint64 // the interpreter's load address and entry (0 without one)
 }
 
 // openProgram opens file for execve: a reader over it (the file itself
@@ -58,8 +64,9 @@ func (s *System) openProgram(file string) (io.ReaderAt, []byte, error) {
 	return r, head[:n], nil
 }
 
-// LoadELF maps the PT_LOAD segments of a static x86-64 executable (ET_EXEC,
-// or ET_DYN without an interpreter: static-PIE at PIEBase) into m.
+// LoadELF maps the PT_LOAD segments of an x86-64 executable (ET_EXEC, or
+// ET_DYN at PIEBase) into m. A dynamic program's interpreter is named in
+// img.Interp; LoadInterp loads it (W18-S05).
 func LoadELF(m *Mem, r io.ReaderAt) (Image, error) {
 	f, err := elf.NewFile(r)
 	if err != nil {
@@ -83,8 +90,12 @@ func LoadELF(m *Mem, r io.ReaderAt) (Image, error) {
 	}
 	for _, p := range f.Progs {
 		switch p.Type {
-		case elf.PT_INTERP:
-			return Image{}, errors.New("elf: dynamically linked (has an interpreter): only static programs run")
+		case elf.PT_INTERP: // a dynamic program: prepare loads the interpreter too
+			name := make([]byte, min(p.Filesz, 4096))
+			if _, err := p.ReadAt(name, 0); err != nil && !errors.Is(err, io.EOF) {
+				return Image{}, fmt.Errorf("elf: interpreter: %w", err)
+			}
+			img.Interp = string(bytes.TrimRight(name, "\x00"))
 		case elf.PT_LOAD:
 			if err := loadSegment(m, r, p, base); err != nil {
 				return Image{}, err
@@ -169,4 +180,26 @@ func phdrOffset(r io.ReaderAt) (uint64, error) {
 		return 0, fmt.Errorf("elf: header: %w", err)
 	}
 	return binary.LittleEndian.Uint64(b[:]), nil
+}
+
+// LoadInterp maps a dynamic program's interpreter (an ET_DYN: musl's
+// loader, which is its libc.so) at InterpBase and returns its entry. The
+// loader finds the program through the auxiliary vector (AT_PHDR,
+// AT_ENTRY) and itself through AT_BASE.
+func LoadInterp(m *Mem, r io.ReaderAt) (base, entry uint64, err error) {
+	f, err := elf.NewFile(r)
+	if err != nil {
+		return 0, 0, fmt.Errorf("elf: interpreter: %w", err)
+	}
+	if f.Class != elf.ELFCLASS64 || f.Machine != elf.EM_X86_64 || f.Type != elf.ET_DYN {
+		return 0, 0, errors.New("elf: the interpreter is not an x86-64 shared object")
+	}
+	for _, p := range f.Progs {
+		if p.Type == elf.PT_LOAD {
+			if err := loadSegment(m, r, p, InterpBase); err != nil {
+				return 0, 0, err
+			}
+		}
+	}
+	return InterpBase, InterpBase + f.Entry, nil
 }

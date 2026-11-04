@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path"
 	"runtime"
+	"strings"
 	"sync"
 
 	"burrow/kernel/klog"
@@ -118,6 +119,9 @@ func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string) (*i
 		return nil, err
 	}
 	img, err := LoadELF(mem, prog)
+	if err == nil && img.Interp != "" { // dynamic: the loader starts first (W18-S05)
+		err = s.loadInterp(mem, &img)
+	}
 	if err == nil {
 		err = mem.MapAnon(StackTop-StackSize, StackSize, ProtWrite)
 	}
@@ -134,7 +138,11 @@ func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string) (*i
 		mem.Close()
 		return nil, err
 	}
-	return &image{mem: mem, entry: img.Entry, sp: sp, end: img.End}, nil
+	start := img.Entry
+	if img.Start != 0 {
+		start = img.Start
+	}
+	return &image{mem: mem, entry: start, sp: sp, end: img.End}, nil
 }
 
 // Spawn loads the program at file (an io/fs path) and starts it as a
@@ -275,4 +283,17 @@ func (s *System) unknown(p *Process, nr uint64) {
 	if first {
 		s.log.Warnf("pid %d (%s): unimplemented syscall %d", p.PID, path.Base(p.Path), nr)
 	}
+}
+
+// loadInterp loads img's interpreter (an absolute path) into mem.
+func (s *System) loadInterp(mem *Mem, img *Image) error {
+	if !strings.HasPrefix(img.Interp, "/") {
+		return fmt.Errorf("elf: interpreter %q is not an absolute path", img.Interp)
+	}
+	r, _, err := s.openProgram(img.Interp[1:])
+	if err != nil {
+		return fmt.Errorf("elf: interpreter %s: %w", img.Interp, err)
+	}
+	img.Base, img.Start, err = LoadInterp(mem, r)
+	return err
 }

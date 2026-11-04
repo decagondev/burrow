@@ -47,5 +47,10 @@ type run /bin/shmtest
 key ret
 wait shmtest: 
 wait burrow> 
+# W18-S05: a dynamic program, a shared library and dlopen (passed on the host's Linux first)
+type run /bin/dynhello
+key ret
+wait dynhello: 
+wait burrow> 
 type poweroff
 key ret

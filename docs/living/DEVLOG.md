@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18-S05 Dynamic linking
+
+**Did:** `PT_INTERP` in `execve`: the program and musl's loader are mapped, the loader starts with `AT_BASE`, and the rest is user space. `/lib` on the initrd holds the loader and two test libraries; `dynhello` calls a linked library and a `dlopen`ed plug-in, on Linux and on Burrow.
+
+**Surprise:** it worked on Burrow at the first boot. Everything musl's loader asks of a kernel (file mappings at fixed addresses, `mprotect`, reading files) was already there from W12 and W14; the kernel's own share of dynamic linking is a page of code.
+
+**Next:** W18-S06, budgets, the memory guide, M18.
+
 ## 2026-11-04 — W18-S04 SysV shared memory and MIT-SHM
 
 **Did:** `shmget`, `shmat`, `shmdt` and `shmctl` over S03's shared objects, attachments kept in each process's memory so fork and exit need no extra code; Doom's X backend draws through MIT-SHM. Doom in X: 37 fps before, 95 now, three quarters of the fbdev rate.

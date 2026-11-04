@@ -152,4 +152,8 @@ shmtest: sysv-rmid-while-attached ok
 shmtest: sysv-shmdt ok
 shmtest: sysv-gone-after-rmid ok
 shmtest: ok
+burrow> run /bin/dynhello
+dynhello: libgreet says hello from a shared library ok
+dynhello: dlopen libplug.so, plug_answer(7) = 42 ok
+dynhello: ok
 burrow> poweroff

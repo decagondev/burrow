@@ -18,6 +18,7 @@ const (
 	atPhent  = 4
 	atPhnum  = 5
 	atPagesz = 6
+	atBase   = 7 // the interpreter's load address (W18-S05; 0 for a static program)
 	atEntry  = 9
 	atUID    = 11
 	atEUID   = 12
@@ -68,7 +69,7 @@ func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte) (uint64
 	}
 	aux := []uint64{
 		atPhdr, img.Phdr, atPhent, img.Phent, atPhnum, img.Phnum, atPagesz, PageSize,
-		atEntry, img.Entry, atRandom, rnd, atExecfn, av[0],
+		atBase, img.Base, atEntry, img.Entry, atRandom, rnd, atExecfn, av[0],
 		atUID, 0, atEUID, 0, atGID, 0, atEGID, 0, atSecure, 0, atNull, 0,
 	}
 	words := []uint64{uint64(len(av))}

@@ -8,7 +8,7 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 43 files, 4 directories
+[initrd] INFO: tarfs: 47 files, 5 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -83,7 +83,7 @@ forktest: my parent is 1
 burrow> run /bin/fdtest
 fdtest: the pipe carried 18 bytes: hello from ring 3
 fdtest: /tmp/note says: written by fdtest
-fdtest: / holds: bin dev etc mnt opt tmp
+fdtest: / holds: bin dev etc lib mnt opt tmp
 fdtest: cwd is now /etc
 burrow> run /bin/sigtest
 sigtest: handler saw signal 10
@@ -101,7 +101,7 @@ spin: spinning until ^C
 run: /bin/spin: killed by signal 2
 burrow> sh
 $ ls / | wc -l
-6
+7
 $ echo hi > /tmp/x; cat /tmp/x
 hi
 $ cd /etc; pwd; ls

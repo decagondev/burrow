@@ -169,7 +169,6 @@ func TestLoadELFRejects(t *testing.T) {
 	bad32 := buildELF(2, 0x400000, text)
 	bad32[4] = 1
 	for name, file := range map[string][]byte{
-		"interpreter":  buildELF(2, 0x400000, text, 3),
 		"32-bit":       bad32,
 		"relocatable":  buildELF(1, 0, text),
 		"segment at 0": buildELF(2, 0, []seg{{vaddr: 0, off: 0, memsz: 0x1000, flags: pfR, data: make([]byte, 0x200)}}),
@@ -180,6 +179,21 @@ func TestLoadELFRejects(t *testing.T) {
 		if _, err := proc.LoadELF(m, bytes.NewReader(file)); err == nil {
 			t.Errorf("%s: loaded", name)
 		}
+	}
+}
+
+// W18-S05: a dynamic program's interpreter is a shared object (ET_DYN)
+// loaded at InterpBase, started at its own entry; an executable is refused.
+func TestLoadInterpWantsASharedObject(t *testing.T) {
+	text := []seg{{vaddr: 0, off: 0, memsz: 0x1000, flags: pfR | pfX, data: make([]byte, 0x200)}}
+	m, _ := newMem(t)
+	base, entry, err := proc.LoadInterp(m, bytes.NewReader(buildELF(3, 0x120, text))) // ET_DYN
+	if err != nil || base != proc.InterpBase || entry != proc.InterpBase+0x120 || !m.Mapped(proc.InterpBase, 0x1000) {
+		t.Fatalf("LoadInterp = %#x, %#x, %v", base, entry, err)
+	}
+	m2, _ := newMem(t)
+	if _, _, err := proc.LoadInterp(m2, bytes.NewReader(buildELF(2, 0x400000, text))); err == nil {
+		t.Error("an ET_EXEC was accepted as an interpreter")
 	}
 }
 
