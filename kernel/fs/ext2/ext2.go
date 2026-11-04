@@ -1,7 +1,7 @@
 // Package ext2 reads the second extended file system (W19-S01): a Unix
 // file system with owners, modes, symbolic and hard links and sparse
 // files, which e2fsprogs creates, checks and repairs on the host. It is an
-// io/fs.FS and an fs.ReadLinkFS; fs.FileInfo.Sys() is a vfs.Attr. Revision
+// io/fs.FS and an fs.ReadLinkFS; fs.FileInfo.Sys() is an fsattr.Attr. Revision
 // 0 and 1 volumes without a journal or extents; an unknown incompatible
 // feature is refused, an unknown read-only-compatible one is reported in
 // ReadOnlyFeatures and keeps it read-only. Mounted with MountRW it writes

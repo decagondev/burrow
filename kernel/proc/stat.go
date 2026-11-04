@@ -111,6 +111,10 @@ func (p *Process) statOf(dirfd, nameVA, flags uint64) ([]byte, int64) {
 	if err != nil {
 		return nil, errno(err)
 	}
+	c := p.Cred() // W19-S04: search permission on the way
+	if err := p.search(&c, name); err != nil {
+		return nil, errno(err)
+	}
 	info, err := fs.Stat(p.sys.files, name)
 	if err != nil {
 		return nil, errno(err)

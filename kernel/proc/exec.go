@@ -33,6 +33,10 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 		return errno(err)
 	}
 	file := p.resolve(name)
+	cred := p.Cred()
+	if err := p.permit(&cred, file, mayExec); err != nil { // W19-S04
+		return errno(err)
+	}
 	prog, head, err := s.openProgram(file)
 	if err != nil {
 		return errno(err)
@@ -42,12 +46,14 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 		return errno(err)
 	}
 	if run != file { // the interpreter runs instead
+		if err := p.permit(&cred, run, mayExec); err != nil {
+			return errno(err)
+		}
 		if prog, _, err = s.openProgram(run); err != nil {
 			return errno(err)
 		}
 		file = run
 	}
-	cred := p.Cred()
 	id := execCred(&cred, s.files, file)
 	im, err := s.prepare("/"+file, prog, argv, envp, id)
 	if err != nil {

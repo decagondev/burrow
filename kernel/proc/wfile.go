@@ -6,13 +6,17 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"burrow/kernel/vfs"
 )
 
-// WritableFS is the VFS's write side (kernel/vfs.VFS): whole files only.
+// WritableFS is the VFS's write side (kernel/vfs.VFS): whole files only;
+// since W19-S04 creating calls take the new file's owner and mode.
 type WritableFS interface {
 	fs.FS
 	WriteFile(name string, data []byte) error
-	Mkdir(name string) error
+	WriteFileAs(name string, data []byte, n vfs.NewFile) error
+	MkdirAs(name string, n vfs.NewFile) error
 	Remove(name string) error
 }
 
@@ -170,7 +174,7 @@ func sysFtruncateFn(p *Process, a [6]uint64) (int64, bool) {
 
 // truncate(path, length): open for writing, truncate, close.
 func sysTruncateFn(p *Process, a [6]uint64) (int64, bool) {
-	fd := p.openAt(uint64(atFDCWD&0xFFFFFFFF), a[0], oWRONLY)
+	fd := p.openAt(uint64(atFDCWD&0xFFFFFFFF), a[0], oWRONLY, 0)
 	if fd < 0 {
 		return ok(fd)
 	}

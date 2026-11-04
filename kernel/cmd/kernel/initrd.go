@@ -4,6 +4,7 @@ package main
 
 import (
 	"io"
+	"io/fs"
 
 	"burrow/kernel/bootinfo"
 	"burrow/kernel/fs/devfs"
@@ -29,7 +30,9 @@ func (k *kernel) mountFiles(console io.Writer) *devfs.FS {
 		dev.Register(name, devfs.WriteOnly{Writer: console}, 0o620)
 	}
 	k.fs.Mount(".", mountInitrd(k.modules, k.log.With("initrd")), "tarfs")
-	k.fs.Mount("tmp", memfs.New(), "ramfs")
+	tmp := memfs.New()
+	tmp.Chmod(".", fs.ModeSticky|0o777) // W19-S04: anyone may create in /tmp, only owners delete
+	k.fs.Mount("tmp", tmp, "ramfs")
 	k.fs.Mount("dev", dev, "devfs")
 	return dev
 }

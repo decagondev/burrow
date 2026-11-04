@@ -8,5 +8,10 @@ type cat /mnt/link.txt
 key ret
 type cat /mnt/docs/hard.txt
 key ret
+# W19-S04: owners and permissions on ext2
+type run /bin/permtest /mnt/permtest
+key ret
+wait permtest: ok
+wait burrow> 
 type poweroff
 key ret

@@ -2,7 +2,7 @@ package ext2
 
 // inode.go - inodes (W19-S01): reading one by number, symbolic link
 // targets (fast ones in the block pointers, slow ones in a data block), and
-// the fs.FileInfo built from an inode, whose Sys() is a vfs.Attr. Never
+// the fs.FileInfo built from an inode, whose Sys() is an fsattr.Attr. Never
 // trusts an inode number or a size without checking it against the volume.
 // Docs: WAVE-19-unix.md.
 
@@ -11,7 +11,7 @@ import (
 	"io/fs"
 	"time"
 
-	"burrow/kernel/vfs"
+	"burrow/kernel/fsattr"
 )
 
 type inode struct {
@@ -110,7 +110,7 @@ func (i fileInfo) ModTime() time.Time { return unix(i.in.mtime) }
 func (i fileInfo) Mode() fs.FileMode  { return fileMode(i.in.mode) }
 
 func (i fileInfo) Sys() any {
-	return vfs.Attr{UID: i.in.uid, GID: i.in.gid, Nlink: uint32(i.in.links), Ino: uint64(i.in.ino),
+	return fsattr.Attr{UID: i.in.uid, GID: i.in.gid, Nlink: uint32(i.in.links), Ino: uint64(i.in.ino),
 		Atime: unix(i.in.atime), Ctime: unix(i.in.ctime)}
 }
 

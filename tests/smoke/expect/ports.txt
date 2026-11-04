@@ -167,4 +167,26 @@ credtest: fsuid ok
 credtest: kill ok
 credtest: peercred ok
 credtest: ok
+burrow> run /bin/credtest --exec /bin/credtest
+credtest: setid-exec ok
+credtest: ok
+burrow> run /bin/permtest /tmp/permtest
+permtest: setup ok
+permtest: owner ok
+permtest: denied ok
+permtest: no-write-dir ok
+permtest: no-search ok
+permtest: sticky ok
+permtest: sticky-other-user ok
+permtest: setgid-dir ok
+permtest: chmod-chown ok
+permtest: exec ok
+permtest: root-reads-anything ok
+permtest: root-needs-an-x-bit ok
+permtest: access-uses-real-ids ok
+permtest: umask ok
+permtest: chown-drops-set-uid ok
+permtest: root-chowns ok
+permtest: sticky-root-deletes ok
+permtest: ok
 burrow> poweroff

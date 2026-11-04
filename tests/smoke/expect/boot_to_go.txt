@@ -8,7 +8,7 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 48 files, 5 directories
+[initrd] INFO: tarfs: 49 files, 5 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -46,7 +46,7 @@ burrow> cat /tmp/note
 typed into ramfs
 burrow> ls /
 drwxr-xr-x        0 etc/
-drwxr-xr-x        0 tmp/
+dtrwxrwxrwx        0 tmp/
 burrow> ls /dev
 Dcrw--w----        0 console
 Dcrw-rw-rw-        0 null
@@ -56,9 +56,9 @@ burrow> disks
 hda 
 hdb 
 burrow> ls /mnt /mnt/docs
-dr-xr-xr-x        0 docs/
--r--r--r--       83 hello.txt
--r--r--r--       72 A-Long-File-Name.text
+drwxr-xr-x        0 docs/
+-rwxr-xr-x       83 hello.txt
+-rwxr-xr-x       72 A-Long-File-Name.text
 burrow> cat /mnt/hello.txt
 Hello from the FAT32 data disk
 burrow> run /bin/hello

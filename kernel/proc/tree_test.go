@@ -148,8 +148,10 @@ func TestExecve(t *testing.T) {
 		t.Errorf("argc %d", le.Uint64(argc))
 	}
 	r.put(p, scratch, []byte("etc/motd\x00"))
-	if e := r.call(p, 59, scratch, 0, 0); e != -int64(syscall.ENOEXEC) {
-		t.Errorf("execve of a text file = %d", e)
+	// W19-S04: a file with no execute bit is EACCES before anything is read,
+	// as on Linux (root too); script_test has the ENOEXEC of a non-program
+	if e := r.call(p, 59, scratch, 0, 0); e != -int64(syscall.EACCES) {
+		t.Errorf("execve of a text file (0644) = %d", e)
 	}
 	r.put(p, scratch, []byte("nope\x00"))
 	if e := r.call(p, 59, scratch, 0, 0); e != -int64(syscall.ENOENT) {

@@ -1,22 +1,23 @@
 package ext2
 
 // write.go - a writable mount (W19-S02): vfs.Writable (WriteFile, Mkdir,
-// Remove), MakeSocket and Rename (rename.go). Each operation runs under
+// Remove), MakeSocket and Rename (rename.go), and since S04 fsattr.Owner
+// (owner.go: the same with an owner, Chmod, Chown). Each operation runs under
 // the write lock and ends with a commit: the bitmaps it changed, the group
 // descriptors and the superblock (free counts, write time) are written and
 // the disk flushed, so the volume is consistent between operations. There
 // is no journal: a crash inside one can leave work for e2fsck (ADR-0010).
-// New files belong to root (owners from the caller come in W19-S04). Never
+// New files get the owner and mode the caller gives (W19-S04). Never
 // writes when mounted with Mount, or when the volume has a read-only-
 // compatible feature it does not know. Docs: WAVE-19-unix.md.
 
 import (
+	"burrow/kernel/fsattr"
 	"errors"
 	"io"
 	"io/fs"
 	"path"
 	"syscall"
-	"time"
 )
 
 // Disk is what a writable volume lives on.
@@ -99,19 +100,19 @@ func (f *FS) parentOf(name string) (*inode, string, error) {
 	return d, base, nil
 }
 
-// create makes a new inode (mode with its type) linked as base in dir; fill
-// gives it data before it is written and linked.
-func (f *FS) create(dir *inode, base string, mode uint16, mtime time.Time, fill func(*inode) error) error {
+// create makes a new inode of type typ, with n's owner and mode, linked as
+// base in dir; fill gives it data before it is written and linked.
+func (f *FS) create(dir *inode, base string, typ uint16, n fsattr.New, fill func(*inode) error) error {
 	if _, err := f.child(dir, base); err == nil {
 		return fs.ErrExist
 	}
-	isDir := mode&modeType == modeDir
+	isDir := typ == modeDir
 	ino, err := f.allocInode(isDir, dir.ino)
 	if err != nil {
 		return err
 	}
-	t := uint32(mtime.Unix())
-	in := &inode{ino: ino, mode: mode, links: 1, atime: t, ctime: f.stamp(), mtime: t}
+	t := uint32(n.Mtime.Unix())
+	in := &inode{ino: ino, mode: typ | unixMode(n.Mode), uid: n.UID, gid: n.GID, links: 1, atime: t, ctime: f.stamp(), mtime: t}
 	if fill != nil {
 		err = fill(in)
 	}
@@ -128,9 +129,10 @@ func (f *FS) create(dir *inode, base string, mode uint16, mtime time.Time, fill 
 	return err
 }
 
-// WriteFile creates name or replaces its contents (keeping its inode, so
-// every hard link sees the new contents).
-func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Time) error {
+// WriteFileAs creates name with n's owner and mode, or replaces its
+// contents (keeping its inode, owner and mode, so every hard link sees the
+// new contents).
+func (f *FS) WriteFileAs(name string, data []byte, n fsattr.New) error {
 	return f.change("write", name, func() error {
 		dir, base, err := f.parentOf(name)
 		if err != nil {
@@ -142,7 +144,7 @@ func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Ti
 			if _, lerr := f.child(dir, base); lerr == nil {
 				return fs.ErrNotExist // a link to nothing
 			}
-			return f.create(dir, base, modeReg|uint16(mode.Perm()), mtime, func(in *inode) error {
+			return f.create(dir, base, modeReg, n, func(in *inode) error {
 				return f.setData(in, data)
 			})
 		case err != nil:
@@ -153,7 +155,7 @@ func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Ti
 			return fs.ErrPermission
 		}
 		err = f.setData(in, data)
-		in.mtime, in.ctime = uint32(mtime.Unix()), f.stamp()
+		in.mtime, in.ctime = uint32(n.Mtime.Unix()), f.stamp()
 		if perr := f.putInode(in, false); err == nil {
 			err = perr
 		}
@@ -161,15 +163,15 @@ func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Ti
 	})
 }
 
-// Mkdir makes a directory with "." and "..".
-func (f *FS) Mkdir(name string, mode fs.FileMode, mtime time.Time) error {
+// MkdirAs makes a directory with "." and "..", owned and moded as n says.
+func (f *FS) MkdirAs(name string, n fsattr.New) error {
 	return f.change("mkdir", name, func() error {
 		dir, base, err := f.parentOf(name)
 		if err != nil {
 			return err
 		}
 		dir.links++
-		err = f.create(dir, base, modeDir|uint16(mode.Perm()), mtime, func(in *inode) error {
+		err = f.create(dir, base, modeDir, n, func(in *inode) error {
 			in.links = 2
 			return f.initDir(in, dir.ino)
 		})
@@ -200,14 +202,14 @@ func (f *FS) initDir(in *inode, parent uint32) error {
 	return nil
 }
 
-// MakeSocket makes a socket node (a bound Unix socket's name, W14-S07).
-func (f *FS) MakeSocket(name string, mtime time.Time) error {
+// MakeSocketAs makes a socket node (a bound Unix socket's name, W14-S07).
+func (f *FS) MakeSocketAs(name string, n fsattr.New) error {
 	return f.change("bind", name, func() error {
 		dir, base, err := f.parentOf(name)
 		if err != nil {
 			return err
 		}
-		return f.create(dir, base, modeSock|0o755, mtime, nil)
+		return f.create(dir, base, modeSock, n, nil)
 	})
 }
 

@@ -4,9 +4,9 @@ package proc
 // renameat2 (RENAME_NOREPLACE), handed to the VFS (inside one mount, as
 // Linux); fsync and fdatasync, which have nothing to wait for (a write is
 // on the disk when write returns: wfile writes the whole file back and FAT
-// flushes each change); and the permission, owner and time calls, which
-// FAT and memfs have no place for: accepted when the file exists, changing
-// nothing. Docs: POSIX_COVERAGE.md.
+// flushes each change); and utimensat, accepted when the file exists and
+// changing nothing. Permissions are checked as perm.go says (W19-S04); the
+// owner calls are ownercalls.go. Docs: POSIX_COVERAGE.md.
 
 import (
 	"io/fs"
@@ -31,11 +31,28 @@ func (p *Process) renameAt(olddirfd, oldVA, newdirfd, newVA, flags uint64) int64
 	if err != nil {
 		return errno(err)
 	}
-	if _, err := fs.Stat(p.sys.files, from); err != nil {
+	c := p.Cred()
+	if err := p.search(&c, from); err != nil {
 		return errno(err)
 	}
-	if _, err := fs.Stat(p.sys.files, to); err == nil && flags&renameNoreplace != 0 {
+	src, err := fs.Stat(p.sys.files, from)
+	if err != nil {
+		return errno(err)
+	}
+	dst, err := fs.Stat(p.sys.files, to)
+	if err == nil && flags&renameNoreplace != 0 {
 		return -int64(syscall.EEXIST)
+	}
+	if err := p.mayRemove(&c, from, src); err != nil { // W19-S04: both directories, the sticky rule on both names
+		return errno(err)
+	}
+	if err := p.mayCreate(&c, to); err != nil {
+		return errno(err)
+	}
+	if dst != nil {
+		if err := p.mayRemove(&c, to, dst); err != nil {
+			return errno(err)
+		}
 	}
 	r, ok := p.sys.files.(renamer)
 	if !ok {
@@ -72,18 +89,14 @@ func (p *Process) pathExists(dirfd, nameVA uint64) int64 {
 	if err != nil {
 		return errno(err)
 	}
+	c := p.Cred() // W19-S04: search permission on the way
+	if err := p.search(&c, name); err != nil {
+		return errno(err)
+	}
 	if _, err := fs.Stat(p.sys.files, name); err != nil {
 		return errno(err)
 	}
 	return 0
-}
-
-func sysChmodFn(p *Process, a [6]uint64) (int64, bool) { // chmod, chown, lchown (path first)
-	return ok(p.pathExists(atFDCWDArg, a[0]))
-}
-
-func sysFchmodatFn(p *Process, a [6]uint64) (int64, bool) { // fchmodat, fchownat (dirfd, path)
-	return ok(p.pathExists(a[0], a[1]))
 }
 
 // utimensat(dirfd, path, times, flags): a NULL path means dirfd itself.
@@ -97,9 +110,7 @@ func sysUtimensatFn(p *Process, a [6]uint64) (int64, bool) {
 func init() {
 	for nr, h := range map[uint64]handler{
 		82: sysRenameFn, 264: sysRenameatFn, 316: sysRenameat2Fn,
-		74: sysFsyncFn, 75: sysFsyncFn, 91: sysFsyncFn, 93: sysFsyncFn, // fsync, fdatasync, fchmod, fchown
-		90: sysChmodFn, 92: sysChmodFn, 94: sysChmodFn, // chmod, chown, lchown
-		268: sysFchmodatFn, 260: sysFchmodatFn, // fchmodat, fchownat
+		74: sysFsyncFn, 75: sysFsyncFn, // fsync, fdatasync (chmod and chown: ownercalls.go)
 		280: sysUtimensatFn,
 	} {
 		table[nr] = h

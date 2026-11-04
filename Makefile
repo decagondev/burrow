@@ -177,14 +177,13 @@ $(BUILD)/uapi/.stamp: | $(BUILD)
 # as ustar reproducibly (sorted names, owner 0, mtime 0, modes 644/755
 # whatever the checkout says), mounted at / by the Go kernel (kernel/fs/tarfs).
 INITRD_FILES := $(shell find initrd -type f)
-$(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) $(BUILD)/user/dynhello $(DYN_LIBS) | $(BUILD)
+$(BUILD)/initrd.tar: $(INITRD_FILES) $(USER_BINS) $(BUILD)/user/dynhello $(DYN_LIBS) scripts/mkinitrd.py | $(BUILD)
 	rm -rf $(BUILD)/initrd-root && mkdir -p $(BUILD)/initrd-root/bin $(BUILD)/initrd-root/lib
 	cp -R initrd/. $(BUILD)/initrd-root/
 	cp $(USER_BINS) $(BUILD)/user/dynhello $(BUILD)/initrd-root/bin/
 	cp $(MUSL_LOADER) $(BUILD)/initrd-root/lib/ld-musl-x86_64.so.1
 	cp $(DYN_LIBS) $(BUILD)/initrd-root/lib/
-	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-root -cf $@ .
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-root $@  # modes by content (W19-S04)
 
 # busybox (W10-S08): `make busybox` downloads the pinned source release once
 # (scripts/busybox.sh, sha256-checked) and builds build/busybox. It goes only
@@ -195,8 +194,7 @@ busybox: | $(BUILD)
 $(BUILD)/initrd-busybox.tar: $(BUILD)/initrd.tar $(BUILD)/busybox
 	rm -rf $(BUILD)/initrd-busybox-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-busybox-root
 	cp $(BUILD)/busybox $(BUILD)/initrd-busybox-root/bin/busybox
-	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-busybox-root -cf $@ .
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-busybox-root $@  # modes by content (W19-S04)
 $(BUILD)/go-busybox.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-busybox.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
 
@@ -210,8 +208,7 @@ doom: $(BUILD)/uapi/.stamp
 $(BUILD)/initrd-doom.tar: $(BUILD)/initrd.tar $(BUILD)/doom-root/doom
 	rm -rf $(BUILD)/initrd-doom-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-doom-root
 	cp $(BUILD)/doom-root/doom $(BUILD)/initrd-doom-root/bin/doom
-	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-doom-root -cf $@ .
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-doom-root $@  # modes by content (W19-S04)
 $(BUILD)/go-doom.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-doom.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar >/dev/null
 DOOM_DRIVE := -drive file=$(BUILD)/doom-data.img,format=raw,if=ide,index=1,media=disk
@@ -322,7 +319,7 @@ $(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
-disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img
+disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk $(EXT2_DRIVE)" \
 		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
@@ -340,7 +337,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -349,10 +346,12 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/forkbench > $(BUILD)/forkbench-linux.log  # W18-S01
 	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
 	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
-	@# W19-S03: credtest needs root on Linux (and a disk without nosuid for --exec)
+	@# W19-S03, S04: credtest and permtest need root on Linux (and a disk without nosuid for --exec)
 	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
+		$(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \
 	elif sudo -n true 2>/dev/null; then sudo -n $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
-	else echo "CREDTEST LINUX SKIP (needs root or sudo -n)"; fi
+		sudo -n $(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \
+	else echo "CREDTEST PERMTEST LINUX SKIP (need root or sudo -n)"; fi
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,
@@ -472,8 +471,7 @@ ports: | $(BUILD)
 $(BUILD)/initrd-ports.tar: $(BUILD)/initrd.tar $(BUILD)/ports-root/bin/lua
 	rm -rf $(BUILD)/initrd-ports-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-ports-root
 	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-ports-root/
-	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-ports-root -cf $@ .
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-ports-root $@  # modes by content (W19-S04)
 $(BUILD)/go-ports.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-ports.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-ports.tar >/dev/null
 ports-dl-smoke:
@@ -495,8 +493,7 @@ $(BUILD)/initrd-dev.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/ports-roo
 	rm -rf $(BUILD)/initrd-dev-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-dev-root
 	cp $(BUILD)/busybox $(BUILD)/initrd-dev-root/bin/busybox
 	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-dev-root/
-	tar --format=ustar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
-		--mode=a-rwx,u+rwX,go+rX -C $(BUILD)/initrd-dev-root -cf $@ .
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-dev-root $@  # modes by content (W19-S04)
 $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)

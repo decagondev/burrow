@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19-S04 Owners and permissions
+
+**Did:** owners on every file system that can keep one (ext2, memfs, the initrd's tar headers), `chmod` and `chown` with Linux's rules, and the permission checks on every path call, `open`, `execve` and `access`. `permtest` passes as root on Linux, then on Burrow on memfs and on ext2; credtest's set-id case runs on Burrow now that chown works.
+
+**Surprise:** Linux reads one class of bits, not the best of three: a user whose real group owns a file gets the group's bits even when "others" may read. My test assumed otherwise and Linux corrected it. Running permtest on ext2 as well as memfs found the one check I had left out: `stat` needs search permission too.
+
+**Learned:** the same test on two file systems is two tests: the second one found what the first could not.
+
+**Next:** W19-S05, symbolic and hard links, and one path walker in place of the text cleaning.
+
 ## 2026-11-04 — W19-S03 Users and groups
 
 **Did:** credentials per process with Linux's rules for the sixteen id calls, set-id `execve` with `AT_SECURE`, `kill`'s permission check, and socket peers that carry real ids instead of root's. `credtest` passes as root on Linux and on Burrow.

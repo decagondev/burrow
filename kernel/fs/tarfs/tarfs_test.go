@@ -8,6 +8,8 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"burrow/kernel/fsattr"
 )
 
 // archive builds what `tar --format=ustar -C initrd -cf - .` produces.
@@ -29,6 +31,9 @@ func archive(t *testing.T) []byte {
 	add(&tar.Header{Name: "./etc/motd", Typeflag: tar.TypeReg, Mode: 0o644}, "Welcome to Burrow\n")
 	add(&tar.Header{Name: "./bin/sh", Typeflag: tar.TypeSymlink, Linkname: "busybox", Mode: 0o777}, "")
 	add(&tar.Header{Name: "usr/share/doc/README", Typeflag: tar.TypeReg, Mode: 0o644}, "made-up dirs\n")
+	add(&tar.Header{Name: "./etc/shadow", Typeflag: tar.TypeReg, Mode: 0o600, Uid: 0, Gid: 42}, "root:x\n")
+	add(&tar.Header{Name: "./bin/su", Typeflag: tar.TypeReg, Mode: 0o4755}, "su\n")
+	add(&tar.Header{Name: "./home/burrow/", Typeflag: tar.TypeDir, Mode: 0o700, Uid: 1000, Gid: 1000}, "")
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -77,5 +82,33 @@ func TestTruncatedArchive(t *testing.T) {
 	a := archive(t)
 	if _, err := New(a[:700]); err == nil {
 		t.Error("New accepted a truncated archive")
+	}
+}
+
+// TestOwnersAndModes (W19-S04): headers' owners and modes, set-id bits
+// included, come through as fsattr.Attr and fs.FileMode.
+func TestOwnersAndModes(t *testing.T) {
+	fsys, err := New(archive(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name     string
+		mode     fs.FileMode
+		uid, gid uint32
+	}{
+		{"etc/shadow", 0o600, 0, 42},
+		{"bin/su", 0o755 | fs.ModeSetuid, 0, 0},
+		{"home/burrow", fs.ModeDir | 0o700, 1000, 1000},
+		{"usr/share", fs.ModeDir | 0o755, 0, 0}, // made up
+	} {
+		info, err := fs.Stat(fsys, c.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, ok := fsattr.Of(info)
+		if !ok || info.Mode() != c.mode || a.UID != c.uid || a.GID != c.gid {
+			t.Errorf("%s: mode %v, attr %+v (want %v, %d:%d)", c.name, info.Mode(), a, c.mode, c.uid, c.gid)
+		}
 	}
 }

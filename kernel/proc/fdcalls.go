@@ -14,7 +14,7 @@ func init() {
 		63: sysUnameFn, 72: sysFcntlFn, 79: sysGetcwdFn, 80: sysChdirFn, 81: sysFchdirFn,
 		83: sysMkdirFn, 84: sysRmdirFn, 87: sysUnlinkFn, 217: sysGetdents64Fn, 258: sysMkdiratFn,
 		262: sysNewfstatatFn, 263: sysUnlinkatFn, 269: sysFaccessatFn, 292: sysDup3Fn,
-		293: sysPipe2Fn, 439: sysFaccessatFn,
+		293: sysPipe2Fn, 439: sysFaccessat2Fn,
 	} {
 		table[nr] = h
 	}

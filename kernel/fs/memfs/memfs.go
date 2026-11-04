@@ -2,7 +2,8 @@
 // storage behind two file systems: tarfs fills one from the initrd and
 // freezes it (read-only, file data are slices of the archive: no copy), and
 // ramfs is a writable one for /tmp. Directories list in name order, which
-// testing/fstest's conformance checks rely on.
+// testing/fstest's conformance checks rely on. Since W19-S04 nodes have an
+// owner, a group and an inode number (owners.go: fsattr.Owner).
 package memfs
 
 import (
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"burrow/kernel/fsattr"
 )
 
 // FS is safe for concurrent use. Open files see the contents as they were
@@ -23,6 +26,7 @@ type FS struct {
 	mu       sync.RWMutex
 	root     *node
 	readOnly bool
+	lastIno  uint64
 }
 
 type node struct {
@@ -31,11 +35,14 @@ type node struct {
 	modTime  time.Time
 	data     []byte
 	children map[string]*node // directories only
+	uid, gid uint32
+	ino      uint64
+	ctime    time.Time
 }
 
 // New returns an empty, writable tree.
 func New() *FS {
-	return &FS{root: &node{name: ".", mode: fs.ModeDir | 0o755, children: map[string]*node{}}}
+	return &FS{root: &node{name: ".", mode: fs.ModeDir | 0o755, children: map[string]*node{}, ino: 1}, lastIno: 1}
 }
 
 // Freeze makes the tree read-only: every later write fails with fs.ErrPermission.
@@ -89,51 +96,23 @@ func (f *FS) parent(op, name string) (*node, string, error) {
 	return p, path.Base(name), nil
 }
 
-// WriteFile creates or replaces a regular file; its directory must exist.
-// The tree keeps data: the caller must not change it afterwards.
+// WriteFile creates or replaces a regular file as root (WriteFileAs);
+// its directory must exist. The tree keeps data: the caller must not
+// change it afterwards.
 func (f *FS) WriteFile(name string, data []byte, mode fs.FileMode, mtime time.Time) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	p, base, err := f.parent("write", name)
-	if err != nil {
-		return err
-	}
-	if old, ok := p.children[base]; ok && old.mode.IsDir() {
-		return &fs.PathError{Op: "write", Path: name, Err: fs.ErrExist}
-	}
-	p.children[base] = &node{name: base, mode: mode.Perm(), modTime: mtime, data: data}
-	return nil
+	return f.WriteFileAs(name, data, fsattr.New{Mode: mode, Mtime: mtime})
 }
 
-// MakeSocket creates a socket node (W14-S07): it holds no data; the
-// kernel's table of bound names says which socket it stands for.
+// MakeSocket creates a socket node (W14-S07) as root, mode 0755: it holds
+// no data; the kernel's table of bound names says which socket it is.
 func (f *FS) MakeSocket(name string, mtime time.Time) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	p, base, err := f.parent("bind", name)
-	if err != nil {
-		return err
-	}
-	if _, ok := p.children[base]; ok {
-		return &fs.PathError{Op: "bind", Path: name, Err: fs.ErrExist}
-	}
-	p.children[base] = &node{name: base, mode: fs.ModeSocket | 0o755, modTime: mtime}
-	return nil
+	return f.MakeSocketAs(name, fsattr.New{Mode: 0o755, Mtime: mtime})
 }
 
-// Mkdir creates one directory; MkdirAll creates every missing one on the way.
+// Mkdir creates one directory as root; MkdirAll creates every missing one
+// on the way.
 func (f *FS) Mkdir(name string, mode fs.FileMode, mtime time.Time) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	p, base, err := f.parent("mkdir", name)
-	if err != nil {
-		return err
-	}
-	if _, ok := p.children[base]; ok {
-		return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrExist}
-	}
-	p.children[base] = &node{name: base, mode: fs.ModeDir | mode.Perm(), modTime: mtime, children: map[string]*node{}}
-	return nil
+	return f.MkdirAs(name, fsattr.New{Mode: mode, Mtime: mtime})
 }
 
 func (f *FS) MkdirAll(name string, mode fs.FileMode, mtime time.Time) error {
@@ -249,10 +228,11 @@ type info struct {
 	size    int64
 	mode    fs.FileMode
 	modTime time.Time
+	attr    fsattr.Attr
 }
 
 func (n *node) info() *info {
-	return &info{name: n.name, size: int64(len(n.data)), mode: n.mode, modTime: n.modTime}
+	return &info{name: n.name, size: int64(len(n.data)), mode: n.mode, modTime: n.modTime, attr: n.attr()}
 }
 
 func (i *info) Name() string       { return i.name }
@@ -260,7 +240,7 @@ func (i *info) Size() int64        { return i.size }
 func (i *info) Mode() fs.FileMode  { return i.mode }
 func (i *info) ModTime() time.Time { return i.modTime }
 func (i *info) IsDir() bool        { return i.mode.IsDir() }
-func (i *info) Sys() any           { return nil }
+func (i *info) Sys() any           { return i.attr }
 
 func (n *node) entries() []fs.DirEntry {
 	out := make([]fs.DirEntry, 0, len(n.children))

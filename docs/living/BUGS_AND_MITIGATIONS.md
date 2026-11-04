@@ -33,7 +33,7 @@ flowchart LR
 
 ### BUG-0023: The console once waited for ever after gohello exited
 - Found: 2026-11-04, W19-S03, in the full `make test`: `SMOKE FAIL [ports]: timed out after 60s`; the log ends at `gohello: ok` (gohello's last line) with no `burrow>` prompt after it and no kernel message.
-- Severity: minor so far (one hang in 18 runs of `make ports-smoke`: the 16 runs since, alone, all passed).
+- Severity: minor so far (one hang in 18 runs of `make ports-smoke`: the 16 runs since, alone, all passed). Seen again in W19-S04, in a C program: `credtest --exec` stopped after `credtest: kill ok`, in the next case (`peercred`: the parent in `accept`, its child about to `connect`); eight runs since passed. Two programs, one shape: a process waiting for its child, which suggests process exit or the wait for it, not Go's runtime.
 - Symptom: a Go user program prints its last line and exits; the console's `run` never returns.
 - Root cause: unknown. Suspected: the exit of a multi-threaded Go program (exit_group while the runtime's threads are in `futex`, `nanosleep` or `tgkill`'s SIGURG preemption) racing with the wait for it. Checked and ruled out: S03's new `p.mu` lookups (`Cred`, `mayKill`) nest no locks, and `send`, which `tgkill` already called, took `p.mu` before them.
 - Fix: none yet. Next time: keep the log of a failing run (`for i in $(seq 20); do make ports-smoke | grep -a SMOKE; grep -q FAIL ... && cp build/smoke-ports.log build/smoke-ports-fail-$i.log; done`), and the kernel's thread list at the hang.
@@ -41,6 +41,16 @@ flowchart LR
 - Lesson: (open)
 
 ## Closed
+
+### BUG-0024: Every program on the initrd was packed without an execute bit
+- Found: 2026-11-04, W19-S04, the first full `make test` with execute permission checked: boot_to_go's shell said `sh: ls: Permission denied` for every program (the console's `run`, which uses `Spawn` and checks nothing, still worked).
+- Severity: latent since W10 (nothing checked modes until S04), then a blocker.
+- Symptom: `tar tvf build/initrd.tar` lists `/bin/*` as `-rw-r--r--`.
+- Root cause: the initrd was packed with `tar --mode=a-rwx,u+rwX,go+rX`, meant to normalise modes taken from a build tree on WSL's `/mnt/c` (which keeps none: everything looks 0777). `X` adds execute only to directories and files that already have it, and `a-rwx` had just taken it away. The FAT disks had the same problem in another form: FAT reported files 0444.
+- Fix: `scripts/mkinitrd.py` packs every initrd (reproducibly: sorted names, owner root, time 0) with modes decided by content: directories, ELF files and `#!` scripts 0755, the rest 0644, with `PATH=MODE[:UID:GID]` overrides for S06's `/etc/shadow` and set-uid `su`. FAT reports what Linux's vfat shows with `umask=022`: 0755.
+- Mitigation: modes are now part of the image's contents: a smoke test that runs a program through `execve` (boot_to_go's shell, busybox, ports) fails at once if they are wrong.
+- Regression: boot_to_go's shell session; `TestOwnersAndModes` (tarfs) for the headers' modes reaching the kernel.
+- Lesson: a field nobody reads is untested, however long it has been written: the day a check starts reading it, every old value is suspect.
 
 ### BUG-0022: A blocked epoll_wait never saw items added after it began
 - Found: 2026-11-04, W18-S06, in the full `make test`: net-smoke failed about one run in six with `gofetch: Get "https://host:PORT/hello.txt": dial tcp 10.0.2.2:PORT: i/o timeout`, and the TLS server logged nothing for that connection.

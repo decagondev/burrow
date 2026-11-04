@@ -8,4 +8,23 @@ burrow> cat /mnt/link.txt
 Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2).
 burrow> cat /mnt/docs/hard.txt
 Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2).
+burrow> run /bin/permtest /mnt/permtest
+permtest: setup ok
+permtest: owner ok
+permtest: denied ok
+permtest: no-write-dir ok
+permtest: no-search ok
+permtest: sticky ok
+permtest: sticky-other-user ok
+permtest: setgid-dir ok
+permtest: chmod-chown ok
+permtest: exec ok
+permtest: root-reads-anything ok
+permtest: root-needs-an-x-bit ok
+permtest: access-uses-real-ids ok
+permtest: umask ok
+permtest: chown-drops-set-uid ok
+permtest: root-chowns ok
+permtest: sticky-root-deletes ok
+permtest: ok
 burrow> poweroff

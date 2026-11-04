@@ -13,11 +13,15 @@ func (i fileInfo) Size() int64        { return i.e.size }
 func (i fileInfo) ModTime() time.Time { return i.e.modTime }
 func (i fileInfo) IsDir() bool        { return i.e.dir }
 func (i fileInfo) Sys() any           { return nil }
+// Mode is what Linux's vfat shows with its default umask=022 (W19-S04):
+// FAT keeps no modes, so every file may be run (the kernel now checks
+// execute permission: the Qt and X disks hold programs) and only root,
+// who owns everything here, may write.
 func (i fileInfo) Mode() fs.FileMode {
 	if i.e.dir {
-		return fs.ModeDir | 0o555
+		return fs.ModeDir | 0o755
 	}
-	return 0o444
+	return 0o755
 }
 
 // file reads through the cluster chain it resolved at Open.

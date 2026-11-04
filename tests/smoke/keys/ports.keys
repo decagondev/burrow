@@ -57,5 +57,14 @@ type run /bin/credtest
 key ret
 wait credtest: ok
 wait burrow> 
+# W19-S04: credtest's set-id exec (chown works now), then owners and permissions in /tmp
+type run /bin/credtest --exec /bin/credtest
+key ret
+wait credtest: ok
+wait burrow> 
+type run /bin/permtest /tmp/permtest
+key ret
+wait permtest: ok
+wait burrow> 
 type poweroff
 key ret

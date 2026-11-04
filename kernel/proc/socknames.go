@@ -17,6 +17,8 @@ import (
 	"io/fs"
 	"sync"
 	"syscall"
+
+	"burrow/kernel/vfs"
 )
 
 const (
@@ -77,8 +79,11 @@ func (n *sockNames) autoName() string {
 	return fmt.Sprintf("\x00%05x", n.auto)
 }
 
-// socketMaker is a file system that can hold socket nodes (memfs).
-type socketMaker interface{ MakeSocket(name string) error }
+// socketMaker is a file system that can hold socket nodes (memfs, ext2),
+// made with an owner since W19-S04.
+type socketMaker interface {
+	MakeSocketAs(name string, n vfs.NewFile) error
+}
 
 // sockaddr reads a struct sockaddr_un of n bytes at va: the name as given
 // (path, "\x00..." or "" for a bare family) and its table key (the path
@@ -193,7 +198,11 @@ func (p *Process) makeSocketNode(rel string) int64 {
 	if !ok {
 		return -int64(syscall.EROFS)
 	}
-	return errno(m.MakeSocket(rel))
+	c := p.Cred()
+	if err := p.mayCreate(&c, rel); err != nil { // W19-S04
+		return errno(err)
+	}
+	return errno(m.MakeSocketAs(rel, p.newAttrs(&c, rel, 0o777, false)))
 }
 
 // listen(fd, backlog).

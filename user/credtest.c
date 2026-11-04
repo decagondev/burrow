@@ -2,8 +2,10 @@
  * for a user, supplementary groups, the file-system ids, kill's permission
  * check, SO_PEERCRED carrying the connecting process's effective ids, and
  * AT_SECURE. Each case runs in a child, which gives up root as it pleases.
- * With --exec (as root, on Linux until Burrow has chown in W19-S04) also a
- * set-user-id and set-group-id copy of itself, run by another user.
+ * With --exec [program] (as root) also a set-user-id and set-group-id copy
+ * of program (default /proc/self/exe; Burrow, which has no /proc, names
+ * /bin/credtest), run by another user: on Linux since S03, on Burrow since
+ * S04 (chown).
  * Prints "credtest: <case> ok|FAIL", then "credtest: ok" or "credtest: FAIL".
  * Must run as root. Docs: docs/04-plan/waves/WAVE-19-unix.md (S03). */
 #define _GNU_SOURCE
@@ -143,7 +145,8 @@ static int probe(void) {
 }
 
 static void setid_exec(const char *self) {
-    const char *copy = "/var/tmp/credtest-setid"; /* /tmp is often nosuid (WSL) */
+    struct stat sb; /* /tmp is often nosuid on Linux (WSL); Burrow has no /var */
+    const char *copy = stat("/var/tmp", &sb) == 0 ? "/var/tmp/credtest-setid" : "/tmp/credtest-setid";
     char buf[65536];
     FILE *in = fopen(self, "rb"), *out = fopen(copy, "wb");
     size_t n;
@@ -178,7 +181,7 @@ int main(int argc, char **argv) {
     in_child("kill", kill_rules);
     peer_cred();
     if (argc > 1 && strcmp(argv[1], "--exec") == 0)
-        setid_exec("/proc/self/exe");
+        setid_exec(argc > 2 ? argv[2] : "/proc/self/exe");
     printf("credtest: %s\n", failures ? "FAIL" : "ok");
     return failures != 0;
 }
