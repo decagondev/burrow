@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"burrow/kernel/block"
+	"burrow/kernel/fs/ext2"
 	"burrow/kernel/fs/fat"
 	"burrow/kernel/klog"
 )
@@ -46,7 +47,7 @@ func listDisks(out io.Writer) {
 	}
 }
 
-// homeLabel marks a FAT volume as the user's home (W13-S05): it mounts at
+// homeLabel marks a volume (FAT, or ext2 since W19) as the user's home (W13-S05): it mounts at
 // /home instead of /mnt. make run-dev attaches such a disk.
 const homeLabel = "BURROWHOME"
 
@@ -60,9 +61,10 @@ var dataDisks = map[string]struct{ point, env string }{
 
 // mountData mounts every data disk (hdb, and since W15-S06 the secondary
 // channel's hdc and hdd) that holds FAT32 (W8-S07), read-write when the
-// disk can be written (W13-S04), at the place its label names: /home for
-// the home disk (W13-S05), /opt/qt for the Qt disk (W15-S02), /mnt for the
-// first other one, and /opt/x11 for the X disk (W16-S02).
+// disk can be written (W13-S04), or ext2 (W19-S01, read-only so far), at
+// the place its label names: /home for the home disk (W13-S05), /opt/qt for
+// the Qt disk (W15-S02), /mnt for the first other one, and /opt/x11 for the
+// X disk (W16-S02).
 func (k *kernel) mountData(log *klog.Logger) {
 	for _, name := range []string{"hdb", "hdc", "hdd"} {
 		if d, ok := block.Get(name); ok {
@@ -71,33 +73,61 @@ func (k *kernel) mountData(log *klog.Logger) {
 	}
 }
 
-func (k *kernel) mountDisk(log *klog.Logger, name string, d block.Device) {
+// volume is a data disk's file system and how to report it.
+type volume struct {
+	fsys        fs.FS
+	label, mode string
+	kind, shown string // the mount table's name for it, and the log's
+}
+
+// openVolume mounts what d holds: ext2 when its superblock says so, else FAT32.
+func openVolume(d block.Device) (volume, error) {
+	r := block.ReaderAt(d)
+	if ext2.Probe(r) {
+		e, err := ext2.Mount(r)
+		if err != nil {
+			return volume{}, err
+		}
+		return volume{fsys: e, label: e.Label, mode: "read-only", kind: "ext2", shown: "ext2"}, nil
+	}
 	var fsys *fat.FS
 	var err error
 	mode := "read-only"
 	if w, isW := d.(block.Writer); isW {
-		fsys, err = fat.MountRW(fatDisk{block.ReaderAt(d), block.WriterAt(w), w})
+		fsys, err = fat.MountRW(fatDisk{r, block.WriterAt(w), w})
 		mode = "read-write"
 	} else {
-		fsys, err = fat.Mount(block.ReaderAt(d))
+		fsys, err = fat.Mount(r)
 	}
+	if err != nil {
+		return volume{}, err
+	}
+	return volume{fsys: fsys, label: fsys.Label, mode: mode, kind: "fat32", shown: "FAT32"}, nil
+}
+
+func (k *kernel) mountDisk(base *klog.Logger, name string, d block.Device) {
+	log := base.With("fat")
+	if ext2.Probe(block.ReaderAt(d)) {
+		log = base.With("ext2")
+	}
+	v, err := openVolume(d)
 	if err != nil {
 		log.Warnf("%s: %v", name, err)
 		return
 	}
 	point := "mnt"
-	disk, isData := dataDisks[fsys.Label]
+	disk, isData := dataDisks[v.label]
 	switch {
-	case fsys.Label == homeLabel:
+	case v.label == homeLabel:
 		point = "home"
 	case isData:
 		point = disk.point
 	}
-	if err := k.fs.Mount(point, fsys, "fat32"); err != nil {
+	if err := k.fs.Mount(point, v.fsys, v.kind); err != nil {
 		log.Errorf("%s: mount /%s: %v", name, point, err)
 		return
 	}
-	log.Infof("%s: FAT32 volume %q mounted at /%s (%s)", name, fsys.Label, point, mode)
+	log.Infof("%s: %s volume %q mounted at /%s (%s)", name, v.shown, v.label, point, v.mode)
 	if isData {
 		env := readEnv(k.fs, disk.env)
 		k.env = append(k.env, env...)

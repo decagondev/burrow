@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19-S01 Reading ext2
+
+**Did:** `kernel/fs/ext2`, a read-only ext2 reader in six small files, tested only on volumes e2fsprogs made: 1 and 4 KiB blocks, revision 0, holes up to the triple indirect block, hard links, fast and slow symbolic links, an htree directory, owners set by `debugfs`. `vfs.Attr` carries owners, links and inode numbers through `FileInfo.Sys()`, and `stat` reports them. The kernel tells ext2 from FAT by the superblock's magic; disk-smoke reads an ext2 volume on hdc. ADR-0010 records why ext2.
+
+**Surprise:** how much of the format a reader can ignore: an htree index is invisible to a linear reader by design, and revision 0 differs only in the inode size and the directory entries' name length. Also that `mke2fs -r 0` is gone in e2fsprogs 1.47, and that `mke2fs` keeps only its last `-E`.
+
+**Next:** W19-S02, writing ext2, checked by `e2fsck` after random sequences of operations.
+
 ## 2026-11-04 — W18 done: foundations for bigger programs (M18)
 
 **Did:** the wave in six slices. Copy-on-write fork, all in Go (S01); lazy `execve`, tuned by measurement to fault around program images only (S02); shared objects behind `MAP_SHARED`, `/dev/shm` and `memfd_create`, with `pread64`/`pwrite64` at last (S03); SysV shared memory, which switched on TinyX's MIT-SHM, and Doom in X at three quarters of its fbdev rate (S04); dynamic linking through musl's loader (S05); batched fork and `make mem-bench` (S06). Fork of a 64 MiB process: 324 ms at the start of the wave, 48 ms at the end.

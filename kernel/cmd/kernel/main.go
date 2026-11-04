@@ -116,7 +116,7 @@ func main() {
 	k.startNetwork(log)
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))
-	k.mountData(log.With("fat"))
+	k.mountData(log) // each disk logs as its file system: [fat] or [ext2]
 
 	rows, cols := 25, 80
 	if screen := startScreen(); screen != nil {

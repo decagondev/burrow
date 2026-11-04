@@ -12,7 +12,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 1 | `write` | partial | W9 | console, pipes and sockets (`EPIPE` and, since W14, `SIGPIPE`: BUG-0015), devices, writable files under `/tmp` (written back whole on every write) |
 | 2 | `open` | partial | W9 | relative to the cwd; `O_CREAT O_EXCL O_TRUNC O_APPEND O_DIRECTORY O_CLOEXEC O_NONBLOCK` (honoured by pipes, the terminal and devices that report readiness, W11); writes only where the mount is writable (`/tmp`, and `/mnt` or `/home` on a FAT32 disk since W13: `-EACCES` on the read-only root); a socket node is `-ENXIO` (W14) |
 | 3 | `close` | done | W9 |  |
-| 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links, so both follow; `st_ino` is a hash of the path |
+| 4, 6 | `stat` `lstat` | partial | W10 | no symbolic links yet, so both follow; `st_ino` is a hash of the path, except where the file system gives a `vfs.Attr` (ext2 since W19-S01): then the inode number, `st_nlink`, `st_uid`, `st_gid`, atime and ctime are its own; the set-uid, set-gid and sticky bits are reported |
 | 5 | `fstat` | partial | W9 | `st_mode` (`S_IFSOCK` for sockets since W14), `st_size`, times, `st_nlink` 1, `st_blksize`, `st_blocks` |
 | 7 | `poll` | done | W10 | the terminal (a poller counts as a reader, so the console forwards keys), pipes (`POLLHUP`, `POLLERR`); regular files and the console are always ready; `POLLNVAL` for a closed fd |
 | 8 | `lseek` | done | W9 | `-ESPIPE` on the console and pipes |

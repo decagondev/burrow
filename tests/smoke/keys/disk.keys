@@ -1,5 +1,12 @@
 # Disk writes (W13-S03): the kernel overwrites the end of a blank scratch disk
-# (kargs disktest=hdb).
+# (kargs disktest=hdb). W19-S01: hdc is an ext2 volume mke2fs made, at /mnt;
+# a file, a symbolic link to it and a hard link to it read the same.
 wait burrow>
+type cat /mnt/hello.txt
+key ret
+type cat /mnt/link.txt
+key ret
+type cat /mnt/docs/hard.txt
+key ret
 type poweroff
 key ret

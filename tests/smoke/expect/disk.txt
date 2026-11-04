@@ -1,4 +1,11 @@
 # Ordered markers for make disk-smoke (W13-S03, tests/smoke/keys/disk.keys). Append-only.
 [ata] INFO: hdb: "QEMU HARDDISK", 2048 sectors (1024 KiB)
 [disktest] INFO: hdb: wrote 64 sectors, flushed, read them back
+[ext2] INFO: hdc: ext2 volume "BURROWEXT2" mounted at /mnt (read-only)
+burrow> cat /mnt/hello.txt
+Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2).
+burrow> cat /mnt/link.txt
+Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2).
+burrow> cat /mnt/docs/hard.txt
+Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2).
 burrow> poweroff

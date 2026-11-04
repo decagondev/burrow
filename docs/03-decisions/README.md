@@ -13,3 +13,4 @@ An ADR records one significant decision: context, options, choice, consequences.
 | [0007](ADR-0007-test-strategy.md) | Serial markers + QEMU debug-exit as the test interface | Accepted |
 | [0008](ADR-0008-disk-manifest.md) | Raw disk + manifest, filesystem later | Accepted |
 | [0009](ADR-0009-gvisor-tcpip.md) | gVisor's TCP/IP stack in the kernel, vendored | Accepted |
+| [0010](ADR-0010-ext2.md) | ext2 as Burrow's Unix file system | Accepted |

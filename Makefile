@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -226,6 +226,17 @@ DATA_DRIVE := -drive file=$(BUILD)/data.img,format=raw,if=ide,index=1,media=disk
 $(BUILD)/data.img: $(DATADISK_FILES) $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go) | $(BUILD)
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label burrowdata ../datadisk
 
+# An ext2 volume for disk-smoke's hdc (W19-S01), made by the host's mke2fs
+# (e2fsprogs), never by kernel/fs/ext2: a file, a symbolic and a hard link.
+MKE2FS ?= $(shell command -v mke2fs 2>/dev/null || echo /usr/sbin/mke2fs)
+EXT2_DRIVE := -drive file=$(BUILD)/ext2.img,format=raw,if=ide,index=2,media=disk
+$(BUILD)/ext2.img: | $(BUILD)
+	rm -rf $(BUILD)/ext2-src && mkdir -p $(BUILD)/ext2-src/docs
+	echo "Hello from an ext2 volume (made by mke2fs, read by kernel/fs/ext2)." > $(BUILD)/ext2-src/hello.txt
+	ln -s hello.txt $(BUILD)/ext2-src/link.txt
+	ln $(BUILD)/ext2-src/hello.txt $(BUILD)/ext2-src/docs/hard.txt
+	rm -f $@ && $(MKE2FS) -q -F -t ext2 -b 1024 -L BURROWEXT2 -E root_owner=0:0 -d $(BUILD)/ext2-src $@ 4M
+
 # The same boot chain plus the Go kernel and the initrd. Separate from
 # disk.img so the nucleus images stay fast (1.7 MiB over ATA PIO costs
 # ~1.5 s per boot).
@@ -248,7 +259,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -311,9 +322,9 @@ $(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
 	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
-disk-smoke: $(BUILD)/go-disktest.img
+disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk" \
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk $(EXT2_DRIVE)" \
 		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
 	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
 
@@ -584,6 +595,10 @@ census:
 # kernel/fs/fat against mkfs.fat/fsck.fat/mtools, both ways (skips without them).
 fat-interop: $(BUILD)/data.img
 	GO="$(GO)" tests/regression/fat_interop.sh $(BUILD)
+
+# kernel/fs/ext2 against volumes e2fsprogs made (W19-S01); skips without e2fsprogs.
+ext2-interop:
+	GO="$(GO)" tests/regression/ext2_interop.sh
 
 sizes: $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin $(BUILD)/nucleus.disk.elf
 	@scripts/sizes.sh $(BUILD)

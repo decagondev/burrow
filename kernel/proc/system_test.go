@@ -36,7 +36,10 @@ func program() []byte {
 	return f
 }
 
-func newRig(t *testing.T) *rig {
+func newRig(t *testing.T) *rig { return newRigWith(t, nil) }
+
+// newRigWith is newRig with more files in its tree.
+func newRigWith(t *testing.T, extra fstest.MapFS) *rig {
 	nu := proctest.New()
 	r := &rig{t: t, nu: nu, console: &syncBuf{}, log: &syncBuf{}}
 	files := fstest.MapFS{
@@ -45,6 +48,9 @@ func newRig(t *testing.T) *rig {
 		"etc/text":   {Data: []byte("#!/bin/sh\n"), Mode: 0o755},
 		"bin/script": {Data: []byte("#! /bin/prog  -a b \necho hi\n"), Mode: 0o755},
 		"bin/nested": {Data: []byte("#!/bin/script\n"), Mode: 0o755},
+	}
+	for name, f := range extra {
+		files[name] = f
 	}
 	r.sys = proc.NewSystem(nu, files, r.console, klog.New(r.log, klog.Info))
 	go r.sys.Serve()

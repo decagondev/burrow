@@ -2,14 +2,18 @@ package proc
 
 // stat.go - the stat family: stat, lstat, fstat, newfstatat, and statx
 // (W14-S03, from the same struct stat). There are no symbolic links yet, so
-// lstat is stat and readlink says "not a link" (-EINVAL). Never reports
-// owners other than root: nothing stores one. Docs: POSIX_COVERAGE.md.
+// lstat is stat and readlink says "not a link" (-EINVAL). The inode number,
+// links, owner and times come from the file system's vfs.Attr when it gives
+// one (ext2 since W19-S01); otherwise the owner is root and the inode a hash
+// of the path. Never decides anything from them. Docs: POSIX_COVERAGE.md.
 
 import (
 	"encoding/binary"
 	"hash/fnv"
 	"io/fs"
 	"syscall"
+
+	"burrow/kernel/vfs"
 )
 
 const (
@@ -28,15 +32,23 @@ func statBuf(name string, info fs.FileInfo) []byte {
 	put := func(off int, v uint64) { binary.LittleEndian.PutUint64(st[off:], v) }
 	h := fnv.New64a()
 	h.Write([]byte(name))
-	put(8, h.Sum64()|1)                                                   // st_ino: stable per path
-	put(16, 1)                                                            // st_nlink
+	mtime := uint64(info.ModTime().Unix())
+	ino, nlink, atime, ctime := h.Sum64()|1, uint64(1), mtime, mtime // st_ino: stable per path
+	if a, ok := vfs.AttrOf(info); ok {
+		ino, nlink = a.Ino, uint64(a.Nlink)
+		atime, ctime = uint64(a.Atime.Unix()), uint64(a.Ctime.Unix())
+		binary.LittleEndian.PutUint32(st[28:], a.UID) // st_uid
+		binary.LittleEndian.PutUint32(st[32:], a.GID) // st_gid
+	}
+	put(8, ino)
+	put(16, nlink)
 	binary.LittleEndian.PutUint32(st[24:], uint32(unixMode(info.Mode()))) // st_mode
 	put(48, uint64(info.Size()))
-	put(56, PageSize)                       // st_blksize
-	put(64, uint64(info.Size()+511)/512)    // st_blocks
-	put(88, uint64(info.ModTime().Unix()))  // st_mtim
-	put(72, uint64(info.ModTime().Unix()))  // st_atim
-	put(104, uint64(info.ModTime().Unix())) // st_ctim
+	put(56, PageSize)                    // st_blksize
+	put(64, uint64(info.Size()+511)/512) // st_blocks
+	put(88, mtime)                       // st_mtim
+	put(72, atime)                       // st_atim
+	put(104, ctime)                      // st_ctim
 	return st
 }
 
@@ -47,10 +59,23 @@ func unixMode(m fs.FileMode) uint64 {
 		t = syscall.S_IFDIR
 	case m&fs.ModeCharDevice != 0:
 		t = syscall.S_IFCHR
+	case m&fs.ModeDevice != 0:
+		t = syscall.S_IFBLK
+	case m&fs.ModeSymlink != 0:
+		t = syscall.S_IFLNK
 	case m&fs.ModeNamedPipe != 0:
 		t = syscall.S_IFIFO
 	case m&fs.ModeSocket != 0:
 		t = syscall.S_IFSOCK
+	}
+	if m&fs.ModeSetuid != 0 {
+		t |= syscall.S_ISUID
+	}
+	if m&fs.ModeSetgid != 0 {
+		t |= syscall.S_ISGID
+	}
+	if m&fs.ModeSticky != 0 {
+		t |= syscall.S_ISVTX
 	}
 	return t | uint64(m.Perm())
 }
