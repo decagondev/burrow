@@ -102,4 +102,26 @@ ptytest: sigint ok
 ptytest: exit ok
 ptytest: eio ok
 ptytest: ok
+burrow> run /bin/nettest
+nettest: tcp-connect-accept ok
+nettest: poll-empty ok
+nettest: poll-readable ok
+nettest: tcp-client-to-server ok
+nettest: tcp-server-to-client ok
+nettest: names ok
+nettest: tcp-nodelay ok
+nettest: shutdown-eof ok
+nettest: half-open ok
+nettest: epipe ok
+nettest: nonblock-connect ok
+nettest: accept4-nonblock ok
+nettest: refused ok
+nettest: refused-nonblock ok
+nettest: udp-sendto-recvfrom ok
+nettest: udp-addrinuse ok
+nettest: udp-dontwait ok
+nettest: ipv6-loopback ok
+nettest: bulk ok
+nettest: 16 MiB over loopback in
+nettest: ok
 burrow> poweroff

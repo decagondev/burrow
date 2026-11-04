@@ -132,6 +132,9 @@ func main() {
 	k.tty, k.input = tty.New(out, rows, cols), input
 	k.procs.SetTerminal(k.tty)
 	k.procs.SetVT(keys.vt)
+	if k.net != nil {
+		k.procs.SetNetwork(k.net.Stack) // AF_INET sockets (W17-S03)
+	}
 	keys.term.Store(k.tty)
 	go k.procs.Serve() // the one dispatcher for every user syscall (W9)
 	con := console.New(out, input)

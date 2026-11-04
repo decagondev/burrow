@@ -14,6 +14,9 @@ import (
 // connect(fd, addr, len).
 func sysConnectFn(t *Thread, a [6]uint64) (int64, bool) {
 	p := t.p
+	if is, f := p.inetFD(a[0]); is != nil {
+		return ok(t.inetConnect(is, f, a[1], a[2]))
+	}
 	s, f, e := p.socket(a[0])
 	if e < 0 {
 		return ok(e)
@@ -97,6 +100,9 @@ func sysAccept4Fn(t *Thread, a [6]uint64) (int64, bool) { return ok(t.accept(a[0
 // the client's address (usually unnamed) goes to addr.
 func (t *Thread) accept(fd, addrVA, lenVA, flags uint64) int64 {
 	p := t.p
+	if is, f := p.inetFD(fd); is != nil {
+		return t.inetAccept(is, f, flags, addrVA, lenVA)
+	}
 	if flags&^(sockNonblock|sockCloexec) != 0 {
 		return -int64(syscall.EINVAL)
 	}
@@ -149,6 +155,9 @@ func (t *Thread) accept(fd, addrVA, lenVA, flags uint64) int64 {
 }
 
 func sysGetsocknameFn(p *Process, a [6]uint64) (int64, bool) {
+	if is, _ := p.inetFD(a[0]); is != nil {
+		return ok(p.inetName(is, false, a[1], a[2]))
+	}
 	s, _, e := p.socket(a[0])
 	if e < 0 {
 		return ok(e)
@@ -160,6 +169,9 @@ func sysGetsocknameFn(p *Process, a [6]uint64) (int64, bool) {
 }
 
 func sysGetpeernameFn(p *Process, a [6]uint64) (int64, bool) {
+	if is, _ := p.inetFD(a[0]); is != nil {
+		return ok(p.inetName(is, true, a[1], a[2]))
+	}
 	s, _, e := p.socket(a[0])
 	if e < 0 {
 		return ok(e)

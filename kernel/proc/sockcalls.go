@@ -4,7 +4,7 @@ package proc
 // socketpair, sendto/recvfrom, shutdown, getsockopt/setsockopt
 // (sendmsg/recvmsg are in sockmsg.go, names in socknames.go). read, write, readv, writev,
 // poll, select and epoll reach sockets through the file layer as they reach
-// pipes. Only AF_UNIX.
+// pipes. AF_INET and AF_INET6 sockets branch off to inetcalls.go.
 // Docs: docs/02-architecture/POSIX_COVERAGE.md.
 
 import (
@@ -187,11 +187,17 @@ func sysSendtoFn(t *Thread, a [6]uint64) (int64, bool) {
 	if err := t.p.mem.CopyIn(a[1], b); err != nil {
 		return ok(errno(err))
 	}
+	if is, f := t.p.inetFD(a[0]); is != nil {
+		return ok(t.inetSend(is, f, b, a[3], a[4], a[5]))
+	}
 	return ok(t.sendBytes(a[0], b, nil, a[3], a[4]))
 }
 
 // recvfrom(fd, buf, len, flags, addr, addrlen *).
 func sysRecvfromFn(t *Thread, a [6]uint64) (int64, bool) {
+	if is, f := t.p.inetFD(a[0]); is != nil {
+		return ok(t.inetRecvfrom(is, f, a))
+	}
 	r, e := t.recvBytes(a[0], a[2], a[3])
 	if e < 0 {
 		return ok(e)
@@ -222,6 +228,9 @@ func (p *Process) putPeerName(fd, va, lenVA uint64) int64 {
 }
 
 func sysShutdownFn(p *Process, a [6]uint64) (int64, bool) {
+	if is, _ := p.inetFD(a[0]); is != nil {
+		return ok(is.shutdown(a[1]))
+	}
 	s, _, e := p.socket(a[0])
 	switch {
 	case e < 0:
@@ -234,7 +243,7 @@ func sysShutdownFn(p *Process, a [6]uint64) (int64, bool) {
 
 // getsockopt(fd, level, name, value, int *len).
 func sysGetsockoptFn(p *Process, a [6]uint64) (int64, bool) {
-	s, _, e := p.socket(a[0])
+	s, e := p.optioner(a[0])
 	if e < 0 {
 		return ok(e)
 	}
@@ -260,7 +269,7 @@ func sysGetsockoptFn(p *Process, a [6]uint64) (int64, bool) {
 
 // setsockopt(fd, level, name, value, len).
 func sysSetsockoptFn(p *Process, a [6]uint64) (int64, bool) {
-	s, _, e := p.socket(a[0])
+	s, e := p.optioner(a[0])
 	switch {
 	case e < 0:
 		return ok(e)

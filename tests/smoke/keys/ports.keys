@@ -32,5 +32,10 @@ type run /bin/ptytest
 key ret
 wait ptytest: 
 wait burrow> 
+# W17-S03: inet sockets over loopback (passed on the host's Linux first)
+type run /bin/nettest
+key ret
+wait nettest: ok
+wait burrow> 
 type poweroff
 key ret

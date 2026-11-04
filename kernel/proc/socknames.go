@@ -122,27 +122,14 @@ func sockaddrOf(name string) []byte {
 // putSockaddr writes name's address at va (cut to the room *lenVA says)
 // and its full length at lenVA, as accept and getsockname do.
 func (p *Process) putSockaddr(name string, va, lenVA uint64) int64 {
-	if va == 0 || lenVA == 0 {
-		return 0
-	}
-	var l [4]byte
-	if err := p.mem.CopyIn(lenVA, l[:]); err != nil {
-		return errno(err)
-	}
-	room := int32(binary.LittleEndian.Uint32(l[:]))
-	if room < 0 {
-		return -int64(syscall.EINVAL)
-	}
-	a := sockaddrOf(name)
-	if err := p.mem.CopyOut(va, a[:min(int(room), len(a))]); err != nil {
-		return errno(err)
-	}
-	binary.LittleEndian.PutUint32(l[:], uint32(len(a)))
-	return errno(p.mem.CopyOut(lenVA, l[:]))
+	return p.putAddr(sockaddrOf(name), va, lenVA)
 }
 
-// socket(AF_UNIX, type, protocol).
+// socket(domain, type, protocol); AF_INET and AF_INET6 are inetcalls.go's.
 func sysSocketFn(p *Process, a [6]uint64) (int64, bool) {
+	if a[0] == afInet || a[0] == afInet6 {
+		return ok(p.inetSocket(a))
+	}
 	typ, e := sockType(a[0], a[1], a[2])
 	if e < 0 {
 		return ok(e)
@@ -162,6 +149,9 @@ func sysSocketFn(p *Process, a [6]uint64) (int64, bool) {
 
 // bind(fd, addr, len): a bare family autobinds an abstract name.
 func sysBindFn(p *Process, a [6]uint64) (int64, bool) {
+	if is, _ := p.inetFD(a[0]); is != nil {
+		return ok(p.inetBind(is, a[1], a[2]))
+	}
 	s, _, e := p.socket(a[0])
 	if e < 0 {
 		return ok(e)
@@ -208,6 +198,9 @@ func (p *Process) makeSocketNode(rel string) int64 {
 
 // listen(fd, backlog).
 func sysListenFn(p *Process, a [6]uint64) (int64, bool) {
+	if is, _ := p.inetFD(a[0]); is != nil {
+		return ok(is.listen(a[1]))
+	}
 	s, _, e := p.socket(a[0])
 	switch {
 	case e < 0:

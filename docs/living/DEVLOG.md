@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17-S03 Sockets for user programs
+
+**Did:** `AF_INET` and `AF_INET6` sockets for user programs: TCP and UDP over gVisor's endpoints, as files that poll, block and get interrupted like every other, with Linux's error numbers and the common options. `nettest` passes its 19 checks on Linux and on Burrow.
+
+**Surprise:** how little glue it took: the Unix socket calls needed one branch each, and nettest passed on Burrow at its first boot. The one failing host test was the test's own mistake (`accept4`'s flags are the new socket's, not the listener's). Loopback runs at 35 MB/s, a sixtieth of the host's.
+
+**Next:** W17-S04, names and the outside: `/etc/resolv.conf`, busybox `wget` and `ping`, and `make net-smoke`.
+
 ## 2026-11-04 — W17-S02 TCP/IP in the kernel
 
 **Did:** gVisor's TCP/IP stack, pinned and vendored (ADR-0009), in `kernel/netstack`: loopback and eth0 from `/etc/net.conf`, routes, ping, and a `net` console command. The gateway answers ping at boot; host tests run TCP between two stacks on a fake cable. Also BUG-0021, a boot selftest threshold that failed one run in many.

@@ -12,6 +12,8 @@ import (
 	"burrow/kernel/klog"
 	"burrow/kernel/tty"
 	"burrow/kernel/vt"
+
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 // System is the set of processes and the one dispatcher that serves their
@@ -32,6 +34,7 @@ type System struct {
 	reported map[uint64]bool     // unknown syscall numbers already logged
 	tty      *tty.TTY            // the controlling terminal (SetTerminal), or nil
 	ptys     map[int]*tty.Master // open pseudo-terminal pairs by number (ptycalls.go)
+	net      *stack.Stack        // TCP/IP for inet sockets (W17-S03; nil: none)
 	vt       *vt.VT              // its keyboard and display modes (SetVT), or nil
 	init     *Process            // pid 1 (kernel-side, no thread)
 

@@ -121,6 +121,9 @@ func sysSendmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 		}
 		all = append(all, b...)
 	}
+	if is, f := p.inetFD(a[0]); is != nil { // control messages are not kept
+		return ok(t.inetSend(is, f, all, a[2], h.name, h.namelen))
+	}
 	fds, e := p.controlFDs(h.control, h.controllen)
 	if e < 0 {
 		return ok(e)
@@ -141,6 +144,9 @@ func sysRecvmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 	total := uint64(0)
 	for _, v := range iov {
 		total += v[1]
+	}
+	if is, f := p.inetFD(a[0]); is != nil {
+		return ok(t.inetRecvmsg(is, f, a, h, raw, iov, total))
 	}
 	r, e := t.recvBytes(a[0], total, a[2])
 	if e < 0 {
