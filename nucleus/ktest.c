@@ -40,6 +40,7 @@ static const struct ktest g_tests[] = {
     { "nu_mem_info",        kt_nu_mem_info },
     { "nu_set_realtime",    kt_nu_set_realtime },
     { "uspace_map_translate", kt_uspace_map_translate },
+    { "uspace_protect_batch", kt_uspace_protect_batch },
     { "uspace_kernel_half_shared", kt_uspace_kernel_half_shared },
     { "uthread_syscalls",   kt_uthread_syscalls },
     { "uthread_faults",     kt_uthread_faults },

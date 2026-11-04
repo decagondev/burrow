@@ -1,5 +1,6 @@
 # Suite "user": address spaces and ring 3 (W9), through the nucleus calls.
 uspace_map_translate
+uspace_protect_batch
 uspace_kernel_half_shared
 # W9-S02: ring 3
 uthread_syscalls

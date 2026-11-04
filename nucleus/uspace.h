@@ -1,5 +1,5 @@
 /* uspace.h - user address spaces, the MECHANISM half (W9; NUCLEUS_ABI
- * 0x1010-0x1016). The Go kernel decides what a process's memory holds and
+ * 0x1010-0x1018). The Go kernel decides what a process's memory holds and
  * asks for it here by handle; the nucleus only builds the page tables.
  * Frames come from nu_page_alloc and stay the caller's: unmap and destroy
  * never free them. Handles are 1..USPACE_MAX; errors are -errno. */
@@ -18,6 +18,12 @@
 long uspace_create(void);
 long uspace_map(uint64_t h, uint64_t va, uint64_t pa, uint64_t len, uint64_t prot);
 long uspace_unmap(uint64_t h, uint64_t va, uint64_t len);
+/* W18-S06, for fork: a whole range made read-only (or not) in one call, and
+ * many single pages mapped from an array in another. */
+long uspace_protect(uint64_t h, uint64_t va, uint64_t len, uint64_t prot);
+struct uspace_map_entry { uint64_t va, pa, prot; };
+#define USPACE_BATCH_MAX 4096u
+long uspace_map_batch(uint64_t h, const struct uspace_map_entry *e, uint64_t n);
 long uspace_translate(uint64_t h, uint64_t va);   /* pa, or -EFAULT */
 long uspace_destroy(uint64_t h);                  /* -EBUSY while threads use it */
 long uspace_page_alloc(uint64_t count);           /* count must be 1 */

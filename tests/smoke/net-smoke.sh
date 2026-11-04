@@ -24,6 +24,8 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=host -addext subject
 python3 tests/smoke/tls-server.py "$TLSPORT" "$WWW" "$B/net-tls.pem" "$B/net-tls.key" > "$B/net-tls.log" 2>&1 &
 TLSSERVER=$!
 trap 'kill $SERVER $TLSSERVER 2>/dev/null || true' EXIT
-for _ in $(seq 50); do python3 -c "import socket; socket.create_connection(('127.0.0.1', $PORT))" 2>/dev/null && break; sleep 0.1; done
+for p in $PORT $TLSPORT; do # both servers listen before Burrow boots (the first TLS fetch once came too early)
+  for _ in $(seq 100); do python3 -c "import socket; socket.create_connection(('127.0.0.1', $p))" 2>/dev/null && break; sleep 0.1; done
+done
 sed "s/@PORT@/$PORT/g; s/@TLSPORT@/$TLSPORT/g; s/@SUM@/$(md5sum < "$WWW/big.bin" | cut -d' ' -f1)/g" "tests/smoke/keys/$NAME.keys" > "$B/$NAME.keys"
 tests/smoke/smoke.sh "$IMG" "tests/smoke/expect/$NAME.txt" "$TIMEOUT" "$B/$NAME.keys"

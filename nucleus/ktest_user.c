@@ -36,6 +36,35 @@ int kt_uspace_map_translate(void) {
     return 0;
 }
 
+/* W18-S06: map two pages in one batch, make the range read-only and
+ * writable again in one call each, refuse bad entries; every frame back. */
+int kt_uspace_protect_batch(void) {
+    uint64_t free0 = frames_free_count();
+    long as = nu(0x1010, 0, 0, 0, 0, 0);
+    long pa0 = nu(0x1014, 1, 0, 0, 0, 0), pa1 = nu(0x1014, 1, 0, 0, 0, 0);
+    KT_CHECK(as >= 1 && pa0 > 0 && pa1 > 0);
+    struct uspace_map_entry e[2] = {{CODE_VA, (uint64_t)pa0, UPROT_WRITE}, {CODE_VA + 0x3000, (uint64_t)pa1, 0}};
+    KT_CHECK(nu(0x1018, as, (uint64_t)e, 2, 0, 0) == 0);
+    KT_CHECK(nu(0x1013, as, CODE_VA + 0x3010, 0, 0, 0) == pa1 + 0x10);
+    uint64_t pa, flags;
+    struct addr_space *s = uspace_get((uint64_t)as);
+    KT_CHECK(vm_translate(s, CODE_VA, &pa, &flags) == PT_OK && (flags & PTE_W));
+    KT_CHECK(nu(0x1017, as, CODE_VA, 0x4000, 0, 0) == 0);                  /* read-only, holes skipped */
+    KT_CHECK(vm_translate(s, CODE_VA, &pa, &flags) == PT_OK && !(flags & PTE_W) && (pa & ~0xFFFull) == (uint64_t)pa0);
+    KT_CHECK(nu(0x1017, as, CODE_VA, 0x1000, UPROT_WRITE, 0) == 0);
+    KT_CHECK(vm_translate(s, CODE_VA, &pa, &flags) == PT_OK && (flags & PTE_W));
+    KT_CHECK(nu(0x1018, as, (uint64_t)e, 1, 0, 0) == -EEXIST);           /* already mapped */
+    e[0].pa = 0x123;
+    KT_CHECK(nu(0x1018, as, (uint64_t)e, 1, 0, 0) == -EINVAL);           /* unaligned frame */
+    KT_CHECK(nu(0x1018, as, (uint64_t)e, USPACE_BATCH_MAX + 1, 0, 0) == -EINVAL);
+    KT_CHECK(nu(0x1017, as, CODE_VA, 0x1000, 8, 0) == -EINVAL);          /* unknown prot */
+    KT_CHECK(nu(0x1016, as, 0, 0, 0, 0) == 0);
+    nu(0x1015, (uint64_t)pa0, 1, 0, 0, 0);
+    nu(0x1015, (uint64_t)pa1, 1, 0, 0, 0);
+    KT_CHECK(frames_free_count() == free0);
+    return 0;
+}
+
 /* The upper half is the kernel's own (same PDPTs), so kernel stacks and
  * MMIO mapped later are visible from every process; the lower half is empty. */
 int kt_uspace_kernel_half_shared(void) {

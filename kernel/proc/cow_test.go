@@ -160,3 +160,40 @@ func TestCowWriteFaultThroughTheDispatcher(t *testing.T) {
 		t.Errorf("write to a read-only page: status %d %q, want SIGSEGV", st, why)
 	}
 }
+
+// plainNucleus hides the fake's BatchMapper: fork then maps page by page.
+type plainNucleus struct{ proc.Nucleus }
+
+// W18-S06: fork uses the batched calls where the nucleus has them (a few
+// calls, not three a page) and gives the same result either way.
+func TestCowForkBatchedAndPageByPage(t *testing.T) {
+	for _, batched := range []bool{true, false} {
+		fake := proctest.New()
+		var nu proc.Nucleus = fake
+		if !batched {
+			nu = plainNucleus{fake}
+		}
+		m, err := proc.NewMem(nu)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const pages = 300
+		m.MapAnon(cowVA, pages*proc.PageSize, proc.ProtWrite)
+		m.CopyOut(cowVA+7*proc.PageSize, []byte("page seven"))
+		calls := fake.BatchCalls()
+		c, err := m.Clone()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if made := fake.BatchCalls() - calls; batched && (made == 0 || made > 4) || !batched && made != 0 {
+			t.Errorf("batched %v: %d batch calls for a %d-page fork", batched, made, pages)
+		}
+		if writable(fake, m, cowVA) || writable(fake, c, cowVA+299*proc.PageSize) || str(t, c, cowVA+7*proc.PageSize, 10) != "page seven" {
+			t.Errorf("batched %v: the fork is not a read-only share", batched)
+		}
+		c.CopyOut(cowVA+7*proc.PageSize, []byte("CHILD"))
+		if str(t, m, cowVA+7*proc.PageSize, 10) != "page seven" {
+			t.Errorf("batched %v: the child's write reached the parent", batched)
+		}
+	}
+}

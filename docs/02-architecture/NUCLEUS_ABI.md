@@ -19,6 +19,8 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1014 | `nu_page_alloc` | count (1) | physical address of a zeroed frame, or -ENOMEM (also while only `USER_RESERVE_FRAMES`, 32 MiB, are free: they stay for the kernel, W14-S01) | W9 |
 | 0x1015 | `nu_page_free` | pa, count (1) | 0 | W9 |
 | 0x1016 | `nu_as_destroy` | as | 0, frees its page tables; -EBUSY while a thread still runs in it | W9 |
+| 0x1017 | `nu_as_protect` | as, va, len, prot | 0; every mapped page of the range is mapped again, same frame, with prot (unmapped ones skipped): fork write-protects a whole range in one call | W18 |
+| 0x1018 | `nu_as_map_batch` | as, entries, n | 0; maps n single pages from an array of `{va, pa, prot}` (24 bytes each, at most 4096), each checked as `nu_as_map` checks one; on an error the pages mapped so far stay | W18 |
 | 0x1020 | `nu_uthread_create` | as, rip, rsp, fs | tid of a ring-3 thread, runnable at once | W9 |
 | 0x1021 | `nu_syscall_wait` | buf, max | blocks until a user thread needs Go, then copies up to max 64-byte requests `{tid, nr, args[6]}` into buf and returns how many; nr >= `0xFFFF0000` is a fault (vector in the low byte; args: cr2, rip, error), `0xFFFF0100` an interrupt stop; since W10 answering a fault or interrupt resumes the thread (Go may have changed its registers) | W9 |
 | 0x1022 | `nu_syscall_reply` | tid, result | 0, resumes the user thread with RAX = result; -ESRCH if it is not waiting | W9 |

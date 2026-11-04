@@ -62,6 +62,7 @@ int kt_nu_set_realtime(void);
 
 /* ktest_user.c */
 int kt_uspace_map_translate(void);
+int kt_uspace_protect_batch(void);
 int kt_uspace_kernel_half_shared(void);
 
 /* ktest_uthread.c */

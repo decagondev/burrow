@@ -89,3 +89,18 @@ var _ [672]byte = [unsafe.Sizeof(Regs{})]byte{}
 
 // InterruptNr is a stop asked for with Nucleus.Interrupt (args: rip).
 const InterruptNr = FaultBase | 0x100
+
+// MapEntry is one page for BatchMapper.MapBatch: the layout of the
+// nucleus's struct uspace_map_entry.
+type MapEntry struct{ VA, PA, Prot uint64 }
+
+// MapBatchMax is how many entries one MapBatch call may take.
+const MapBatchMax = 4096
+
+// BatchMapper is what a Nucleus may also offer (W18-S06): a range made
+// read-only or writable in one call, and many pages mapped in one. Fork
+// uses them where they exist; without them it maps page by page.
+type BatchMapper interface {
+	Protect(as, va, n uint64, prot Prot) error
+	MapBatch(as uint64, e []MapEntry) error
+}

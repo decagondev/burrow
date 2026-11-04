@@ -1,0 +1,9 @@
+# make mem-bench (W18-S06): forkbench on go.img; tests/smoke/mem-budgets.py
+# checks its numbers. Not in make test.
+wait burrow>
+type run /bin/forkbench
+key ret
+wait forkbench: ok
+wait burrow>
+type poweroff
+key ret

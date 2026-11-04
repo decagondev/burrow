@@ -13,7 +13,10 @@ package proc
 // it: the copy happens under the table's lock, before the count drops.
 // Docs: docs/04-plan/waves/WAVE-18-foundations.md, MEMORY_MAP.md.
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // frameRefs counts the owners of shared frames: a frame absent from the
 // table has exactly one. One table serves a family of processes (fork
@@ -30,6 +33,33 @@ func (r *frameRefs) share(pa uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.n[pa] = max(r.n[pa], 1) + 1
+}
+
+// shareAll adds an owner to each frame under one lock (fork, W18-S06).
+func (r *frameRefs) shareAll(pas []uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, pa := range pas {
+		r.n[pa] = max(r.n[pa], 1) + 1
+	}
+}
+
+// releaseAll drops an owner of each frame under one lock and returns the
+// frames that had no other owner (exit, W18-S06).
+func (r *frameRefs) releaseAll(pas []uint64) (free []uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, pa := range pas {
+		switch c := r.n[pa]; {
+		case c > 2:
+			r.n[pa] = c - 1
+		case c == 2:
+			delete(r.n, pa)
+		default:
+			free = append(free, pa)
+		}
+	}
+	return free
 }
 
 // release drops an owner; true when that was the last one (free the frame).
@@ -140,4 +170,61 @@ func (m *Mem) shareInto(c *Mem, va uint64, pg page) error {
 	m.refs.share(pg.pa)
 	c.pages[va] = pg
 	return c.nu.Map(c.as, va, pg.pa, PageSize, pg.hwProt())
+}
+
+// cloneBatchedLocked is shareInto for every page at once (W18-S06), with
+// two kinds of nucleus call instead of three calls a page: the parent's
+// newly shared writable pages are write-protected in runs first (so no
+// parent thread can still write a page the child already maps), then the
+// child's pages are mapped MapBatchMax at a time. m.mu held.
+func (m *Mem) cloneBatchedLocked(c *Mem, bm BatchMapper) error {
+	type ro struct {
+		va   uint64
+		prot Prot
+	}
+	var protect []ro
+	child := make([]MapEntry, 0, len(m.pages))
+	shared := make([]uint64, 0, len(m.pages))
+	c.pages = make(map[uint64]page, len(m.pages)) // grown once, not rehashed 16 times
+	for va, pg := range m.pages {
+		switch {
+		case pg.shm != nil:
+			pg.shm.ref()
+		case !pg.device:
+			if !pg.cow {
+				pg.cow = true
+				m.pages[va] = pg
+				if pg.prot&ProtWrite != 0 {
+					protect = append(protect, ro{va, pg.hwProt()})
+				}
+			}
+			shared = append(shared, pg.pa)
+		}
+		c.pages[va] = pg
+		prot := pg.prot
+		if !pg.device && pg.shm == nil {
+			prot = pg.hwProt()
+		}
+		child = append(child, MapEntry{VA: va, PA: pg.pa, Prot: uint64(prot)})
+	}
+	m.refs.shareAll(shared)
+	sort.Slice(protect, func(i, j int) bool { return protect[i].va < protect[j].va })
+	for i := 0; i < len(protect); { // one call per run of adjacent pages with one protection
+		j := i + 1
+		for j < len(protect) && protect[j].va == protect[j-1].va+PageSize && protect[j].prot == protect[i].prot {
+			j++
+		}
+		if err := bm.Protect(m.as, protect[i].va, uint64(j-i)*PageSize, protect[i].prot); err != nil {
+			return err
+		}
+		i = j
+	}
+	for len(child) > 0 {
+		k := min(len(child), MapBatchMax)
+		if err := bm.MapBatch(c.as, child[:k]); err != nil {
+			return err
+		}
+		child = child[k:]
+	}
+	return nil
 }

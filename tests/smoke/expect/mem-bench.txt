@@ -1,0 +1,8 @@
+# Ordered markers for make mem-bench (W18-S06, tests/smoke/keys/mem-bench.keys). Append-only.
+# The numbers vary; tests/smoke/mem-budgets.py checks them.
+burrow> run /bin/forkbench
+forkbench: fork of a small process
+forkbench: fork of a 64 MiB process
+forkbench: a waiting child costs
+forkbench: ok
+burrow> poweroff

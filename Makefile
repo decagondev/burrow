@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -503,6 +503,11 @@ net-smoke-run: $(BUILD)/go-dev.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev.img $(BUILD)/home-net.img 240
 
+# What fork costs (W18-S06, not in make test): forkbench on go.img against
+# tests/smoke/mem-budgets.py (a small fork, a 64 MiB one, a waiting child).
+mem-bench: $(BUILD)/go.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem-bench.txt 120 tests/smoke/keys/mem-bench.keys
+	python3 tests/smoke/mem-budgets.py $(BUILD)/smoke-mem-bench.log
 # How fast the network is (W17-S06, not in make test): a 10 MB download
 # from the host with gofetch and short connections to busybox httpd,
 # against the budgets in tests/smoke/net-budgets.py.

@@ -40,6 +40,10 @@ Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisio
 - **A Windows-backed checkout** cannot hold files whose names differ only in case (the Linux UAPI headers have such pairs): link to such trees instead of copying them.
 - **Smoke waits** match the serial log, which also holds the echo of what was typed: wait for output the command line does not contain.
 
+## Dynamic linking (W18)
+
+Burrow runs dynamically linked programs since W18: `execve` loads the program and the interpreter its `PT_INTERP` names, starts the interpreter with `AT_BASE` in the auxiliary vector, and musl's loader does the rest. The initrd's `/lib` holds musl's loader, `/lib/ld-musl-x86_64.so.1` (the `libc.so` of the host's `musl-gcc`, `MUSL_LOADER` in the Makefile), and the libraries; `/lib` is on the loader's default path, so nothing needs `LD_LIBRARY_PATH`. To port a dynamic program: build it with `musl-gcc` without `-static` (shared libraries with `-shared -fPIC`), check it on the host's Linux first with `LD_LIBRARY_PATH` at the build's libraries, and put its libraries in the initrd's `/lib`; `user/dyn/` (`dynhello`, a library it links against and a plug-in it opens with `dlopen`) is the example. Everything that existed before W18 is still static, and static stays the simpler way to ship one program; dynamic linking is for sharing code between several and for plug-ins. Shared Qt and X libraries are later work.
+
 ## Qt (W15)
 
 Qt widget programs run on Burrow with no X server: Qt's `linuxfb` platform draws on `/dev/fb0` and its own evdev handlers read the keyboard and mouse. `scripts/qt.sh` (`make qt`) builds qtbase 6.12.0 twice: for the host, because a Qt cross build runs the host's `moc`, `rcc` and `uic` (`-qt-host-path`), and statically for Burrow with musl.cc's GCC 11.2.1. The Burrow configure line, beyond `-static -release -nomake examples -nomake tests`:

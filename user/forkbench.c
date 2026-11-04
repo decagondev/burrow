@@ -1,4 +1,5 @@
-/* forkbench.c - what fork costs (W18-S01): a process with 64 MiB touched
+/* forkbench.c - what fork costs (W18-S01): first a small process (the
+ * fixed cost of fork, exit and waitpid, W18-S06), then a process with 64 MiB touched
  * forks ROUNDS times (each child exits at once; the time is fork to
  * waitpid), then forks once more and, while that child waits on a pipe,
  * asks sysinfo how much memory the system lost to it, then lets the child
@@ -32,6 +33,15 @@ static long free_kib(void) {
 
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
+    double small = 0; /* first a fork with almost nothing to share: the fixed cost */
+    for (int i = 0; i < ROUNDS; i++) {
+        double t = now_us();
+        pid_t pid = fork();
+        if (pid == 0) _exit(0);
+        waitpid(pid, NULL, 0);
+        small += now_us() - t;
+    }
+    printf("forkbench: fork of a small process: %.0f us (fork to waitpid)\n", small / ROUNDS);
     char *mem = malloc(SIZE);
     if (!mem) { puts("forkbench: FAIL no memory"); return 1; }
     memset(mem, 7, SIZE); /* every page touched: a copying fork copies all of it */

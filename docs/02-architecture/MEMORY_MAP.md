@@ -66,6 +66,17 @@ Since W5 the nucleus drops the loader's identity map (PML4[0]) in `vmm_init`, so
 
 **As built in W9:** every process has **its own lower half** (its own PML4; the upper half is the kernel's, shared), so the user and Go kernel rows above describe two different address spaces, not one: the Go kernel's lower half lives only in the kernel PML4, and Go never runs on a process's CR3. A process's layout (policy in `kernel/proc`): the ELF at its link address (`0x400000` for static-PIE), the `brk` heap right after the highest segment, anonymous `mmap` from `0x1000_0000_0000` up with a guard page between mappings, and a 256 KiB stack ending at `0x7FFF_FFFF_0000`, all mapped user-accessible. **Since W12** `mmap` and `brk` memory is demand-zero (`kernel/proc/area.go`): they record an area, and a page gets its frame at first touch, a ring-3 page fault Go answers by mapping it (the thread resumes) or a kernel copy in or out. A reservation therefore costs nothing (the Go runtime reserves hundreds of MiB), and a `PROT_NONE` area is genuinely inaccessible. **Since W14** an area may have a backing file (`mmap` of a regular file): its pages fill from the file's `io.ReaderAt` instead of with zeros, and are private copies from then on.
 
+**Since W18** a frame may belong to more than one process, and user memory has four kinds of page (`kernel/proc`, [WAVE-18](../04-plan/waves/WAVE-18-foundations.md)):
+
+| Page | Whose frame | Mapped as | Fork | Freed |
+|---|---|---|---|---|
+| private (anonymous, `brk`, a private file mapping, a program's segment) | the process's, counted in its family's `frameRefs` (`cow.go`) | its protection; read-only while shared | shared copy-on-write: read-only in both until one writes, which copies it (or, for the last owner, makes it writable again) | when its last owner unmaps it or exits |
+| shared (`MAP_SHARED`: anonymous, a `/dev/shm` file, a memfd, a SysV segment) | the shared object's (`shm.go`) | its protection, never copy-on-write | shared as it is | when the object has no handle, no name and no mapped page |
+| device (`/dev/fb0`) | the device's | its protection | shared as it is | never |
+| reserved (an area with no page yet) | none | not mapped: the first touch faults | the area is copied | - |
+
+A write that breaks a share can come from the program (a ring-3 write fault on a present, read-only page, which the dispatcher sends to `FaultIn`) or from the kernel (`CopyOut`, the ELF loader, `MADV_DONTNEED`'s clearing). A program's file is mapped lazily (`execve`): its whole pages fill from the file at first touch, 64 KiB at a time, its edge pages and bss at once. A dynamic program's interpreter is loaded at `0x7F00_0000_0000`. SysV attachments are kept per address space, so fork inherits them and exit and `execve` detach them. Fork write-protects the parent's pages in runs and maps the child's in batches (`nu_as_protect`, `nu_as_map_batch`).
+
 S = supervisor-only, U = user accessible. The Go kernel and nucleus regions are present in **every** address space but marked supervisor-only, so a user process cannot read them, and its SYSCALL return RIP can never point into Go kernel text (this is what makes the gate's caller check sound, [ADR-0004](../03-decisions/ADR-0004-syscall-gate.md)).
 
 ```mermaid

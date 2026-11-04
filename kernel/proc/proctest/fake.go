@@ -13,15 +13,16 @@ import (
 
 // Fake implements proc.Nucleus.
 type Fake struct {
-	mu      sync.Mutex
-	frames  map[uint64][]byte
-	nextPA  uint64
-	limit   int                           // frames PageAlloc may hand out at once; 0 = no limit
-	spaces  map[uint64]map[uint64]mapping // as -> va -> mapping
-	nextAS  uint64
-	threads map[uint64]*Thread
-	nextTID uint64
-	reqs    chan proc.Request
+	mu         sync.Mutex
+	frames     map[uint64][]byte
+	nextPA     uint64
+	limit      int                           // frames PageAlloc may hand out at once; 0 = no limit
+	spaces     map[uint64]map[uint64]mapping // as -> va -> mapping
+	nextAS     uint64
+	threads    map[uint64]*Thread
+	nextTID    uint64
+	reqs       chan proc.Request
+	batchCalls int // Protect and MapBatch calls (W18-S06)
 }
 
 type mapping struct {
@@ -101,6 +102,47 @@ func (f *Fake) Map(as, va, pa, n uint64, prot proc.Prot) error {
 		s[va+off] = mapping{pa + off, prot}
 	}
 	return nil
+}
+
+// Protect implements proc.BatchMapper: mapped pages of the range get prot.
+func (f *Fake) Protect(as, va, n uint64, prot proc.Prot) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.batchCalls++
+	s, ok := f.spaces[as]
+	if !ok {
+		return syscall.EBADF
+	}
+	for off := uint64(0); off < n; off += proc.PageSize {
+		if m, mapped := s[va+off]; mapped {
+			m.prot = prot
+			s[va+off] = m
+		}
+	}
+	return nil
+}
+
+// MapBatch implements proc.BatchMapper: Map for each entry.
+func (f *Fake) MapBatch(as uint64, e []proc.MapEntry) error {
+	f.mu.Lock()
+	f.batchCalls++
+	f.mu.Unlock()
+	if len(e) > proc.MapBatchMax {
+		return syscall.EINVAL
+	}
+	for _, x := range e {
+		if err := f.Map(as, x.VA, x.PA, proc.PageSize, proc.Prot(x.Prot)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BatchCalls is how many Protect and MapBatch calls were made (tests).
+func (f *Fake) BatchCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.batchCalls
 }
 
 func (f *Fake) Unmap(as, va, n uint64) error {

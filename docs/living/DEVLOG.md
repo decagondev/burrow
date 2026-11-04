@@ -14,6 +14,22 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18 done: foundations for bigger programs (M18)
+
+**Did:** the wave in six slices. Copy-on-write fork, all in Go (S01); lazy `execve`, tuned by measurement to fault around program images only (S02); shared objects behind `MAP_SHARED`, `/dev/shm` and `memfd_create`, with `pread64`/`pwrite64` at last (S03); SysV shared memory, which switched on TinyX's MIT-SHM, and Doom in X at three quarters of its fbdev rate (S04); dynamic linking through musl's loader (S05); batched fork and `make mem-bench` (S06). Fork of a 64 MiB process: 324 ms at the start of the wave, 48 ms at the end.
+
+**Surprise:** the kernel needed less than the plan feared and the measurements more. Dynamic linking and MIT-SHM each took a page of kernel code because earlier waves had built the rest; the time went into finding where the milliseconds were, and twice the obvious culprit (fault reads, nucleus calls) was not it.
+
+**Learned:** time the thing from inside before optimising it; a single benchmark run is an anecdote.
+
+**Next:** E12 (hardening), or the rest of E18 (ext2, shared Qt and X libraries, sound); see BACKLOG.md.
+
+## 2026-11-04 — W18-S06 Budgets and the memory guide
+
+**Did:** two batched nucleus calls for fork and the Go side measured and tightened: a 64 MiB fork from 86 to 48 ms. `make mem-bench`, the memory table in MEMORY_MAP.md, dynamic linking in PORTING.md. S04's question about st settled: S02 was as slow, its earlier figure a lucky run.
+
+**Surprise:** net-smoke failed one run in six with a TLS dial timeout. A pcap of a failing run showed the handshake done on the wire and 30 s of silence, so the packets were fine and the wake-up was lost: a blocked `epoll_wait` never watched sockets added after it began, the shape of every Go dial (BUG-0022).
+
 ## 2026-11-04 — W18-S05 Dynamic linking
 
 **Did:** `PT_INTERP` in `execve`: the program and musl's loader are mapped, the loader starts with `AT_BASE`, and the rest is user space. `/lib` on the initrd holds the loader and two test libraries; `dynhello` calls a linked library and a `dlopen`ed plug-in, on Linux and on Burrow.

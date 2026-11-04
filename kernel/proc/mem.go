@@ -241,6 +241,13 @@ func (m *Mem) Clone() (*Mem, error) {
 		c.sysv[at] = g
 		g.attach(0)
 	}
+	if bm, ok := m.nu.(BatchMapper); ok {
+		if err := m.cloneBatchedLocked(c, bm); err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}
 	for va, pg := range m.pages {
 		if err := m.shareInto(c, va, pg); err != nil {
 			c.Close()
@@ -258,10 +265,19 @@ func (m *Mem) Close() error {
 	if err := m.nu.DestroySpace(m.as); err != nil {
 		return err
 	}
-	for va, pg := range m.pages {
-		m.releaseLocked(pg)
-		delete(m.pages, va)
+	own := make([]uint64, 0, len(m.pages))
+	for _, pg := range m.pages {
+		switch {
+		case pg.shm != nil:
+			pg.shm.unref()
+		case !pg.device:
+			own = append(own, pg.pa)
+		}
 	}
+	for _, pa := range m.refs.releaseAll(own) { // one lock for every frame (W18-S06)
+		m.nu.PageFree(pa)
+	}
+	m.pages = map[uint64]page{}
 	for at, g := range m.sysv { // exit and execve detach every SysV segment
 		delete(m.sysv, at)
 		g.detach(0)

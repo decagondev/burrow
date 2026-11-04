@@ -3,6 +3,7 @@
 package amd64
 
 import (
+	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
@@ -20,6 +21,8 @@ const (
 	nrMemInfo       = 0x1006
 	nrSetRealtime   = 0x1007
 	nrASDestroy     = 0x1016
+	nrASProtect     = 0x1017
+	nrASMapBatch    = 0x1018
 	nrUThreadCreate = 0x1020
 	nrSyscallWait   = 0x1021
 	nrSyscallReply  = 0x1022
@@ -71,6 +74,22 @@ func (Nucleus) Map(as, va, pa, n uint64, prot proc.Prot) error {
 
 func (Nucleus) Unmap(as, va, n uint64) error {
 	_, err := raw(nrASUnmap, uintptr(as), uintptr(va), uintptr(n))
+	return err
+}
+
+// Protect maps every mapped page of [va, va+n) again with prot (W18-S06).
+func (Nucleus) Protect(as, va, n uint64, prot proc.Prot) error {
+	_, err := raw(nrASProtect, uintptr(as), uintptr(va), uintptr(n), uintptr(prot))
+	return err
+}
+
+// MapBatch maps the entries' pages (at most proc.MapBatchMax) in one call.
+func (Nucleus) MapBatch(as uint64, e []proc.MapEntry) error {
+	if len(e) == 0 {
+		return nil
+	}
+	_, err := raw(nrASMapBatch, uintptr(as), uintptr(unsafe.Pointer(&e[0])), uintptr(len(e)))
+	runtime.KeepAlive(e)
 	return err
 }
 

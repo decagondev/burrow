@@ -118,6 +118,12 @@ static long nu_as_map(struct syscall_frame *f) {
 static long nu_as_unmap(struct syscall_frame *f)     { return uspace_unmap(SYSARG0(f), SYSARG1(f), SYSARG2(f)); }
 static long nu_as_translate(struct syscall_frame *f) { return uspace_translate(SYSARG0(f), SYSARG1(f)); }
 static long nu_as_destroy(struct syscall_frame *f)   { return uspace_destroy(SYSARG0(f)); }
+static long nu_as_protect(struct syscall_frame *f) {
+    return uspace_protect(SYSARG0(f), SYSARG1(f), SYSARG2(f), SYSARG3(f));
+}
+static long nu_as_map_batch(struct syscall_frame *f) {
+    return uspace_map_batch(SYSARG0(f), (const struct uspace_map_entry *)SYSARG1(f), SYSARG2(f));
+}
 static long nu_page_alloc(struct syscall_frame *f)   { return uspace_page_alloc(SYSARG0(f)); }
 static long nu_page_free(struct syscall_frame *f)    { return uspace_page_free(SYSARG0(f), SYSARG1(f)); }
 
@@ -154,6 +160,8 @@ static const sys_fn g_nu_table[] = {
     [NU_page_alloc - NU_BASE] = nu_page_alloc,
     [NU_page_free - NU_BASE] = nu_page_free,
     [NU_as_destroy - NU_BASE] = nu_as_destroy,
+    [NU_as_protect - NU_BASE] = nu_as_protect,
+    [NU_as_map_batch - NU_BASE] = nu_as_map_batch,
     [NU_uthread_create - NU_BASE] = nu_uthread_create,
     [NU_syscall_wait - NU_BASE] = nu_syscall_wait,
     [NU_syscall_reply - NU_BASE] = nu_syscall_reply,
