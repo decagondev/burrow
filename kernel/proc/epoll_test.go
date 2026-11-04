@@ -136,6 +136,36 @@ func TestEpoll(t *testing.T) {
 	}
 }
 
+// TestBUG0022EpollAddWakesBlockedWait: Go's netpoller sits in epoll_wait
+// while another thread connects and ADDs the new socket; the wait must see
+// the new item, or the connection's readiness waits for the poller's timer.
+func TestBUG0022EpollAddWakesBlockedWait(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	ep := r.call(p, 291, 0)
+	idle := r.call(p, 290, 0, 0x800) // never ready
+	if r.epollCtl(p, ep, 1, idle, 0x1|1<<31, 1) != 0 {
+		t.Fatal("epoll_ctl ADD")
+	}
+	ready := r.call(p, 290, 1, 0x800) // readable from the start
+	evs := uint64(scratch + 1400)
+	_, nt := r.spawnThread(p, scratch+0x800, 0, 0, 0)
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 232, Args: [6]uint64{uint64(ep), evs, 8, 2000}})
+	time.Sleep(10 * time.Millisecond) // blocked, waiting only on idle
+	start := time.Now()
+	b := make([]byte, 12)
+	le.PutUint32(b, 0x1|1<<31)
+	le.PutUint64(b[4:], 2)
+	r.put(p, scratch+1300, b)
+	if e := r.callAs(nt, 233, uint64(ep), 1, uint64(ready), scratch+1300); e != 0 {
+		t.Fatalf("ADD from another thread = %d", e)
+	}
+	n := r.await(p.TID())
+	if n != 1 || epollEvents(p, evs, 1)[0] != [2]uint64{1, 2} || time.Since(start) > time.Second {
+		t.Errorf("wait after ADD = %d after %v, want the new item at once", n, time.Since(start))
+	}
+}
+
 func TestMadviseAndLimits(t *testing.T) {
 	r := newRig(t)
 	p := r.spawn()

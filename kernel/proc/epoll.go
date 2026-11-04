@@ -6,7 +6,9 @@ package proc
 // items report while ready; an edge-triggered (EPOLLET) item reports when
 // its file's change channel has closed since the last report, i.e. when
 // something happened; EPOLLONESHOT disarms an item after one report. The
-// Go runtime's network poller is the first user. Docs: WAVE-12-ports.md.
+// Go runtime's network poller is the first user. A blocked wait also wakes
+// on epoll_ctl ADD/MOD (the epoll's own change channel), so an item added by
+// another thread is seen at once (BUG-0022). Docs: WAVE-12-ports.md.
 
 import (
 	"encoding/binary"
@@ -44,8 +46,19 @@ type epollItem struct {
 }
 
 type epoll struct {
-	mu    sync.Mutex
-	items map[int]*epollItem // by fd
+	mu      sync.Mutex
+	items   map[int]*epollItem // by fd
+	changed chan struct{}      // closed (and replaced) by ADD and MOD
+}
+
+func newEpoll() *epoll {
+	return &epoll{items: map[int]*epollItem{}, changed: make(chan struct{})}
+}
+
+// touched wakes waits blocked on the old set of items; ep.mu is held.
+func (ep *epoll) touched() {
+	close(ep.changed)
+	ep.changed = make(chan struct{})
 }
 
 func (*epoll) Read([]byte) (int, error)   { return 0, syscall.EINVAL }
@@ -56,7 +69,7 @@ func sysEpollCreate1Fn(p *Process, a [6]uint64) (int64, bool) {
 	if a[0]&^oCloexec != 0 {
 		return ok(-int64(syscall.EINVAL))
 	}
-	f := newFile(&epoll{items: map[int]*epollItem{}}, nil)
+	f := newFile(newEpoll(), nil)
 	n, err := p.fds.add(f, 0, a[0]&oCloexec != 0)
 	if err != nil {
 		f.unref()
@@ -106,10 +119,12 @@ func sysEpollCtlFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(-int64(syscall.EEXIST))
 	case a[1] == epollCtlAdd:
 		ep.items[fd] = &epollItem{file: f, events: events, data: data}
+		ep.touched()
 	case !exists && (a[1] == epollCtlMod || a[1] == epollCtlDel):
 		return ok(-int64(syscall.ENOENT))
 	case a[1] == epollCtlMod:
 		*it = epollItem{file: f, events: events, data: data}
+		ep.touched()
 	case a[1] == epollCtlDel:
 		delete(ep.items, fd)
 	default:
@@ -167,7 +182,8 @@ func (t *Thread) epollWait(epfd, va uint64, max int, timeoutMs int32) int64 {
 }
 
 // scan collects up to max ready items as epoll_events and the channels to
-// wait on otherwise. Items whose fd was closed or reused are dropped.
+// wait on otherwise (the epoll's own first). Items whose fd was closed or
+// reused are dropped.
 func (ep *epoll) scan(p *Process, max int) ([]byte, []<-chan struct{}) {
 	ep.mu.Lock()
 	defer ep.mu.Unlock()
@@ -177,7 +193,7 @@ func (ep *epoll) scan(p *Process, max int) ([]byte, []<-chan struct{}) {
 	}
 	sort.Ints(fds)
 	var out []byte
-	var waits []<-chan struct{}
+	waits := []<-chan struct{}{ep.changed}
 	for _, fd := range fds {
 		it := ep.items[fd]
 		if p.fds.get(uint64(fd)) != it.file {

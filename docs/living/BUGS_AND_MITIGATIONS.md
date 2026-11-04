@@ -35,6 +35,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0022: A blocked epoll_wait never saw items added after it began
+- Found: 2026-11-04, W18-S06, in the full `make test`: net-smoke failed about one run in six with `gofetch: Get "https://host:PORT/hello.txt": dial tcp 10.0.2.2:PORT: i/o timeout`, and the TLS server logged nothing for that connection.
+- Severity: major (any Go program that dials or accepts while its netpoller sleeps can stall for as long as the poller's next timer).
+- Symptom: a pcap of a failing run (QEMU `filter-dump`) showed the handshake done in 2 ms (SYN, SYN-ACK, ACK) and then nothing from Burrow until its FIN exactly 30 s later: `http.DefaultTransport`'s dial timeout.
+- Root cause: `epollWait` selected only on the change channels of the items present when it scanned. Go's netpoller is usually parked in `epoll_wait` with a timeout while another thread runs `connect` → EINPROGRESS → `epoll_ctl(ADD)`; the SYN-ACK then closed a channel no wait was watching, and the dial waited for the poller's timer. Linux wakes waiters when an added item is ready. It passed most runs because other activity (a timer, the netpoll break eventfd) happened to wake the poller first.
+- Fix: the epoll has its own change channel, closed by ADD and MOD and waited on by every blocked wait (`kernel/proc/epoll.go`).
+- Mitigation: a waiter that selects over a set must also wait for the set to change; noted in the file's header comment.
+- Regression: `TestBUG0022EpollAddWakesBlockedWait` (`kernel/proc`): a wait blocks on an idle eventfd, another thread ADDs a readable one, the wait must return it at once (it timed out after 2 s before the fix); net-smoke itself.
+- Lesson: when a flake's failing side logs nothing, capture the wire: it separated "the packet never came" from "nobody was told", in one run.
+
 ### BUG-0021: The gc_stress selftest's heap limit sat 12 MiB above a normal run
 - Found: 2026-11-04, W17-S01, in the full `make test`: x11-smoke's boot stopped at `[kernel] INFO: selftest FAILED: gc_stress: heap grew to 79 MiB (limit 64 MiB)`; the same image passed twice right after, at 52 MiB.
 - Severity: minor (a flaky test, not a kernel fault: the check runs before any driver, and the GC did free, the heap only peaked higher once).
