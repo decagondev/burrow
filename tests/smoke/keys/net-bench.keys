@@ -1,0 +1,22 @@
+# make net-bench (W17-S06), run by tests/smoke/net-bench.sh: a 10 MB
+# download from the host with gofetch (@PORT@), then busybox httpd on 8080
+# (forwarded from the host) serving /etc while the host times 200 short
+# connections to it and ends with /bench-done.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /bin/gofetch -stats -o /dev/null http://host:@PORT@/ten.bin
+key ret
+wait MB/s)
+type httpd -f -vv -p 8080 -h /etc & echo net: httpd up
+key ret
+wait url:/bench-done
+type kill $!; wait; echo net: bench done
+key ret
+wait net: bench done
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

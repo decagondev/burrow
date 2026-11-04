@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -487,6 +487,19 @@ net-smoke-run: $(BUILD)/go-dev.img
 	rm -f $(BUILD)/home-net.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev.img $(BUILD)/home-net.img 240
+
+# How fast the network is (W17-S06, not in make test): a 10 MB download
+# from the host with gofetch and short connections to busybox httpd,
+# against the budgets in tests/smoke/net-budgets.py.
+net-bench: $(BUILD)/go-dev.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
+# The workbench on the network (W17-S06): run-dev's image and home disk,
+# QEMU's user network (the host is 10.0.2.2, DNS 10.0.2.3, the internet
+# beyond if the host has it) and the host's port 8080 forwarded to 8080 in
+# Burrow: `httpd -p 8080 -h /home` there, then http://localhost:8080 here.
+RUN_NET_FWD ?= 8080
+run-net: $(BUILD)/go-dev.img $(HOME_IMG)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk 		-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
 # with tcc, write and rename a Lua script; power off; boot again and find

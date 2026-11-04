@@ -1,6 +1,7 @@
 # The network from busybox on go-dev.img (W17-S04), run by
 # tests/smoke/net-smoke.sh, which fills in @PORT@ (its HTTP server on the
-# host, 10.0.2.2, "host" in /etc/hosts) and @SUM@ (big.bin's md5).
+# host, 10.0.2.2, "host" in /etc/hosts), @TLSPORT@ (its HTTPS server, a
+# self-signed certificate) and @SUM@ (big.bin's md5).
 wait burrow>
 type run /bin/busybox sh
 key ret
@@ -19,6 +20,17 @@ wait packet loss
 type wget -q -O - http://host:1/ || echo net: refused as expected
 key ret
 wait net: refused as expected
+# W17-S06: gofetch (Go's net/http and crypto/tls): plain, then TLS refused
+# without -k (the certificate is self-signed), then TLS with -k
+type /bin/gofetch -stats http://host:@PORT@/hello.txt
+key ret
+wait bytes in
+type /bin/gofetch https://host:@TLSPORT@/hello.txt || echo net: certificate refused
+key ret
+wait net: certificate refused
+type /bin/gofetch -k https://host:@TLSPORT@/hello.txt | tr a-z A-Z
+key ret
+wait BURROW FETCHED THIS FROM THE HOST
 type exit
 key ret
 wait burrow>

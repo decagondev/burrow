@@ -21,7 +21,7 @@
 | M14 | Desktop groundwork | a mouse-driven paint program whose colour arrives over a Unix socket (done: `make desk-smoke`) | W14 |
 | M15 | Qt | a Qt text editor on `/dev/fb0` edits and saves a file in `/home` (done: `make qt-smoke`) | W15 |
 | M16 | A desktop | `startx`: dwm tiles st terminals, dmenu starts Doom in a window (done: `make x11-smoke`, `make run-desktop`) | W16 |
-| M17 | On the network | busybox `wget` from the host, a Go program fetching an HTTPS page, `httpd` inside Burrow reached from the host (in progress: `make net-smoke`) | W17 |
+| M17 | On the network | busybox `wget` from the host, a Go program fetching an HTTPS page, `httpd` inside Burrow reached from the host (done: `make net-smoke`, `make run-net`) | W17 |
 
 ```mermaid
 flowchart TB
@@ -45,8 +45,7 @@ flowchart TB
     classDef done fill:#2e7d32,color:#fff;
     classDef next fill:#f9a825,color:#000;
     classDef later fill:#e6eaee,color:#333,stroke-dasharray: 4 3;
-    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15,W16 done;
-    class W17 next;
+    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15,W16,W17 done;
     class X later;
 ```
 
@@ -54,7 +53,7 @@ Green = done, yellow = next, grey = planned.
 
 ## Critical path and risk
 
-The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. Networking (W17) is under way: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, and servers inside Burrow work; `make run-net`, a Go HTTPS client and the networking guide remain. Then come the foundations bigger programs want (copy-on-write fork, shared memory, dynamic linking: E18) and hardening (E12). See [RISKS.md](../living/RISKS.md).
+The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. W17 put it on the network: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, servers inside Burrow and HTTPS from a Go program. Then come the foundations bigger programs want (copy-on-write fork, shared memory, dynamic linking: E18) and hardening (E12). See [RISKS.md](../living/RISKS.md).
 
 ## Rough effort (part-time, one person)
 

@@ -9,4 +9,9 @@ burrow fetched this from the host
 /tmp/big.bin: OK
 2 packets transmitted, 2 packets received, 0% packet loss
 net: refused as expected
+burrow fetched this from the host
+gofetch: 200 OK, 34 bytes in
+certificate signed by unknown authority
+net: certificate refused
+BURROW FETCHED THIS FROM THE HOST
 burrow> poweroff

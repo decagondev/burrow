@@ -3,6 +3,7 @@
 servers inside Burrow through QEMU's forwarded ports and checks every byte.
 
 Usage: fetch.py <httpd-port> <goserve-port> <dir> <file> <count>
+       fetch.py bench <port> <dir> <file> <count>   (make net-bench)
 
 Phase 1: busybox httpd on the first port: <count> short connections, each
 fetching <file> and comparing it with <dir>/<file>; then /phase1-done,
@@ -11,7 +12,8 @@ restarted httpd (on the same port at once: SO_REUSEADDR) serves / instead
 of /home, so home/<file> answers only once it is up; /phase2-done.
 Phase 3: goserve (Go's net/http) on the second port, <count> fetches,
 /phase3-done. Prints one line per phase and exits 1 on any
-mismatch or timeout. Talks to 127.0.0.1 only. Docs: WAVE-17-networking.md.
+mismatch or timeout. The bench form is phase 1 alone, ending with
+/bench-done. Talks to 127.0.0.1 only. Docs: WAVE-17-networking.md.
 """
 import sys
 import time
@@ -53,7 +55,15 @@ def many(port, name, want, count, label):
         sys.exit(1)
 
 
+def bench():
+    port, root, name, count = int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
+    many(port, name, open(f"{root}/{name}", "rb").read(), count, "httpd")
+    get(port, "bench-done")
+
+
 def main():
+    if sys.argv[1] == "bench":
+        return bench()
     p1, p2, root, name, count = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
     want = open(f"{root}/{name}", "rb").read()
     many(p1, name, want, count, "httpd")

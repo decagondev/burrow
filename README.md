@@ -22,7 +22,7 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M14: desktop groundwork (a mouse, Unix sockets, a clock, file mmap, console modes) | **done: `make desk-smoke`** |
 | M15: Qt widget programs on /dev/fb0 | **done: `make run-qt`, `qtpad`** |
 | M16: an X11 desktop (TinyX, dwm, st, dmenu, Doom in a window) | **done: `make run-desktop`, then `startx`** ([DESKTOP.md](docs/06-guides/DESKTOP.md)) |
-| M17: networking (e1000, gVisor's TCP/IP, `AF_INET` sockets, wget, servers inside Burrow) | **in progress: `make net-smoke`** |
+| M17: networking (e1000, gVisor's TCP/IP, `AF_INET` sockets, wget, servers inside Burrow) | **done: `make run-net`** ([NETWORKING.md](docs/06-guides/NETWORKING.md)) |
 
 ## Quick start
 

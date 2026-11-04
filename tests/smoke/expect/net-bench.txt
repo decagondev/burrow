@@ -1,0 +1,7 @@
+# Ordered markers for make net-bench (W17-S06, tests/smoke/keys/net-bench.keys). Append-only.
+# The numbers vary; tests/smoke/net-budgets.py checks them.
+gofetch: 200 OK, 10485760 bytes in
+net: httpd up
+url:/bench-done
+net: bench done
+burrow> poweroff

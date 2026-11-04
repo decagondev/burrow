@@ -5,7 +5,9 @@
 # <img> on QEMU's user network, where the host is 10.0.2.2 ("host" in
 # Burrow's /etc/hosts). Burrow's busybox fetches both files and pings the
 # gateway; the expect file checks what it printed, including the 1 MiB
-# file's size and checksum. Needs nothing beyond the host: no internet.
+# file's size and checksum. W17-S06: a second, HTTPS server (a self-signed
+# certificate made here with openssl) for gofetch's TLS handshake. Needs
+# nothing beyond the host: no internet.
 #
 # Usage: tests/smoke/net-smoke.sh <build-dir> <img> <name> [timeout]
 set -euo pipefail
@@ -17,7 +19,11 @@ python3 -c 'import random, sys; random.seed(17); sys.stdout.buffer.write(random.
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$WWW" > "$B/net-www.log" 2>&1 &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null || true' EXIT
+TLSPORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=host -addext subjectAltName=DNS:host   -keyout "$B/net-tls.key" -out "$B/net-tls.pem" 2>/dev/null
+python3 tests/smoke/tls-server.py "$TLSPORT" "$WWW" "$B/net-tls.pem" "$B/net-tls.key" > "$B/net-tls.log" 2>&1 &
+TLSSERVER=$!
+trap 'kill $SERVER $TLSSERVER 2>/dev/null || true' EXIT
 for _ in $(seq 50); do python3 -c "import socket; socket.create_connection(('127.0.0.1', $PORT))" 2>/dev/null && break; sleep 0.1; done
-sed "s/@PORT@/$PORT/g; s/@SUM@/$(md5sum < "$WWW/big.bin" | cut -d' ' -f1)/g" "tests/smoke/keys/$NAME.keys" > "$B/$NAME.keys"
+sed "s/@PORT@/$PORT/g; s/@TLSPORT@/$TLSPORT/g; s/@SUM@/$(md5sum < "$WWW/big.bin" | cut -d' ' -f1)/g" "tests/smoke/keys/$NAME.keys" > "$B/$NAME.keys"
 tests/smoke/smoke.sh "$IMG" "tests/smoke/expect/$NAME.txt" "$TIMEOUT" "$B/$NAME.keys"

@@ -14,6 +14,22 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W17 done: on the network (M17)
+
+**Did:** the wave in six slices. A Go driver for the e1000 with rings in nucleus frames (S01); gVisor's TCP/IP stack vendored into the kernel, with loopback, `/etc/net.conf` and a `net` command (S02, ADR-0009); `AF_INET` and `AF_INET6` sockets as files over its endpoints, checked by `nettest` on Linux and on Burrow (S03); names, raw ICMP for `ping`, busybox's network applets and `make net-smoke` (S04); servers inside Burrow reached through forwarded ports, busybox `httpd` and Go's `net/http` (S05); `gofetch` over TLS, `make run-net`, `make net-bench` and the guide (S06). The M17 demo: `wget` from the host, `gofetch https://example.com/` with its certificate checked, `httpd` inside Burrow serving the host.
+
+**Surprise:** how little of it was kernel work once the stack was in: S04's raw sockets and a host name were the only kernel changes after S03, and S05 needed none. Taking a stack (ADR-0009) rather than writing one left the time for the tests, which found most of the problems in themselves: log levels, job numbers, a test server that serialised its TLS handshakes.
+
+**Learned:** a module's `go` line is a runtime setting too (twice in this wave: the kernel and the Go user programs).
+
+**Next:** E18 (copy-on-write fork, shared memory, dynamic linking) or E12 (hardening); see BACKLOG.md.
+
+## 2026-11-04 — W17-S06 gofetch, run-net and the networking guide
+
+**Did:** `gofetch` (Go's `net/http` and `crypto/tls`, Mozilla's roots built in), TLS in `make net-smoke` against a throwaway certificate on the host, `make run-net`, `make net-bench` with budgets, and `docs/06-guides/NETWORKING.md`. From Burrow, `nslookup example.com` and `gofetch https://example.com/` work.
+
+**Surprise:** one hang in the first TLS run, never repeated; the cause was likely the Python test server, which did every handshake in its accept loop, and it no longer does.
+
 ## 2026-11-04 — W17-S05 Servers inside Burrow
 
 **Did:** servers inside Burrow reached from the host through QEMU's forwarded ports: busybox `httpd` serving `/home` for 50 connections, restarted on the same port at once, and a new Go program, `goserve`, serving it with `net/http`; the host checks every byte (`tests/smoke/fetch.py`, in `make net-smoke`).
