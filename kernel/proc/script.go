@@ -10,36 +10,35 @@ package proc
 
 import (
 	"bytes"
-	"io/fs"
 	"strings"
 	"syscall"
 )
 
 const scriptLine = 256 // Linux's BINPRM_BUF_SIZE
 
-// script turns a "#!" file into its interpreter: the file to load, its
-// contents and the new argv. Anything else comes back as it was.
-func (p *Process) script(name, file string, data []byte, argv []string) (string, []byte, []string, error) {
-	if !bytes.HasPrefix(data, []byte("#!")) {
-		return file, data, argv, nil
+// script turns a "#!" file (head is its start) into its interpreter: the
+// file to load and the new argv. Anything else comes back as it was.
+func (p *Process) script(name, file string, head []byte, argv []string) (string, []string, error) {
+	if !bytes.HasPrefix(head, []byte("#!")) {
+		return file, argv, nil
 	}
-	line := data[2:min(len(data), scriptLine)]
+	line := head[2:min(len(head), scriptLine)]
 	end := bytes.IndexByte(line, '\n')
 	if end < 0 {
-		return "", nil, nil, syscall.ENOEXEC
+		return "", nil, syscall.ENOEXEC
 	}
 	words := strings.TrimSpace(strings.ReplaceAll(string(line[:end]), "\t", " "))
 	interp, arg, _ := strings.Cut(words, " ")
 	if interp == "" {
-		return "", nil, nil, syscall.ENOEXEC
+		return "", nil, syscall.ENOEXEC
 	}
 	ifile := p.resolve(interp)
-	idata, err := fs.ReadFile(p.sys.files, ifile)
+	_, ihead, err := p.sys.openProgram(ifile)
 	switch {
 	case err != nil:
-		return "", nil, nil, err
-	case bytes.HasPrefix(idata, []byte("#!")):
-		return "", nil, nil, syscall.ENOEXEC
+		return "", nil, err
+	case bytes.HasPrefix(ihead, []byte("#!")):
+		return "", nil, syscall.ENOEXEC
 	}
 	args := []string{interp}
 	if arg = strings.TrimSpace(arg); arg != "" {
@@ -49,5 +48,5 @@ func (p *Process) script(name, file string, data []byte, argv []string) (string,
 	if len(argv) > 1 {
 		args = append(args, argv[1:]...)
 	}
-	return ifile, idata, args, nil
+	return ifile, args, nil
 }

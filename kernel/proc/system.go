@@ -110,12 +110,12 @@ type image struct {
 }
 
 // prepare loads the ELF in data with its entry stack into a new Mem.
-func (s *System) prepare(file string, data []byte, argv, envp []string) (*image, error) {
+func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string) (*image, error) {
 	mem, err := NewMem(s.nu)
 	if err != nil {
 		return nil, err
 	}
-	img, err := LoadELF(mem, bytesReaderAt(data))
+	img, err := LoadELF(mem, prog)
 	if err == nil {
 		err = mem.MapAnon(StackTop-StackSize, StackSize, ProtWrite)
 	}
@@ -138,11 +138,11 @@ func (s *System) prepare(file string, data []byte, argv, envp []string) (*image,
 // Spawn loads the program at file (an io/fs path) and starts it as a
 // child of init (which reaps it); Process.Wait reports how it ended.
 func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
-	data, err := fs.ReadFile(s.files, file)
+	prog, _, err := s.openProgram(file)
 	if err != nil {
 		return nil, err
 	}
-	im, err := s.prepare("/"+file, data, argv, envp)
+	im, err := s.prepare("/"+file, prog, argv, envp)
 	if err != nil {
 		return nil, err
 	}

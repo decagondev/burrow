@@ -1,7 +1,6 @@
 package proc
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"io/fs"
@@ -11,8 +10,6 @@ import (
 	"sync/atomic"
 	"syscall"
 )
-
-func bytesReaderAt(b []byte) io.ReaderAt { return bytes.NewReader(b) }
 
 // file is an open file description: a VFS file or the console. fork and
 // dup share it (and its offset); the last close closes it.

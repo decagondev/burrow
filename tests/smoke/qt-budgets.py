@@ -13,14 +13,14 @@ import re
 import sys
 
 BUDGETS = {                    # name: (most allowed, what it measures)
-    'first-frame-ms': (3500, 'exec to the first full-screen frame'),
+    'first-frame-ms': (2500, 'exec to the first full-screen frame'),  # 3500 until W18-S02's lazy execve
     'repaint-ms': (33, 'one full-screen repaint (30 frames a second)'),
     'memory-mib': (64, 'memory the system lost to the program'),
     'idle-wakes': (0, 'event-loop wakes in 2 s of idling'),
 }
 
 text = open(sys.argv[1], errors='replace').read()
-seen = {m.group(1): float(m.group(2)) for m in re.finditer(r'qtbench: (\S+) ([0-9.]+)', text)}
+seen = {m.group(1): float(m.group(2)) for m in re.finditer(r'qtbench: (\S+) (-?[0-9.]+)', text)}  # memory can read negative: the kernel's heap gives frames back meanwhile
 failed = False
 for name, (most, what) in BUDGETS.items():
     value = seen.get(name)

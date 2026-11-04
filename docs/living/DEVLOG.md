@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W18-S02 Lazy execve
+
+**Did:** `execve` maps a program's file instead of reading it whole: whole pages fill at first touch (64 KiB at a time), edge pages and the bss are mapped at once. Qt's first frame dropped from 1.8 to about 1.4 s; the X server starts faster; st is unchanged.
+
+**Surprise:** the obvious version made st a quarter slower, and the obvious fix (read more per fault) made it slower still. Bisecting by measurement found two separate costs: faults are expensive here (each is a dispatcher round trip), so a lazy bss is a loss; and fault-around for every file mapping punished fontconfig, which touches a little of many fonts. Fault-around now applies to program images only.
+
+**Learned:** Linux's defaults assume cheap faults; measure each one on Burrow before copying it.
+
+**Next:** W18-S03, shared memory.
+
 ## 2026-11-04 — W18-S01 Copy-on-write fork
 
 **Did:** the W18 plan, then copy-on-write fork, all in Go: frames counted per family, pages shared read-only after fork, copied at the first write by the program or the kernel. Fork of a 64 MiB process: 324 ms before, 86 ms now; a waiting child no longer costs 58 MB.

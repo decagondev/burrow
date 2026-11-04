@@ -75,7 +75,11 @@ type seg struct {
 // buildELF writes an ELF64 file: header, program headers at 64, segments
 // at their offsets (the first may cover the headers, as linkers do).
 func buildELF(typ uint16, entry uint64, segs []seg, extra ...uint32) []byte {
-	f := make([]byte, 0x4000)
+	size := uint64(0x4000)
+	for _, s := range segs {
+		size = max(size, s.off+uint64(len(s.data)))
+	}
+	f := make([]byte, size)
 	copy(f, "\x7fELF\x02\x01\x01")
 	le.PutUint16(f[16:], typ)
 	le.PutUint16(f[18:], 62) // EM_X86_64
@@ -212,5 +216,45 @@ func TestBuildStack(t *testing.T) {
 	if aux[9] != img.Entry || aux[3] != img.Phdr || aux[5] != 3 || aux[6] != 4096 ||
 		!bytes.Equal(got, rnd[:]) || aux[31] != word(1) {
 		t.Errorf("auxv %v", aux)
+	}
+}
+
+// W18-S02: loading reads nothing it does not have to. A 1 MiB data
+// segment that starts and ends mid-page takes frames for its two edge
+// pages and its bss (mapped at once: a fault costs a dispatcher round
+// trip); a page in the middle fills, with its 64 KiB window, when touched;
+// the bss and the bytes past the segment's file size read zero.
+func TestLoadELFIsLazy(t *testing.T) {
+	data := make([]byte, 1<<20)
+	for i := range data {
+		data[i] = byte(i / 4096)
+	}
+	file := buildELF(2, 0x400100, []seg{
+		{vaddr: 0x400000, off: 0, memsz: 0x200, flags: pfR | pfX, data: make([]byte, 0x200)},
+		{vaddr: 0x500800, off: 0x1800, memsz: uint64(len(data)) + 0x10000, flags: pfR | pfW, data: data},
+	})
+	copy(file[0x1800+len(data):], "not the segment's") // the file goes on past the segment
+	m, nu := newMem(t)
+	if _, err := proc.LoadELF(m, bytes.NewReader(file)); err != nil {
+		t.Fatal(err)
+	}
+	const upFront = 3 + 0x10000/4096 // the text page, the data segment's two edges, the bss
+	if n := nu.FramesInUse(); n > upFront {
+		t.Fatalf("loading took %d frames, want at most %d of the %d the program spans", n, upFront, 1+(len(data)+0x10000)/4096)
+	}
+	b := make([]byte, 1)
+	m.CopyIn(0x500800+0x80000, b)                      // the middle: 0x80000 bytes in, page 0x80 of the data
+	if b[0] != 0x80 || nu.FramesInUse() > upFront+16 { // the page and its 64 KiB window (fault-around)
+		t.Errorf("a middle page reads %#x (want 0x80), %d frames", b[0], nu.FramesInUse())
+	}
+	end := uint64(0x500800 + len(data))
+	m.CopyIn(end-1, b)
+	if b[0] != byte((len(data)-1)/4096) {
+		t.Errorf("the last data byte reads %#x", b[0])
+	}
+	for _, va := range []uint64{end, end + 5, end + 0x8000} { // past the file bytes: zero, not the file
+		if m.CopyIn(va, b); b[0] != 0 {
+			t.Errorf("%#x reads %#x, want 0", va, b[0])
+		}
 	}
 }

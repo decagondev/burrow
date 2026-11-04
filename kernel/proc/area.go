@@ -29,6 +29,7 @@ type area struct {
 	none       bool        // PROT_NONE: reserved, not accessible
 	file       io.ReaderAt // nil: anonymous (zeros)
 	off        int64       // the file offset at start
+	program    bool        // a program's segment (execve): faults read around (W18-S02)
 }
 
 // slice is the part [lo, hi) of a (inside it), its file offset moved along.
@@ -47,6 +48,14 @@ func (m *Mem) Reserve(va, n uint64, prot Prot, none bool) error {
 // ReserveFile is Reserve for a private mapping of file from offset off.
 func (m *Mem) ReserveFile(va, n uint64, prot Prot, none bool, file io.ReaderAt, off int64) error {
 	return m.reserve(area{start: va, end: va + n, prot: prot, none: none, file: file, off: off})
+}
+
+// reserveProgram is ReserveFile for a program's segment (execve, elf.go):
+// its faults read the window around them, since a program touches most of
+// its pages; ordinary mappings do not (fontconfig reads a little of many
+// fonts, and reading around those cost st a quarter second).
+func (m *Mem) reserveProgram(va, n uint64, prot Prot, file io.ReaderAt, off int64) error {
+	return m.reserve(area{start: va, end: va + n, prot: prot, file: file, off: off, program: true})
 }
 
 func (m *Mem) reserve(a area) error {
@@ -109,6 +118,9 @@ func (m *Mem) reprotect(lo, hi uint64, prot Prot, none bool) {
 // fillLocked backs page p of an accessible area with a frame: zeroed, or
 // read from the area's file (m.mu held).
 func (m *Mem) fillLocked(p uint64, a area) (page, error) {
+	if a.program {
+		return m.fillAroundLocked(p, a)
+	}
 	pa, err := m.nu.PageAlloc()
 	if err != nil {
 		return page{}, err
@@ -120,6 +132,51 @@ func (m *Mem) fillLocked(p uint64, a area) (page, error) {
 			return page{}, &fileError{err}
 		}
 	}
+	return m.mapFilledLocked(p, pa, a)
+}
+
+// faultAround is how much of a program's file a fault reads at once
+// (W18-S02, as Linux's fault_around_bytes): one read of the aligned window
+// around the page, so a program that touches most of its pages reads its
+// file in runs, as execve did before it was lazy, not 4 KiB at a time.
+const faultAround = 64 << 10
+
+// fillAroundLocked fills p from a's file and maps, from the same read, the
+// other pages of p's window that are in a and not backed yet. Only p must
+// succeed; a neighbour without a frame is left for its own fault.
+func (m *Mem) fillAroundLocked(p uint64, a area) (page, error) {
+	lo := max(a.start, p&^(faultAround-1))
+	hi := min(a.end, lo+faultAround)
+	buf := make([]byte, hi-lo)
+	if _, err := a.file.ReadAt(buf, a.off+int64(lo-a.start)); err != nil && err != io.EOF {
+		return page{}, &fileError{err} // short at the end of the file: the rest stays zero
+	}
+	var got page
+	for q := lo; q < hi; q += PageSize {
+		if _, backed := m.pages[q]; backed && q != p {
+			continue
+		}
+		pa, err := m.nu.PageAlloc()
+		if err != nil {
+			if q == p {
+				return page{}, err
+			}
+			continue
+		}
+		copy(m.nu.Frame(pa), buf[q-lo:q-lo+PageSize])
+		pg, err := m.mapFilledLocked(q, pa, a)
+		if q == p {
+			if err != nil {
+				return page{}, err
+			}
+			got = pg
+		}
+	}
+	return got, nil
+}
+
+// mapFilledLocked maps the filled frame pa at p with a's protection.
+func (m *Mem) mapFilledLocked(p, pa uint64, a area) (page, error) {
 	if err := m.nu.Map(m.as, p, pa, PageSize, a.prot); err != nil {
 		m.nu.PageFree(pa)
 		return page{}, err

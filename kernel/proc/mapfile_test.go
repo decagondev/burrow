@@ -59,7 +59,7 @@ func TestMmapFile(t *testing.T) {
 		t.Error("a write to a read-only file mapping did not fault")
 	}
 	if p.Mem().FaultIn(va+2*4096, false) != proc.FaultResume || read(p, va+2*4096, 1)[0] != 'C' {
-		t.Error("a read fault did not fill page 2 from the file")
+		t.Error("a read fault did not fill page 2 from the file (one page at a time: no fault-around for mmap)")
 	}
 }
 

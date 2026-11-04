@@ -7,7 +7,6 @@ package proc
 // process half replaced. Docs: POSIX_COVERAGE.md.
 
 import (
-	"io/fs"
 	"syscall"
 )
 
@@ -29,14 +28,21 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 		return errno(err)
 	}
 	file := p.resolve(name)
-	data, err := fs.ReadFile(s.files, file)
+	prog, head, err := s.openProgram(file)
 	if err != nil {
 		return errno(err)
 	}
-	if file, data, argv, err = p.script(name, file, data, argv); err != nil { // "#!" (W16-S04)
+	run, argv, err := p.script(name, file, head, argv) // "#!" (W16-S04)
+	if err != nil {
 		return errno(err)
 	}
-	im, err := s.prepare("/"+file, data, argv, envp)
+	if run != file { // the interpreter runs instead
+		if prog, _, err = s.openProgram(run); err != nil {
+			return errno(err)
+		}
+		file = run
+	}
+	im, err := s.prepare("/"+file, prog, argv, envp)
 	if err != nil {
 		return -int64(syscall.ENOEXEC)
 	}
