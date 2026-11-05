@@ -164,7 +164,10 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E18.F02 As a user, I want `execve` to read a program's pages as they are touched, so that big programs start fast. [W18]
 - [x] E18.F03 As a porter, I want shared memory (`MAP_SHARED`, `/dev/shm`, `memfd_create`, SysV `shm*`), so that programs and the X server share buffers. [W18]
 - [x] E18.F04 As a porter, I want dynamic linking (`PT_INTERP`, musl's loader, `dlopen`), so that programs share code and load plugins. [W18]
-- Later: shared Qt and X libraries · sound (SB16 or AC'97, OSS `/dev/dsp`) · an absolute pointer (USB tablet or virtio-input: no mouse grab, PIT-32).
+- [ ] E18.F05 As a user, I want sound: an AC'97 card, `/dev/dsp` with OSS's interface, and Doom's sound effects, so that programs and games are heard. [W22]
+- [ ] E18.F06 As a user, I want an absolute pointer (QEMU's virtio tablet) that X, Qt and paint follow, so that the pointer is where the host's is, with no grab (PIT-32). [W22]
+- [ ] E18.F07 As a kernel dev, I want a virtio 1.0 PCI transport (capabilities, feature negotiation, split virtqueues) and shared interrupt lines, so that virtio devices (input now, block and network later) share one tested driver core. [W22]
+- Later: shared Qt and X libraries · music (Doom's MIDI through an OPL emulator) · recording · `/dev/mixer`.
 
 ## E19 A multi-user Unix
 *Exit: people log in, files have owners and permissions, links work, and a Unix file system keeps it all.* [W19]
@@ -178,10 +181,10 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [W20, then later]
-- [ ] E12.F01 As a kernel dev, I want a hang to leave evidence (every process and thread with what it waits on) and BUG-0023 found, so that races are fixed before more CPUs make them worse. [W20]
-- [ ] E12.F02 As a user, I want SMEP, SMAP and NX on, so that a kernel bug cannot run or quietly read user memory. [W20]
-- [ ] E12.F03 As a porter, I want XSAVE state and a CPU with AVX, so that programs using AVX run and keep their registers. [W20]
-- [ ] E12.F04 As a user, I want ACPI: the machine's CPUs from the MADT and a real poweroff, so that Burrow knows what it runs on and turns it off. [W20]
-- [ ] E12.F05 As a user, I want every CPU running threads (APs started, one run queue, IPIs, TLB shootdown), so that programs and the Go kernel run in parallel. [W20]
-- [ ] E12.F06 As a porter, I want `nproc` and the Go runtime to see every CPU (`GOMAXPROCS>1`), so that parallel programs speed up. [W20]
+- [x] E12.F01 As a kernel dev, I want a hang to leave evidence (every process and thread with what it waits on) and BUG-0023 found, so that races are fixed before more CPUs make them worse. [W20]
+- [x] E12.F02 As a user, I want SMEP, SMAP and NX on, so that a kernel bug cannot run or quietly read user memory. [W20]
+- [x] E12.F03 As a porter, I want XSAVE state and a CPU with AVX, so that programs using AVX run and keep their registers. [W20]
+- [x] E12.F04 As a user, I want ACPI: the machine's CPUs from the MADT and a real poweroff, so that Burrow knows what it runs on and turns it off. [W20]
+- [x] E12.F05 As a user, I want every CPU running threads (APs started, one run queue, IPIs, TLB shootdown), so that programs and the Go kernel run in parallel. [W20]
+- [x] E12.F06 As a porter, I want `nproc` and the Go runtime to see every CPU (`GOMAXPROCS>1`), so that parallel programs speed up. [W20]
 - Later: per-CPU run queues and balancing · an I/O APIC · a tickless timer · UEFI front-end producing boot_info · virtio-blk/virtio-net · real-hardware boot.
