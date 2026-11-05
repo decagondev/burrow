@@ -30,7 +30,7 @@ Nothing on the site is typed in by hand except the home page's layer description
 - **Milestones** come from the table in `ROADMAP.md`; a milestone is done when its wave is.
 - **Devlog entries** appear as a timeline when they use the `## YYYY-MM-DD — title` heading; **bug entries** become cards when they use `### BUG-NNNN:` under `## Open` or `## Closed`.
 - **Test counts** are read from the test tree: `RUN(` lines in `tests/unit/c/test_main.c`, `func Test` in Go, ordered markers in `tests/smoke/expect/*.txt`, `[ktest]` lines in `tests/ktest/expect/*.txt`, `case_run REG-` in `tests/regression/run_all.sh`.
-- **A new wave** needs a row in the waves table and, if it starts a new layer, an entry in `STRATA`.
+- **A new wave** needs a row in the waves table and its id in the `waves` list of the layer it builds in `STRATA` (a new entry if it starts a new layer): the home page shows a wave only through that list, which is how W18-W20 went missing until W20-S07.
 - **The Gallery** shows every screen the smoke tests save (each `screendump build/screen-<name>.ppm` step in `tests/smoke/keys/*.keys`). The site cannot read `build/`, so after a test run refresh the committed copies:
 
   ```sh

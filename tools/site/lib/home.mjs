@@ -6,11 +6,13 @@
 import { esc, codeBlock } from './md.mjs';
 
 // The layers from the top of the stack down, and the waves that build each.
+// Add each new wave here when it starts, or its layer card never shows it
+// (a wave only appears on the home page through this list).
 const STRATA = [
   { cls: 's-desk', name: 'Desktop', lang: 'C++, C + musl', waves: ['W14', 'W15', 'W16'], text: 'A mouse, Unix sockets and file mappings below toolkits; then Qt widgets on the framebuffer and an X11 desktop with dwm.' },
-  { cls: 's-user', name: 'User space', lang: 'C, C++, Go, Lua + musl', waves: ['W9', 'W10', 'W11', 'W12', 'W13'], text: 'Shell, busybox, DOOM, compilers and editors talking to the kernel through the Linux system-call ABI.' },
-  { cls: 's-go', name: 'Go kernel', lang: 'Go', waves: ['W6', 'W7', 'W8', 'W17'], text: 'The stock Go runtime in ring 0: drivers, files, processes, POSIX policy and a TCP/IP stack.' },
-  { cls: 's-nucleus', name: 'Nucleus', lang: 'C + assembly', waves: ['W4', 'W5'], text: 'Threads, memory, interrupts and the system-call gate that lets Go run.' },
+  { cls: 's-user', name: 'User space', lang: 'C, C++, Go, Lua + musl', waves: ['W9', 'W10', 'W11', 'W12', 'W13', 'W19'], text: 'Shell, busybox, DOOM, compilers and editors talking to the kernel through the Linux system-call ABI; users, logins and passwords.' },
+  { cls: 's-go', name: 'Go kernel', lang: 'Go', waves: ['W6', 'W7', 'W8', 'W17', 'W18'], text: 'The stock Go runtime in ring 0: drivers, files (FAT32, ext2), processes with copy-on-write fork and shared memory, POSIX policy and a TCP/IP stack.' },
+  { cls: 's-nucleus', name: 'Nucleus', lang: 'C + assembly', waves: ['W4', 'W5', 'W20'], text: 'Threads on every CPU, memory, interrupts and the system-call gate that lets Go run, with the CPU\'s own protections on.' },
   { cls: 's-loader', name: 'C loader', lang: 'C', waves: ['W3'], text: 'Verifies every input, reads the disk and hands over a description of the machine.' },
   { cls: 's-stage2', name: 'Stage 2', lang: 'NASM', waves: ['W2'], text: 'Memory map, A20, protected mode, paging, long mode, then calls C.' },
   { cls: 's-stage1', name: 'Stage 1', lang: 'NASM', waves: ['W1'], text: 'The 512-byte boot sector the BIOS runs first.' },
@@ -57,7 +59,7 @@ export function homeBody(pr, shots = []) {
 <section class="hero">
   <div class="hero-text">
     <h1>Burrow</h1>
-    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, runs an X11 desktop, and is learning to talk to the network.</p>
+    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, runs an X11 desktop, talks to the network, logs users in, and is learning to use every CPU.</p>
     <p class="hero-actions"><a class="btn primary" href="docs/02-architecture/ARCHITECTURE.html">Read the architecture</a><a class="btn" href="progress.html">See progress</a>${shots.length ? '<a class="btn" href="gallery.html">See screenshots</a>' : ''}</p>
   </div>
   <div class="strata-wrap">
