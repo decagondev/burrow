@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W21-S01 A VBE mode set in stage2
+
+**Did:** a `video` payload (`mkimage -video WxHxB[,pitch]`) that stage2 reads as its last real-mode step to find and set a linear VBE mode through the BIOS, with a padded scanline through 4F06 when asked; its messages go to COM1 only. The Go images ask for 1024x768x32; `make vbe-smoke` boots an odd 1280x1024 mode with a 5248-byte pitch and a mode that does not exist.
+
+**Surprise:** that it all worked on the first boot, and that SeaBIOS's vgabios honours 4F06, which is the only way to get a padded pitch out of QEMU. It also rounds: 1700 bytes came back as 1696, so reading back the card's answer was not optional.
+
+**Next:** W21-S02: the mode in boot_info.
+
 ## 2026-11-05 — W20 done: many CPUs, hardened (M20)
 
 **Did:** the wave in eight slices. A hang watchdog and a stress test first (S01, which found BUG-0026), then the CPU's own protections while there was still one CPU: SMEP, SMAP and NX everywhere (S02), XSAVE and AVX (S03), ACPI tables and a real poweroff (S04). Then the other CPUs: started through a trampoline with per-CPU state behind GS (S05), scheduling from one run queue (S06), TLB shootdown and user threads anywhere (S07), and the Go kernel with a P per CPU (S08). Four CPUs run a CPU-bound program 3.8 times faster than one, and `make test` is green with four and with one.

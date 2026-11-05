@@ -15,6 +15,10 @@ LOADER_SEG         equ 0x1000      ; loader loaded at 0x1000:0000 = 0x10000
 LOADER_ADDR        equ 0x10000
 LOADER_MAX_SECT    equ 512         ; 256 KiB cap
 LOADER_STACK_TOP   equ 0x80000
+; VBE scratch (W21-S01), between stage2's slot and the loader; free after boot
+VBE_INFO_ADDR      equ 0xC000      ; VbeInfoBlock, 512 B (4F00)
+VBE_MODE_ADDR      equ 0xC200      ; ModeInfoBlock of the chosen mode, 256 B (4F01)
+VBE_REQ_ADDR       equ 0xC400      ; the "video" payload's sector, 512 B
 
 ; ---- disk layout
 MANIFEST_LBA       equ 1
@@ -51,6 +55,14 @@ ME_LBA             equ 16
 ME_SECTORS         equ 20
 ME_SIZE_BYTES      equ 24
 ME_CRC32           equ 32
+
+; ---- struct video_request offsets (manifest.h; the "video" payload, W21)
+VR_MAGIC           equ 0
+VR_WIDTH           equ 4
+VR_HEIGHT          equ 6
+VR_BPP             equ 8
+VR_PITCH           equ 12
+VIDEO_MAGIC_DW     equ 0x52444956  ; "VIDR" little-endian
 
 ; ---- serial (COM1)
 COM1               equ 0x3F8

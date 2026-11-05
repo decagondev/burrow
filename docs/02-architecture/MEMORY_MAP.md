@@ -16,6 +16,7 @@ Two maps matter: the **physical** layout while booting (fixed addresses, chosen 
 | `0x06000 - 0x07BFF` | ~7 KiB | Real/protected-mode stack (grows down from `0x7C00`) | `stage1.asm` |
 | `0x07C00 - 0x07DFF` | 512 B | stage1 | BIOS convention |
 | `0x07E00 - 0x0BDFF` | 16 KiB | stage2 slot | `STAGE2_ADDR` |
+| `0x0C000 - 0x0C5FF` | 1.5 KiB | stage2's VBE scratch (W21-S01): VbeInfoBlock at `0xC000`, the chosen ModeInfoBlock at `0xC200`, the `video` payload's sector at `0xC400`; between the stage2 slot and the loader, free after boot | `VBE_*_ADDR` in `boot_abi.inc` |
 | `0x08000 - 0x08FFF` | 4 KiB | after boot: the APs' trampoline (`nucleus/ap.asm`, copied there by `smp_init`; SIPI vector 0x08; W20-S05) | `TRAMPOLINE_PA` |
 | `0x10000 - 0x4FFFF` | 256 KiB max | loader image + .bss | `LOADER_ADDR`, `LOADER_MAX_SECT` |
 | `0x50000 - 0x7FFFF` | 192 KiB | loader stack (top `0x80000`) | `LOADER_STACK_TOP` |

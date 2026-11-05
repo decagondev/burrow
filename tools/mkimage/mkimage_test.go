@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"hash/crc32"
 	"testing"
 )
@@ -93,6 +94,32 @@ func TestBuildImageRejectsBadInputs(t *testing.T) {
 	for name, f := range cases {
 		if f() == nil {
 			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestVideoLayoutMatchesC(t *testing.T) {
+	v, err := ParseVideo("1280x1024x32,5248")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := v.MarshalBinary()
+	if len(raw) != 16 || string(raw[0:4]) != "VIDR" {
+		t.Fatal("16 bytes, magic at offset 0 (struct video_request)")
+	}
+	le := binary.LittleEndian
+	if le.Uint16(raw[4:]) != 1280 || le.Uint16(raw[6:]) != 1024 || raw[8] != 32 || le.Uint32(raw[12:]) != 5248 {
+		t.Fatalf("width at 4, height at 6, bpp at 8, pitch at 12: % x", raw)
+	}
+}
+
+func TestParseVideo(t *testing.T) {
+	if v, err := ParseVideo("1024x768x32"); err != nil || v.PitchBytes != 0 || v.BPP != 32 {
+		t.Fatalf("plain mode: %+v %v", v, err)
+	}
+	for _, bad := range []string{"", "1024x768", "1024x768x8", "0x768x32", "1024x768x32,4000", "1024x768x32,abc", "70000x768x32"} {
+		if _, err := ParseVideo(bad); err == nil {
+			t.Errorf("ParseVideo(%q) accepted", bad)
 		}
 	}
 }

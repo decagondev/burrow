@@ -1,0 +1,7 @@
+# Ordered markers for make vbe-smoke (W21-S01): the nucleus image with a "video"
+# payload asking for 1280x1024x32 and a padded 5248-byte scanline (VBE 4F06),
+# and one asking for a mode the BIOS does not have. Append-only.
+[stage2] entering protected mode
+[stage2] vbe: 1280x1024x32 pitch 5248 at
+[stage2] protected mode ok
+BURROW:NUCLEUS:OK

@@ -10,11 +10,12 @@
 ;     5. load_loader      - INT 13h ext reads -> 0x10000
 ;     6. check_long_mode  - CPUID: does this CPU do x86-64?
 ;     7. fill_bootinfo    - struct boot_info at 0x1000
+;     8. vbe_setup        - the VBE mode a "video" payload asks for (W21; vbe16.inc)
 ;   PROTECTED MODE (32-bit, no BIOS from here on)
-;     8. build_page_tables - identity-map the first 1 GiB with 2 MiB pages
-;     9. enable long mode  - PAE, CR3, EFER.LME, CR0.PG
+;     9. build_page_tables - identity-map the first 1 GiB with 2 MiB pages
+;    10. enable long mode  - PAE, CR3, EFER.LME, CR0.PG
 ;   LONG MODE (64-bit)
-;    10. call loader_entry(rdi = &boot_info)
+;    11. call loader_entry(rdi = &boot_info)
 ;
 ; Build: nasm -f bin -I boot/ boot/stage2.asm -o build/stage2.bin
 ; =============================================================================
@@ -50,6 +51,7 @@ s2_start:
 
     mov si, msg_pm
     call print
+    call vbe_setup               ; last: after a mode set, COM1 is the only output
 
     ; ---- Real mode -> Protected mode -------------------------------------
     cli                          ; no IDT for 32/64-bit yet: interrupts stay OFF
@@ -184,22 +186,35 @@ read_manifest:
     mov si, msg_manifest
     jmp print
 
-find_loader:
+; find_entry - DI = a 16-byte NUL-padded name. CF=0 and SI = its manifest
+; entry, or CF=1 if the manifest has none. Clobbers: CX.
+find_entry:
     mov si, MANIFEST_ADDR + MF_ENTRIES
     mov cx, [MANIFEST_ADDR + MF_COUNT]
     jcxz .missing
 .cmp:
     push cx
     push si
-    mov di, name_loader
+    push di
     mov cx, 16                   ; compare the full NUL-padded name field
     repe cmpsb
+    pop di
     pop si
     pop cx
     je  .found
     add si, ME_SIZE
     loop .cmp
 .missing:
+    stc
+    ret
+.found:
+    clc
+    ret
+
+find_loader:
+    mov di, name_loader
+    call find_entry
+    jnc .found
     mov al, 'L'
     jmp fail
 .found:
@@ -309,6 +324,7 @@ fail:
     jmp .halt
 
 %include "lib16.inc"
+%include "vbe16.inc"
 
 ; =============================================================================
 ; 32-BIT PROTECTED MODE
@@ -494,6 +510,9 @@ loader_crc:     dd 0
 
 manifest_magic: db "BRWMNFST"
 name_loader:    db "loader", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   ; 16 bytes
+name_video:     db "video", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; 16 bytes (W21)
+vbe_mode:       dw 0         ; the VBE mode set, 0 = none
+vbe_pitch:      dd 0         ; bytes per scanline the card took
 
 msg_hello:    db "[stage2] hello from stage2", 13, 10, 0
 msg_a20:      db "[stage2] a20 ok", 13, 10, 0
@@ -507,6 +526,13 @@ msg_crc_bad:  db "[stage2] FAIL K loader crc mismatch", 13, 10, 0
 msg_lm_ok:    db "[stage2] long mode ok -> loader", 13, 10, 0
 msg_returned: db "[stage2] FAIL loader returned", 13, 10, 0
 msg_fail:     db 13, 10, "[stage2] FAIL ", 0
+msg_vbe:      db "[stage2] vbe: ", 0
+msg_vbe_pitch: db " pitch ", 0
+msg_vbe_at:   db " at ", 0
+msg_vbe_mode: db " (mode 0x", 0
+msg_vbe_end:  db ")", 13, 10, 0
+msg_vbe_no:   db "[stage2] vbe: no ", 0
+msg_vbe_none: db " mode", 13, 10, 0
 
 ; stage2 must fit its 32-sector slot. NASM errors out if this goes negative.
 times (STAGE2_SECTORS * 512) - ($ - $$) db 0

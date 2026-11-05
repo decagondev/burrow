@@ -1,0 +1,5 @@
+# make vbe-smoke (W21-S01): a mode the BIOS does not list is reported and
+# nothing is set; the image boots on. Append-only.
+[stage2] vbe: no 1000x700x32 mode
+[stage2] protected mode ok
+BURROW:NUCLEUS:OK

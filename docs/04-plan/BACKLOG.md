@@ -34,7 +34,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - **E02.F01 Real-mode services**: [x] A20 (3 methods) · [x] E820 map · [x] manifest read · [x] chunked loader load.
 - **E02.F02 Mode switches**: [x] GDT + protected mode · [x] identity paging 1 GiB · [x] long mode + call C.
 - **E02.F03 Safety**: [x] CPUID long-mode check · [x] CRC-verify loader before executing (BUG-0003).
-- [ ] E02.F04.S01 As a user, I want a VBE graphics mode set in stage2, so that real hardware without Bochs-VBE still gets a framebuffer. [W21]
+- [x] E02.F04.S01 As a user, I want a VBE graphics mode set in stage2, so that real hardware without Bochs-VBE still gets a framebuffer. [W21-S01; the kernel uses it from S03]
 
 ## E03 C Loader
 *Exit: the loader loads, verifies and starts the nucleus and stages the Go kernel + initrd.*

@@ -71,7 +71,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -133,6 +133,10 @@ BOOT_PARTS := $(BUILD)/stage1.bin $(BUILD)/stage2.bin $(BUILD)/loader.bin \
 	$(BUILD)/nucleus.disk.elf $(BUILD)/mkimage
 MKIMAGE_BOOT = $(BUILD)/mkimage -o $@ -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
 	-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf
+# W21-S01: the Go images ask stage2 for a VBE mode (a "video" payload);
+# the nucleus-only images (disk.img, ktest) ask for none.
+VIDEO ?= 1024x768x32
+MKIMAGE_GO = $(MKIMAGE_BOOT) -video $(VIDEO)
 
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
@@ -203,7 +207,7 @@ $(BUILD)/initrd-busybox.tar: $(BUILD)/initrd.tar $(BUILD)/busybox
 	cp $(BUILD)/busybox $(BUILD)/initrd-busybox-root/bin/busybox
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-busybox-root $@  # modes by content (W19-S04)
 $(BUILD)/go-busybox.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-busybox.tar
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
 
 # Doom (W11): `make doom` downloads doomgeneric (pinned commit) and Freedoom
 # (pinned sha256) once (scripts/doom.sh) and builds build/doom-root/doom with
@@ -217,7 +221,7 @@ $(BUILD)/initrd-doom.tar: $(BUILD)/initrd.tar $(BUILD)/doom-root/doom
 	cp $(BUILD)/doom-root/doom $(BUILD)/initrd-doom-root/bin/doom
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-doom-root $@  # modes by content (W19-S04)
 $(BUILD)/go-doom.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-doom.tar
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar >/dev/null
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar >/dev/null
 DOOM_DRIVE := -drive file=$(BUILD)/doom-data.img,format=raw,if=ide,index=1,media=disk
 $(BUILD)/doom-data.img: $(BUILD)/doom-root/freedoom1.wad $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	rm -rf $(BUILD)/doom-data && mkdir -p $(BUILD)/doom-data
@@ -245,7 +249,7 @@ $(BUILD)/ext2.img: | $(BUILD)
 # disk.img so the nucleus images stay fast (1.7 MiB over ATA PIO costs
 # ~1.5 s per boot).
 $(BUILD)/go.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar >/dev/null
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar >/dev/null
 
 # One image per ktest suite: the same boot chain plus a "ktest" payload that
 # names the in-kernel tests to run (nucleus/ktest.h).
@@ -263,7 +267,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -324,7 +328,7 @@ doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # bytes are known to have reached the disk.
 $(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
 disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest $(BUILD)/user/linktest
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
@@ -485,7 +489,7 @@ $(BUILD)/initrd-ports.tar: $(BUILD)/initrd.tar $(BUILD)/ports-root/bin/lua
 	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-ports-root/
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-ports-root $@  # modes by content (W19-S04)
 $(BUILD)/go-ports.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-ports.tar
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-ports.tar >/dev/null
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-ports.tar >/dev/null
 ports-dl-smoke:
 	@if [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory ports-dl-smoke-run; \
 	else echo "PORTS SMOKE SKIP (make ports downloads and builds Lua, C++ and TinyCC)"; fi
@@ -507,7 +511,7 @@ $(BUILD)/initrd-dev.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/ports-roo
 	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-dev-root/
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-dev-root $@  # modes by content (W19-S04)
 $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
@@ -522,7 +526,7 @@ ROOT_IMG ?= burrow-root.img
 ROOT_SRC := $(BUILD)/busybox scripts/mkroot.py $(wildcard initrd/etc/*)
 $(BUILD)/go-unix.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo login > $(BUILD)/kargs-unix.txt
-	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-unix.txt >/dev/null
 $(BUILD)/root-test.img: $(ROOT_SRC)
 	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $@
@@ -664,6 +668,17 @@ regress: $(BUILD)/disk.img $(BUILD)/go.img
 # PIT-09: the Go runtime's syscall set (host strace) vs the pinned census.
 census:
 	GO="$(GO)" tests/regression/census.sh $(BUILD)
+
+# W21-S01: stage2 sets a VBE mode from a "video" payload: an odd one with a
+# padded scanline (4F06), and one the BIOS does not have (reported, boots on).
+vbe-smoke: $(BOOT_PARTS)
+	@mkdir -p $(BUILD)/vbe
+	$(BUILD)/mkimage -o $(BUILD)/vbe/odd.img -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
+		-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf -video 1280x1024x32,5248 >/dev/null
+	$(BUILD)/mkimage -o $(BUILD)/vbe/none.img -stage1 $(BUILD)/stage1.bin -stage2 $(BUILD)/stage2.bin \
+		-payload loader=$(BUILD)/loader.bin -payload nucleus=$(BUILD)/nucleus.disk.elf -video 1000x700x32 >/dev/null
+	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/vbe/odd.img tests/smoke/expect/vbe-odd.txt
+	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/vbe/none.img tests/smoke/expect/vbe-none.txt
 
 # kernel/fs/fat against mkfs.fat/fsck.fat/mtools, both ways (skips without them).
 # W20-S04: the machine's ACPI tables on four CPUs, and a real power-off

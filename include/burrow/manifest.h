@@ -45,4 +45,23 @@ struct manifest {
 _Static_assert(sizeof(struct manifest_entry) == 40, "abi drift");
 _Static_assert(sizeof(struct manifest) <= 512, "manifest must fit one sector");
 
+/* The "video" payload (W21-S01): the display mode an image asks stage2 to
+ * set through VBE. Written by `mkimage -video WxHxB[,pitch]`
+ * (tools/mkimage/video.go), read only by stage2 (VR_* in boot_abi.inc). An
+ * image without one gets no VBE mode at all (the Go kernel uses DISPI). */
+#define VIDEO_MAGIC "VIDR"            /* 4 bytes, no NUL stored */
+
+struct video_request {
+    char     magic[4];                /* 0x00 "VIDR"                          */
+    uint16_t width;                   /* 0x04 pixels                          */
+    uint16_t height;                  /* 0x06 pixels                          */
+    uint8_t  bpp;                     /* 0x08 15, 16, 24 or 32                */
+    uint8_t  reserved[3];             /* 0x09 0                               */
+    uint32_t pitch_bytes;             /* 0x0C a padded scanline (4F06), 0 = the mode's own */
+} __attribute__((packed));            /* 16 bytes */
+
+_Static_assert(sizeof(struct video_request) == 16, "abi drift");
+_Static_assert(__builtin_offsetof(struct video_request, bpp) == 8, "abi drift");
+_Static_assert(__builtin_offsetof(struct video_request, pitch_bytes) == 12, "abi drift");
+
 #endif /* BURROW_MANIFEST_H */

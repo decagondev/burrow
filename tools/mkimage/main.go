@@ -1,7 +1,7 @@
 // mkimage assembles the Burrow boot disk.
 //
 //	mkimage -o build/disk.img -stage1 build/stage1.bin -stage2 build/stage2.bin \
-//	        -payload loader=build/loader.bin [-payload kernel=build/kernel.elf ...]
+//	        -payload loader=build/loader.bin [-payload kernel=build/kernel.elf ...] [-video 1024x768x32]
 //	mkimage -inspect build/disk.img
 package main
 
@@ -23,6 +23,7 @@ func main() {
 	s2 := flag.String("stage2", "", "stage2 binary (<= 16 KiB)")
 	minMiB := flag.Int("min-mib", 4, "pad image to at least this many MiB")
 	inspect := flag.String("inspect", "", "print the manifest of an existing image and exit")
+	video := flag.String("video", "", "WxHxB[,pitch]: a \"video\" payload asking stage2 for that VBE mode (W21-S01)")
 	var payloads payloadFlags
 	flag.Var(&payloads, "payload", "name=path (repeatable, order = disk order)")
 	flag.Parse()
@@ -46,6 +47,14 @@ func main() {
 			fail(fmt.Errorf("bad -payload %q, want name=path", spec))
 		}
 		ps = append(ps, Payload{Name: name, Data: mustRead(path)})
+	}
+	if *video != "" {
+		v, err := ParseVideo(*video)
+		if err != nil {
+			fail(err)
+		}
+		b, _ := v.MarshalBinary()
+		ps = append(ps, Payload{Name: VideoPayloadName, Data: b})
 	}
 	img, m, err := BuildImage(stage1, stage2, ps, *minMiB<<20)
 	if err != nil {

@@ -29,6 +29,8 @@ Entry: `name[16]` (NUL padded, must end in NUL), `lba u32`, `sectors u32`, `size
 
 Validation rules (`loader/manifest.c`, unit-tested): magic, version, count range, name terminated, `sectors*512 >= size_bytes`, every non-stage2 entry starts at LBA >= 34.
 
+**The `video` payload (W21-S01).** `mkimage -video WxHxB[,pitch]` adds a 16-byte payload named `video`, `struct video_request` in `manifest.h` (mirrored by `VR_*` in `boot_abi.inc` and `tools/mkimage/video.go`): magic `VIDR` at 0, width u16 at 4, height u16 at 6, bpp u8 at 8, three reserved bytes, pitch_bytes u32 at 12 (0 = the mode's own scanline). stage2 reads it, as its last real-mode step, and sets a VBE mode: 4F00 for the mode list (`VBE2` in), 4F01 for each mode until one is linear (attributes bits 0, 4 and 7), direct colour (memory model 6) and of the requested width, height and depth, 4F02 with bit 14 (linear) to set it, then 4F06 BL=2 for a requested pitch, keeping what the card answers (it may round: 1700 bytes at 800x600x16 became 1696). It prints `[stage2] vbe: WxHxB pitch P at BASE (mode 0xM)`, or `[stage2] vbe: no WxHxB mode` and sets nothing; both go to COM1 only, because after 4F02 the BIOS teletype has no text mode to write to. Its scratch is at 0xC000-0xC5FF (MEMORY_MAP.md); the chosen ModeInfoBlock stays at 0xC200 for boot_info (S02). The loader reads `video` like any payload, so it also arrives as a 16-byte boot module. The Go images ask for 1024x768x32 (`VIDEO ?=` in the Makefile); `disk.img` and the ktest images ask for nothing.
+
 ## 3. `struct boot_info` (physical 0x1000)
 
 Defined in `include/burrow/boot_info.h` with `_Static_assert` offsets.
@@ -82,6 +84,7 @@ Every stage prints a one-letter code on COM1 and the screen (real mode only), th
 | stage2 | `B` | loader > 256 KiB | raise `LOADER_MAX_SECT` and the memory map |
 | stage2 | `C` | CPU lacks long mode | use `-cpu qemu64` |
 | stage2 | `K` | loader CRC mismatch | corrupted image / chunked read bug (REG-0001) |
+| stage2 | `V` | the `video` payload is corrupt, or VBE would not set a mode it listed (W21) | rebuild with `mkimage -video`; another VGA device |
 | loader | `PANIC: <text>` | see the message | `build/smoke-*.log` |
 | nucleus | `[nucleus] PANIC: <text>` | see the message | boot_info v2 fields; `make debug` + `add-symbol-file build/nucleus.elf` |
 
