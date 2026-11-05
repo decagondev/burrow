@@ -173,5 +173,11 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - Later: ext3/ext4 (journal, extents) · ACLs and extended attributes · capabilities · `/proc` · ssh (dropbear, with E17).
 
 ## E12 Hardening & Evolution
-*Exit: a platform worth extending.* [later]
-- SMP (APs via INIT-SIPI, per-CPU GS, `GOMAXPROCS>1`) · SMEP/SMAP/NX everywhere · UEFI front-end producing boot_info · virtio-blk/virtio-net (networking itself is E17) · real-hardware boot · XSAVE/AVX state · ACPI shutdown.
+*Exit: a platform worth extending.* [W20, then later]
+- [ ] E12.F01 As a kernel dev, I want a hang to leave evidence (every process and thread with what it waits on) and BUG-0023 found, so that races are fixed before more CPUs make them worse. [W20]
+- [ ] E12.F02 As a user, I want SMEP, SMAP and NX on, so that a kernel bug cannot run or quietly read user memory. [W20]
+- [ ] E12.F03 As a porter, I want XSAVE state and a CPU with AVX, so that programs using AVX run and keep their registers. [W20]
+- [ ] E12.F04 As a user, I want ACPI: the machine's CPUs from the MADT and a real poweroff, so that Burrow knows what it runs on and turns it off. [W20]
+- [ ] E12.F05 As a user, I want every CPU running threads (APs started, one run queue, IPIs, TLB shootdown), so that programs and the Go kernel run in parallel. [W20]
+- [ ] E12.F06 As a porter, I want `nproc` and the Go runtime to see every CPU (`GOMAXPROCS>1`), so that parallel programs speed up. [W20]
+- Later: per-CPU run queues and balancing · an I/O APIC · a tickless timer · UEFI front-end producing boot_info · virtio-blk/virtio-net · real-hardware boot.
