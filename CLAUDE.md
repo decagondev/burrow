@@ -14,11 +14,13 @@ The build targets Linux/WSL (bash, gcc, nasm, qemu, go 1.22+, python3). On this 
 make              # build/disk.img (stage1 + stage2 + loader via tools/mkimage)
 make run          # boot in QEMU, serial on stdio (Ctrl-A X quits)
 make debug        # QEMU paused on :1234; then: gdb -x scripts/gdbinit
-make test         # test-unit + census + fat-interop + ext2-interop + smoke + go-smoke + devices-smoke + disk-smoke + ports-smoke + mem-smoke + desk-smoke + ports-dl-smoke + dev-smoke + doom-smoke + busybox-smoke + qt-smoke + x11-smoke + desktop-smoke + net-smoke + unix-smoke + ktest + regress (full suite)
+make test         # test-unit + census + fat-interop + ext2-interop + smoke + go-smoke + devices-smoke + disk-smoke + ports-smoke + mem-smoke + desk-smoke + ports-dl-smoke + dev-smoke + doom-smoke + busybox-smoke + qt-smoke + x11-smoke + desktop-smoke + net-smoke + unix-smoke + acpi-smoke + poweroff-smoke + ktest + regress (full suite)
 make test-c       # host C unit tests (gcc, ASan+UBSan) -> build/unit_tests
 make test-go      # go vet + go test in tools/ and kernel/ (separate modules)
 make smoke        # boot headless, assert ordered serial markers
 make ktest        # boot one image per tests/ktest/<suite>.txt, run the in-kernel tests
+make acpi-smoke   # the nucleus on -smp 4: its ACPI tables count four CPUs (W20-S04; part of make test)
+make poweroff-smoke # go.img without the debug-exit device: poweroff must turn QEMU off through ACPI S5 (part of make test)
 make go-smoke     # boot build/go.img (nucleus + Go kernel), check tests/smoke/expect/boot_to_go.txt
 make mem-smoke    # 2 GiB guest: syslat (BUG-0014), memtest 1.5 GiB, an out-of-memory kill (part of make test; ~2.5 min)
 make desk-smoke   # the M14 demo: startup, mmaptest, socktest, socknames, mousetest, paint (KD_GRAPHICS, a drag, a crash), pixels checked

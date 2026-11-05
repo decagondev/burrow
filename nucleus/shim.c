@@ -6,6 +6,7 @@
  * failure") and return -ENOSYS: after a Go upgrade, boot and read the log.
  * Numbers and errno values are Linux's, so musl user programs (W9) reuse
  * the table. */
+#include "acpi.h"
 #include "shim.h"
 #include "boot.h"
 #include "io.h"
@@ -75,6 +76,7 @@ static long nu_physmap_base(struct syscall_frame *f) { (void)f; return (long)boo
 static long nu_debug_exit(struct syscall_frame *f) {
     kprintf("[shim] nu_debug_exit(%llx)\n", (unsigned long long)SYSARG0(f));
     qemu_exit((uint8_t)SYSARG0(f));    /* ends a QEMU test run; a no-op without the device */
+    if (SYSARG0(f) == 0x10) acpi_poweroff();   /* W20-S04: still here? no test device: turn it off */
     return 0;
 }
 /* Blocks this thread (and only it) until the ISA line fires: ADR-0005. */

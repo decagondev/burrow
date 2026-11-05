@@ -29,6 +29,7 @@ TEST(pmm_counts_usable_frames); TEST(pmm_never_hands_out_reserved); TEST(pmm_all
 TEST(pmm_skips_frame_zero);
 TEST(regions_hint_or_first_fit); TEST(regions_first_fit_uses_gaps); TEST(regions_covers_neighbours);
 TEST(regions_release_splits_and_trims); TEST(regions_full_table);
+TEST(acpi_qemu_like); TEST(acpi_xsdt_ebda_override); TEST(acpi_bad_checksums); TEST(acpi_error_names);
 TEST(go_stack_layout);
 TEST(go_stack_split_words);
 
@@ -64,6 +65,8 @@ int main(void) {
     puts("[regions]");  RUN(regions_hint_or_first_fit); RUN(regions_first_fit_uses_gaps);
                         RUN(regions_covers_neighbours); RUN(regions_release_splits_and_trims);
                         RUN(regions_full_table);
+    puts("[acpi]");     RUN(acpi_qemu_like); RUN(acpi_xsdt_ebda_override); RUN(acpi_bad_checksums);
+                        RUN(acpi_error_names);
     puts("[go_stack]"); RUN(go_stack_layout); RUN(go_stack_split_words);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;

@@ -8,7 +8,7 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line; the ISR masked it) | W7 (done) |
 | 0x1002 | `nu_bootinfo` | buf, len | bytes copied of boot_info v2 (at most 128); the module table it points to is read through the physmap | W8 (done: `amd64.BootInfo`) |
 | 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 (done: `amd64.PhysmapBase`) |
-| 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; returns 0 where there is no debug-exit device | W6 (done: `amd64.DebugExit`) |
+| 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; where there is no debug-exit device, code 0x10 (the console's `poweroff`) turns the machine off through ACPI S5 (W20-S04), and the call returns 0 only if neither worked | W6 (done: `amd64.DebugExit`) |
 | 0x1005 | `nu_mmio_map` | pa, len | virtual address of pa (physmap + pa), mapped uncached and NX; `-EINVAL` for len 0, over 256 MiB or past 2^46 | W8 (done: `amd64.MapMMIO`) |
 | 0x1006 | `nu_mem_info` | buf | 16; writes `{total, free}` (uint64 bytes) of the RAM the frame allocator manages, for `sysinfo` (free includes the 32 MiB kept for the kernel) | W14 |
 | 0x1007 | `nu_set_realtime` | unix_ns | 0; wall time is unix_ns now: from here on `clock_gettime` answers `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` with it, every other clock stays monotonic since boot. Go calls it once, from the CMOS clock | W14 |

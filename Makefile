@@ -67,7 +67,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -259,7 +259,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -269,7 +269,7 @@ UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
-	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c
+	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
@@ -653,6 +653,14 @@ census:
 	GO="$(GO)" tests/regression/census.sh $(BUILD)
 
 # kernel/fs/fat against mkfs.fat/fsck.fat/mtools, both ways (skips without them).
+# W20-S04: the machine's ACPI tables on four CPUs, and a real power-off
+# (ACPI S5, with no debug-exit device: QEMU must turn itself off).
+acpi-smoke: $(BUILD)/disk.img
+	@mkdir -p $(BUILD)/acpi && cp $(BUILD)/disk.img $(BUILD)/acpi/disk.img
+	QEMU="$(QEMU)" QEMU_EXTRA="-smp 4" tests/smoke/smoke.sh $(BUILD)/acpi/disk.img tests/smoke/expect/acpi-smp.txt
+poweroff-smoke: $(BUILD)/go.img
+	QEMU="$(QEMU)" QEMU_CPU="$(QEMU_CPU)" MEM=$(GO_MEM) python3 tests/smoke/poweroff.py $(BUILD)/go.img 90
+
 fat-interop: $(BUILD)/data.img
 	GO="$(GO)" tests/regression/fat_interop.sh $(BUILD)
 

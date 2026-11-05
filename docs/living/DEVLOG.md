@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S04 ACPI
+
+**Did:** a host-tested ACPI reader (RSDP, RSDT/XSDT, MADT, FADT, `\_S5` from the DSDT), the CPU list at boot, and a real power-off: `poweroff` with no test device now turns QEMU off through ACPI S5.
+
+**Surprise:** QEMU's `\_S5` package sits within twelve bytes of the end of my test table, and my scan stopped twelve bytes early; the unit test caught it before any machine did.
+
+**Next:** W20-S05: the application processors.
+
 ## 2026-11-05 — W20-S03 XSAVE and AVX
 
 **Did:** XSAVE in place of FXSAVE when the CPU has it, with AVX's state kept per thread, and a CPU that offers AVX: QEMU's Broadwell model.
