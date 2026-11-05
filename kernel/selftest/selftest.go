@@ -51,6 +51,7 @@ var checks = []check{
 	{"goroutine_ping_pong", checkPingPong},
 	{"sync", checkSync},
 	{"gc_stress", checkGC},
+	{"parallel", checkParallel},
 }
 
 // Run executes every check in order and stops at the first failure.

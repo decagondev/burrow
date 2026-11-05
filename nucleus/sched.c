@@ -19,6 +19,10 @@
 #include "tlb.h"
 
 #define MSR_FS_BASE 0xC0000100u
+/* An idle CPU polls this long for a kick before it halts (W20-S08): waking a
+ * halted CPU by IPI costs tens of microseconds under QEMU, and a request
+ * and its answer often cross CPUs (a user thread, Go's dispatcher). */
+#define IDLE_POLL_NS 200000ull
 
 extern void switch_to(struct thread *prev, struct thread *next);   /* switch.asm */
 
@@ -83,16 +87,34 @@ static void schedule_locked(void) {
 /* A new thread's first instructions run here with the lock still held. */
 void sched_start_tail(void) { spin_unlock(&g_sched_lock); }
 
-/* Lock held: an IPI to one idle CPU that may run t (not this one: its own
- * idle loop or tick finds t). */
+/* Lock held: tells one idle CPU that may run t (not this one: its own idle
+ * loop or tick finds t), and one not told already, so a burst of wake-ups
+ * spreads. A polling CPU sees the flag; a halted one also gets the IPI. The
+ * flag is set before halted is read, as the idle loop sets halted before
+ * reading the flag (both sequentially consistent): one of them sees the other. */
 void sched_kick(const struct thread *t) {
     uint32_t self = this_cpu()->index, n = smp_cpu_count();
     for (uint32_t i = 0; i < n; i++) {
         struct percpu *c = &g_cpus[i];
-        if (i == self || !c->idle || c->current != c->idle || !can_run_on(t, i)) continue;
-        lapic_send_ipi((uint8_t)c->apic_id, VEC_WAKE);
+        if (i == self || !c->idle || c->current != c->idle || !can_run_on(t, i) || c->kicked) continue;
+        __atomic_store_n(&c->kicked, 1, __ATOMIC_SEQ_CST);
+        if (__atomic_load_n(&c->halted, __ATOMIC_SEQ_CST)) lapic_send_ipi((uint8_t)c->apic_id, VEC_WAKE);
         return;
     }
+}
+
+/* Idle and nothing to run: poll for a kick (or mailbox work) a little, then
+ * halt until an interrupt. IF=1 on entry and exit. */
+static void idle_wait(struct percpu *c) {
+    uint64_t until = time_monotonic_ns() + IDLE_POLL_NS;
+    while (time_monotonic_ns() < until)
+        if (__atomic_load_n(&c->kicked, __ATOMIC_ACQUIRE) || c->fn) return;
+        else cpu_pause();
+    cpu_cli();
+    __atomic_store_n(&c->halted, 1, __ATOMIC_SEQ_CST);
+    if (!__atomic_load_n(&c->kicked, __ATOMIC_SEQ_CST) && !c->fn) cpu_sti_hlt();   /* an IPI after sti ends the hlt */
+    __atomic_store_n(&c->halted, 0, __ATOMIC_RELAXED);
+    cpu_sti();
 }
 
 static void wake_sleepers(void) {
@@ -119,19 +141,20 @@ void sched_on_tick(void) {
 }
 
 /* Every CPU's idle thread: run the mailbox (smp.c), any runnable thread,
- * else hlt. The check and sti;hlt are one step: a kick that lands after
- * the check is taken right after sti and ends the hlt. */
+ * else poll for a kick and then hlt (idle_wait). */
 void sched_idle(void) {
+    struct percpu *c = this_cpu();     /* the idle thread never leaves its CPU */
     for (;;) {
         cpu_cli();
         smp_mailbox_run();
         spin_lock(&g_sched_lock);
+        c->kicked = 0;                  /* this look covers every kick so far */
         uint64_t before = g_switches;
         schedule_locked();
         int ran = g_switches != before;
         spin_unlock(&g_sched_lock);
-        if (ran) cpu_sti();             /* there may be more: look again */
-        else cpu_sti_hlt();
+        cpu_sti();
+        if (!ran) idle_wait(c);         /* else there may be more: look again */
     }
 }
 

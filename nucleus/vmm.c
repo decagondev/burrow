@@ -194,7 +194,10 @@ int vm_fault_in(struct addr_space *as, uint64_t va) {
     va &= ~(PAGE_4K - 1);
     uint64_t flags, f = spin_lock_irqsave(&g_vm_lock);
     int done = 0;
-    if (pt_discarded(&as->pt, va, &flags)) {
+    uint64_t pa_now;
+    if (pt_translate(&as->pt, va, &pa_now, &flags) == PT_OK) {
+        done = 1;          /* BUG-0027: another CPU filled it since our fault; retry the access */
+    } else if (pt_discarded(&as->pt, va, &flags)) {
         uint64_t pa = frame_alloc_zeroed();
         done = -1;                                 /* marked, but no frame to give it */
         if (pa && pt_map(&as->pt, va, pa, PAGE_4K, flags & g_nx_mask) == PT_OK) done = 1;

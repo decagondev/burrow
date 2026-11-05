@@ -113,13 +113,26 @@ func TestSchedAndMembarrier(t *testing.T) {
 	if e := r.call(p, 145, 999); e != -int64(syscall.ESRCH) {
 		t.Errorf("sched_getscheduler(999) = %d, want ESRCH", e)
 	}
+	restore := proc.SetNumCPU(1)
+	defer restore()
 	r.put(p, scratch, []byte{1, 0, 0, 0, 0, 0, 0, 0})
 	if e := r.call(p, 203, 0, 8, scratch); e != 0 {
 		t.Errorf("sched_setaffinity(cpu 0) = %d", e)
 	}
 	r.put(p, scratch, []byte{2})
 	if e := r.call(p, 203, 0, 8, scratch); e != -int64(syscall.EINVAL) {
-		t.Errorf("sched_setaffinity(cpu 1 only) = %d, want EINVAL", e)
+		t.Errorf("sched_setaffinity(cpu 1 only) on one CPU = %d, want EINVAL", e)
+	}
+	proc.SetNumCPU(4) // W20-S08; the deferred restore still puts the real count back
+	if e := r.call(p, 203, 0, 8, scratch); e != 0 {
+		t.Errorf("sched_setaffinity(cpu 1 only) on four CPUs = %d", e)
+	}
+	r.put(p, scratch, []byte{0x10})
+	if e := r.call(p, 203, 0, 8, scratch); e != -int64(syscall.EINVAL) {
+		t.Errorf("sched_setaffinity(cpu 4 only) on four CPUs = %d, want EINVAL", e)
+	}
+	if e := r.call(p, 204, 0, 8, scratch); e != 8 || le.Uint64(read(p, scratch, 8)) != 0xF {
+		t.Errorf("sched_getaffinity on four CPUs = %d, mask %#x", e, le.Uint64(read(p, scratch, 8)))
 	}
 	if n := r.call(p, 324, 0, 0); n != 0 {
 		t.Errorf("membarrier QUERY = %d, want 0 (no commands)", n)

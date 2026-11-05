@@ -59,6 +59,7 @@ int kt_syscall_write(void);
 int kt_shim_unknown_once(void);
 int kt_madvise_dontneed_zeroes(void);
 int kt_madvise_returns_frames(void);
+int kt_bug0027_fault_in_present(void);
 int kt_nu_bootinfo_mmio(void);
 int kt_nu_mem_info(void);
 int kt_nu_set_realtime(void);

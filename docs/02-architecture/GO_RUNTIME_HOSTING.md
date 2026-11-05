@@ -63,7 +63,7 @@ The nucleus, acting like `execve`:
 | `fcntl(0..2, F_GETFD)` | return 0 | Go >= 1.22 checks std fds and throws otherwise |
 | `openat` | `-ENOENT` | THP size probe, harmless |
 | `rt_sigaction`, `rt_sigprocmask`, `sigaltstack` | accept, never deliver | no signals in-kernel |
-| `sched_getaffinity` | 1 CPU mask | `ncpu` |
+| `sched_getaffinity` | a bit per CPU online (1 CPU before W20-S08) | `ncpu`, so GOMAXPROCS |
 | `getrlimit` | fixed values | `os` package init |
 | `epoll_create1/ctl/pwait`, `pipe2` | minimal: one wake pipe + timed sleep | netpoller drives timers |
 | `exit_group` | kernel panic | the kernel must never exit |

@@ -8,6 +8,7 @@ package proc
 
 import (
 	"encoding/binary"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -112,8 +113,22 @@ func sysSchedGetparamFn(p *Process, a [6]uint64) (int64, bool) {
 // sched_getscheduler(pid): SCHED_OTHER (0).
 func sysSchedGetschedulerFn(p *Process, a [6]uint64) (int64, bool) { return ok(p.schedTarget(a[0])) }
 
-// sched_setaffinity(pid, len, mask): accepted when the mask holds CPU 0,
-// the only one.
+// numCPU is how many CPUs are online: the Go runtime's count, which the
+// nucleus's sched_getaffinity gave it (a variable so tests can pick one).
+var numCPU = runtime.NumCPU
+
+// onlineMask has a bit for each online CPU, 0 to numCPU()-1.
+func onlineMask() uint64 {
+	n := numCPU()
+	if n >= 64 {
+		return ^uint64(0)
+	}
+	return 1<<uint(n) - 1
+}
+
+// sched_setaffinity(pid, len, mask): accepted when the mask holds a CPU
+// that is online; the nucleus keeps running the threads anywhere (affinity
+// is not enforced, W20).
 func sysSchedSetaffinityFn(p *Process, a [6]uint64) (int64, bool) {
 	if e := p.schedTarget(a[0]); e < 0 {
 		return ok(e)
@@ -121,11 +136,15 @@ func sysSchedSetaffinityFn(p *Process, a [6]uint64) (int64, bool) {
 	if a[1] == 0 {
 		return ok(-int64(syscall.EINVAL))
 	}
-	var b [1]byte
-	if err := p.mem.CopyIn(a[2], b[:]); err != nil {
+	var b [8]byte
+	n := a[1]
+	if n > 8 {
+		n = 8
+	}
+	if err := p.mem.CopyIn(a[2], b[:n]); err != nil {
 		return ok(errno(err))
 	}
-	if b[0]&1 == 0 {
+	if binary.LittleEndian.Uint64(b[:])&onlineMask() == 0 {
 		return ok(-int64(syscall.EINVAL))
 	}
 	return ok(0)

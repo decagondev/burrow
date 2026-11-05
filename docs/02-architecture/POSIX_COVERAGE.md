@@ -93,8 +93,8 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 200, 234 | `tkill` `tgkill` | done | W12 | a signal for one thread; `kill`'s permission check since W19 |
 | 137, 138 | `statfs` `fstatfs` | partial | W16 | `f_type` names the file system (`TMPFS_MAGIC` for `/tmp` and `/dev`, `RAMFS_MAGIC` for the initrd, `MSDOS_SUPER_MAGIC` for FAT), `f_bsize` 4096, `f_namelen` 255; sizes read as 0 |
 | 202 | `futex` | partial | W12 | `WAIT WAKE WAIT_BITSET WAKE_BITSET REQUEUE CMP_REQUEUE`, timeouts (`FUTEX_CLOCK_REALTIME` deadlines since W14), `EINTR`; private to an address space (no PI, no robust lists) |
-| 203 | `sched_setaffinity` | done | W14 | one CPU: accepted when the mask holds CPU 0, else `-EINVAL` |
-| 204 | `sched_getaffinity` | done | W12 | one CPU |
+| 203 | `sched_setaffinity` | done | W14 | accepted when the mask holds a CPU that is online, else `-EINVAL`; not enforced (W20-S08) |
+| 204 | `sched_getaffinity` | done | W12 | every CPU online since W20-S08 (one before) |
 | 213, 291 | `epoll_create` `epoll_create1` | done | W12 | `EPOLL_CLOEXEC` |
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
 | 218 | `set_tid_address` | done | W12 | the word is cleared and futex-woken when the thread exits |

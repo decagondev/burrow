@@ -156,12 +156,15 @@ func sysExitGroupFn(t *Thread, a [6]uint64) (int64, bool) {
 // sched_yield: the nucleus schedules ring-3 threads; answering is a yield.
 func sysSchedYieldFn(*Thread, [6]uint64) (int64, bool) { return ok(0) }
 
-// sched_getaffinity: one CPU.
+// sched_getaffinity: every CPU online (W20-S08: the nucleus tells the Go
+// runtime, whose NumCPU is the count; nproc and sysconf follow).
 func sysSchedGetaffinityFn(t *Thread, a [6]uint64) (int64, bool) {
 	if a[1] < 8 {
 		return ok(-int64(syscall.EINVAL))
 	}
-	if err := t.p.mem.CopyOut(a[2], []byte{1, 0, 0, 0, 0, 0, 0, 0}); err != nil {
+	var mask [8]byte
+	binary.LittleEndian.PutUint64(mask[:], onlineMask())
+	if err := t.p.mem.CopyOut(a[2], mask[:]); err != nil {
 		return ok(errno(err))
 	}
 	return ok(8) // bytes of mask written

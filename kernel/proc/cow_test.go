@@ -197,3 +197,24 @@ func TestCowForkBatchedAndPageByPage(t *testing.T) {
 		}
 	}
 }
+
+// BUG-0027: two threads of one process fault on the same page on different
+// CPUs; the second takes the lock after the first filled the page or broke
+// its copy-on-write. Its fault must resume, not raise SIGSEGV.
+func TestBUG0027SecondFaultOnAPageAlreadyHandledResumes(t *testing.T) {
+	nu := proctest.New()
+	m := cowMem(t, nu)
+	c, err := m.Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := c.FaultIn(cowVA, true); f != proc.FaultResume {
+		t.Fatalf("first write fault = %v, want resume (copy)", f)
+	}
+	if f := c.FaultIn(cowVA, true); f != proc.FaultResume {
+		t.Fatalf("second write fault after the copy = %v, want resume", f)
+	}
+	if f := c.FaultIn(cowVA+proc.PageSize, false); f != proc.FaultResume {
+		t.Fatalf("not-present read fault on a backed page = %v, want resume", f)
+	}
+}

@@ -24,7 +24,7 @@
 | M17 | On the network | busybox `wget` from the host, a Go program fetching an HTTPS page, `httpd` inside Burrow reached from the host (done: `make net-smoke`, `make run-net`) | W17 |
 | M18 | Bigger programs | Doom in X through MIT-SHM at three quarters of its fbdev rate, a 64 MiB process forks in milliseconds, a dynamic program and `dlopen` (done: `make mem-bench`, `make x11-bench`, `make ports-smoke`) | W18 |
 | M19 | A multi-user Unix | boot an ext2 root disk to `login:`, a user denied `/etc/passwd`, `su` with a password, `adduser`, a symbolic link; all still there after a reboot, `e2fsck` clean (done: `make unix-smoke`, `make run-unix`) | W19 |
-| M20 | Many CPUs, hardened | four CPUs online, `nproc` 4, a four-thread program at least 2.5 times faster, `GOMAXPROCS=4`, SMEP and SMAP on, ACPI poweroff, `make test` green on four CPUs (planned: `make smp-bench`) | W20 |
+| M20 | Many CPUs, hardened | four CPUs online, `nproc` 4, a four-thread program at least 2.5 times faster, `GOMAXPROCS=4`, SMEP and SMAP on, ACPI poweroff, `make test` green on four CPUs (done: `make smp-bench`, 3.8x for C and 4.0x for Go; `make test` with `SMP=4` and `SMP=1`) | W20 |
 | M21 | A firmware framebuffer | stage2 sets a VBE mode; the console, `/dev/fb0` programs, Doom and X draw at 1280x1024 with a padded pitch from boot_info; the framebuffer is write-combining; DISPI still serves images that ask for no mode (planned: `make fb-smoke`) | W21 |
 
 ```mermaid
@@ -49,7 +49,8 @@ flowchart TB
     classDef done fill:#2e7d32,color:#fff;
     classDef next fill:#f9a825,color:#000;
     classDef later fill:#e6eaee,color:#333,stroke-dasharray: 4 3;
-    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15,W16,W17,W18,W19 done;
+    class W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15,W16,W17,W18,W19,W20 done;
+    class W21 next;
     class X later;
 ```
 
@@ -57,7 +58,7 @@ Green = done, yellow = next, grey = planned.
 
 ## Critical path and risk
 
-The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. W17 put it on the network: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, servers inside Burrow and HTTPS from a Go program. W18 laid the foundations bigger programs want: copy-on-write fork, lazy `execve`, shared memory with MIT-SHM, dynamic linking. W19 made it a multi-user Unix: ext2 read and written, users and groups, permissions, links, and an ext2 root disk that boots to `login:`. Next is W20 (E12): the CPU's protections (SMEP, SMAP, XSAVE), ACPI, and every CPU running threads; then W21 (E02.F04, E07.F04): the framebuffer from the firmware (VBE in stage2, a boot_info descriptor, any geometry and pixel format, write-combining), the bring-up step real hardware needs that QEMU's DISPI device lets us skip; then the rest of E18 (sound, an absolute pointer). See [RISKS.md](../living/RISKS.md).
+The critical path was **W5 -> W6**: Go could not run until the nucleus had threads, futexes and a reserve/commit VM, and W6 held the riskiest spike (ADR-0003); both are done. Everything since has been "normal" OS work with many reference implementations. W14 laid the desktop groundwork (more RAM, a mouse, the start-up calls, a clock, file mappings, Unix sockets with descriptor passing, the console's graphics modes); W15 put Qt widget programs on `/dev/fb0`; W16 an X11 desktop with dwm. W17 put it on the network: an e1000 driver, gVisor's TCP/IP stack in the kernel, `AF_INET` sockets, names, servers inside Burrow and HTTPS from a Go program. W18 laid the foundations bigger programs want: copy-on-write fork, lazy `execve`, shared memory with MIT-SHM, dynamic linking. W19 made it a multi-user Unix: ext2 read and written, users and groups, permissions, links, and an ext2 root disk that boots to `login:`. W20 hardened it and put it on every CPU: SMEP, SMAP, XSAVE and ACPI, application processors behind per-CPU GS, one run queue, TLB shootdown, and the Go kernel with a P per CPU. Next is W21 (E02.F04, E07.F04): the framebuffer from the firmware (VBE in stage2, a boot_info descriptor, any geometry and pixel format, write-combining), the bring-up step real hardware needs that QEMU's DISPI device lets us skip; then the rest of E18 (sound, an absolute pointer). See [RISKS.md](../living/RISKS.md).
 
 ## Rough effort (part-time, one person)
 

@@ -9,6 +9,7 @@
 #include "cpu.h"
 #include "serial.h"
 #include "spinlock.h"
+#include "smp.h"
 #include "kprintf.h"
 #include "lib_string.h"
 #include "panic.h"
@@ -81,9 +82,9 @@ long sys_prlimit64(struct syscall_frame *f) {
 
 long sys_sched_getaffinity(struct syscall_frame *f) {
     if (SYSARG1(f) < 8) return -EINVAL;
-    uint8_t *mask = (uint8_t *)SYSARG2(f);
-    memset(mask, 0, 8);
-    mask[0] = 1;                                   /* one CPU until an SMP wave */
+    uint64_t mask = 0;
+    for (uint32_t i = 0; i < smp_cpu_count(); i++) mask |= 1ull << i;   /* CPUs 0..n-1 online (W20-S08) */
+    memcpy((void *)SYSARG2(f), &mask, 8);           /* the Go runtime makes that many Ps */
     return 8;                                      /* bytes written */
 }
 

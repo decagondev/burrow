@@ -8,13 +8,14 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 51 files, 5 directories
+[initrd] INFO: tarfs: 53 files, 5 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
 [go-selftest] goroutine_ping_pong ok
 [go-selftest] sync ok
 [go-selftest] gc_stress ok
+[go-selftest] parallel ok
 [go-selftest] irq ok
 BURROW:GO:SELFTEST:OK
 [ata] INFO: hda: "QEMU HARDDISK"

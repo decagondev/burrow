@@ -36,6 +36,9 @@ struct percpu {
     /* TLB shootdown (tlb.c, W20-S07) */
     uint64_t cr3;             /* the PML4 this CPU runs on (after its mov to CR3) */
     volatile uint32_t shoot_pending;   /* a shootdown for this CPU waits to be done */
+    /* idle (sched.c, W20-S08): a kick is a flag; only a halted CPU needs the IPI */
+    volatile uint32_t kicked;  /* a thread it may run became runnable            */
+    volatile uint32_t halted;  /* in sti;hlt (or about to be): wake it by IPI    */
 };
 _Static_assert(__builtin_offsetof(struct percpu, kstack_top) == 0, "trap.asm offset");
 _Static_assert(__builtin_offsetof(struct percpu, kstack_bottom) == 8, "trap.asm offset");

@@ -7,7 +7,8 @@
 # types the file's steps into the guest's PS/2 keyboard while it runs.
 # QEMU_EXTRA adds QEMU arguments (make go-smoke attaches build/data.img);
 # MEM is the guest's RAM (default 128M; the Go images use 512M, W14-S01).
-# SMP is the guest's CPU count (W20-S07; unset: one, or QEMU_EXTRA's -smp).
+# SMP is the guest's CPU count (W20-S07; the Makefile exports 4 since S08,
+# unset here means one), on multi-threaded TCG.
 #
 # PASS requires ALL of:
 #   1. every non-comment line of <expect-file> appears in the serial log,
@@ -35,7 +36,7 @@ if [ -n "$KEYS" ]; then
 fi
 
 set +e
-timeout "$TIMEOUT" "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" ${SMP:+-smp $SMP} \
+timeout "$TIMEOUT" "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" -smp "${SMP:-1}" -accel tcg,thread=multi \
   -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot

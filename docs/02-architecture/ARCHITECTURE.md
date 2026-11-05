@@ -293,6 +293,45 @@ flowchart LR
     ticks --> tick
 ```
 
+### 7.5 Many CPUs (Wave 20)
+
+Every CPU the ACPI MADT lists comes online at boot (ADR-0011). The nucleus
+copies a trampoline (`nucleus/ap.asm`) to physical 0x8000 and starts each
+application processor with INIT and two STARTUP IPIs; the AP climbs from
+real mode to long mode, loads its own GDT, TSS and IST stacks, binds
+`GS_BASE` to its `struct percpu`, turns on its LAPIC timer and becomes its
+own idle thread. From then on, all CPUs schedule from one run queue:
+
+- **Per-CPU state through GS.** `this_cpu()` is one `gs:` load; `trap.asm`
+  and `syscall.asm` read the current kernel stack at `gs:0`/`gs:8`. Ring 3
+  runs with the user's GS base: every entry from ring 3 and every return to
+  it swaps (`swapgs`), and SYSCALL has a user and a kernel entry, which the
+  scheduler switches between in LSTAR.
+- **One run queue.** `g_sched_lock` guards every thread's state and is held
+  across the context switch; the thread switched to releases it. Waking a
+  thread sends the wake IPI (0xF0) to an idle CPU that may run it. Lock
+  order: an object's lock (futex bucket, IRQ lines, the uthread FIFO), then
+  the scheduler's.
+- **TLB shootdown.** Each CPU publishes the page-table root it runs on; a
+  change to a present entry is flushed on every CPU on that root (all of
+  them for the shared upper half) through IPI 0xF1 before the call returns
+  and before a freed frame is reused. CPUs spinning on a lock with
+  interrupts off answer shootdowns while they spin.
+- **Go on every CPU.** The shim's `sched_getaffinity` reports the CPUs
+  online, so the Go kernel runs with that many Ps; `kernel/proc` reports
+  the same to user programs (`nproc`, `sysconf`, a Go program's
+  GOMAXPROCS). Interrupts from devices still arrive on CPU 0 through the
+  8259; a driver's goroutine may run anywhere.
+
+```mermaid
+flowchart LR
+    bsp["CPU 0 (BSP)<br/>timer, 8259 IRQs"] --> rq[("one run queue<br/>g_sched_lock")]
+    ap1["CPU 1..n (APs)<br/>own timer, own GDT/TSS"] --> rq
+    rq --> th["kernel threads, Go's Ms,<br/>user threads"]
+    vm["vm_unmap / vm_protect"] -- "IPI 0xF1, wait" --> ap1
+    wake["thread_wake"] -- "IPI 0xF0 to an idle CPU" --> ap1
+```
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

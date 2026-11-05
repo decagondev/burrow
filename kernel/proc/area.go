@@ -226,12 +226,19 @@ func (m *Mem) FaultIn(va uint64, write bool) Fault {
 		return FaultSignal
 	}
 	if pg, backed := m.pages[p]; backed {
-		if !write || !pg.cow || pg.prot&ProtWrite == 0 {
+		if write && pg.prot&ProtWrite == 0 {
 			return FaultSignal // the page is there: a protection fault
 		}
-		if _, err := m.breakLocked(p, pg); err != nil { // a write to a shared page (W18-S01)
-			return FaultNoMem
+		if write && pg.cow {
+			if _, err := m.breakLocked(p, pg); err != nil { // a write to a shared page (W18-S01)
+				return FaultNoMem
+			}
 		}
+		// BUG-0027: the access is allowed now. Another thread of the process,
+		// on another CPU, filled the page or broke its copy-on-write between
+		// this fault and our lock: resume, and the access is retried. (A read
+		// or fetch the page still refuses comes back as a present fault, which
+		// never reaches FaultIn.)
 		return FaultResume
 	}
 	a, ok := m.areaAt(va)

@@ -59,7 +59,7 @@ export function homeBody(pr, shots = []) {
 <section class="hero">
   <div class="hero-text">
     <h1>Burrow</h1>
-    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, runs an X11 desktop, talks to the network, logs users in, and is learning to use every CPU.</p>
+    <p class="lede">An educational x86-64 operating system. Our own assembly boots the machine, C prepares it, and a kernel written in Go runs on top: a POSIX-like system that runs DOOM, compiles C, runs an X11 desktop, talks to the network, logs users in, and runs on every CPU of the machine.</p>
     <p class="hero-actions"><a class="btn primary" href="docs/02-architecture/ARCHITECTURE.html">Read the architecture</a><a class="btn" href="progress.html">See progress</a>${shots.length ? '<a class="btn" href="gallery.html">See screenshots</a>' : ''}</p>
   </div>
   <div class="strata-wrap">

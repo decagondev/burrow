@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20 done: many CPUs, hardened (M20)
+
+**Did:** the wave in eight slices. A hang watchdog and a stress test first (S01, which found BUG-0026), then the CPU's own protections while there was still one CPU: SMEP, SMAP and NX everywhere (S02), XSAVE and AVX (S03), ACPI tables and a real poweroff (S04). Then the other CPUs: started through a trampoline with per-CPU state behind GS (S05), scheduling from one run queue (S06), TLB shootdown and user threads anywhere (S07), and the Go kernel with a P per CPU (S08). Four CPUs run a CPU-bound program 3.8 times faster than one, and `make test` is green with four and with one.
+
+**Surprise:** how much of the work was the one-CPU assumptions nobody had written down: `swapgs` that the plan said we did not need, a kernel stack another CPU still cached, a page fault that only one CPU could make safe (BUG-0027), and an idle CPU that slept too deeply for a request that crosses CPUs. Each was invisible until a second CPU existed, and each failed loudly once it did.
+
+**Learned:** write the test that a second CPU would break before giving it the chance, and keep one-CPU runs in the suite: they are what tells a race from a regression.
+
+**Next:** W21, a firmware framebuffer (WAVE-21-framebuffer.md); BUG-0023 and PIT-59 remain open.
+
+## 2026-11-05 — W20-S08 Go on every CPU, M20
+
+**Did:** `sched_getaffinity` reports every CPU online, so the Go kernel runs with four Ps and user programs see four (`nproc`, `sysconf`, a Go program's GOMAXPROCS); a `parallel` selftest proves four goroutines run at once; every boot runs on four CPUs with multi-threaded TCG (`SMP ?= 4`, `SMP=1` for one); `make smp-bench`.
+
+**Surprise:** the first boot with four Ps crashed in the Go runtime's allocator: two CPUs faulting on one demand-zero page, the second called a bad pointer (BUG-0027), and the same race was waiting in user processes. Then mem-smoke timed out: not a hang, but a page fault two and a half times slower, because a request and its answer each woke a halted CPU by IPI. Polling 200 us before halting brought it back near one CPU's speed.
+
+**Next:** W21, a firmware framebuffer.
+
 ## 2026-11-05 — W20-S07 TLB shootdown, and user threads everywhere
 
 **Did:** every page-table change to a present entry is flushed on every CPU that may cache it before the call returns (`tlb.c`: each CPU publishes its CR3; an IPI to the others on that root, or to all for the upper half; spinlock loops answer shootdowns so nobody deadlocks with interrupts off); freed frames wait in a batch for one shootdown. Then Go's threads and user threads run on any CPU, kernel stacks are freed at join again, and a kill or interrupt reaches a thread computing on another CPU with an IPI. `SMP=4 make go-smoke ports-smoke` pass.

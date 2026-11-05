@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -145,4 +146,37 @@ func checkGC(cfg Config) (string, error) {
 	}
 	return fmt.Sprintf("%d MiB allocated, %d GC cycles, peak heap %d MiB, %d MiB from the OS, %d MiB released",
 		cfg.GCTotal/mib, gcs, peak/mib, ms.Sys/mib, ms.HeapReleased/mib), nil
+}
+
+// checkParallel (W20-S08): the runtime has a P per CPU the nucleus reports,
+// and that many goroutines really run at once: each spins until all have
+// arrived, which on fewer CPUs than Ps could only happen by preemption,
+// and the runtime's asynchronous preemption is off (GODEBUG), so it would
+// time out.
+func checkParallel(Config) (string, error) {
+	n := runtime.GOMAXPROCS(0)
+	if n != runtime.NumCPU() {
+		return "", fmt.Errorf("GOMAXPROCS %d, but %d CPUs", n, runtime.NumCPU())
+	}
+	var arrived atomic.Int32
+	deadline := time.Now().Add(5 * time.Second)
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			arrived.Add(1)
+			for arrived.Load() < int32(n) {
+				if time.Now().After(deadline) {
+					errs <- fmt.Errorf("only %d of %d goroutines ran at once", arrived.Load(), n)
+					return
+				}
+			}
+			errs <- nil
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%d Ps, %d running at once", n, n), nil
 }

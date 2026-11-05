@@ -136,3 +136,16 @@ int kt_vm_reserve_hint(void) {
     KT_CHECK(vm_release(as, again, PAGE_4K) == 0);
     return 0;
 }
+
+/* BUG-0027: two CPUs fault on one demand-zero page of the Go kernel; the
+ * first fills it, so the second finds it present, not marked. That fault is
+ * answered (resume and retry), never reported as a bad pointer. */
+int kt_bug0027_fault_in_present(void) {
+    struct addr_space *k = vmm_kernel();
+    uint64_t pa = frame_alloc_zeroed();
+    KT_CHECK(pa && vm_map(k, TEST_VA, pa, PAGE_4K, PTE_W | PTE_NX) == PT_OK);
+    KT_CHECK(vm_fault_in(k, TEST_VA + 8) == 1);        /* present: the other CPU won */
+    KT_CHECK(vm_unmap(k, TEST_VA, PAGE_4K, 1) == PT_OK);
+    KT_CHECK(vm_fault_in(k, TEST_VA) == 0);            /* absent and unmarked: a real fault */
+    return 0;
+}

@@ -18,6 +18,7 @@ timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 90
 qemu = os.environ.get('QEMU', 'qemu-system-x86_64')
 cpu = os.environ.get('QEMU_CPU', 'Broadwell-noTSX-IBRS')
 cmd = [qemu, '-machine', 'pc', '-cpu', cpu, '-m', os.environ.get('MEM', '512M'),
+       '-smp', os.environ.get('SMP', '1'), '-accel', 'tcg,thread=multi',
        '-drive', 'file=%s,format=raw,if=ide,index=0,media=disk' % img,
        '-display', 'none', '-no-reboot', '-serial', 'stdio', '-monitor', 'none']
 p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)

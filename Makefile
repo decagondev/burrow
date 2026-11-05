@@ -63,11 +63,15 @@ GO_MEM ?= 512M
 # W20-S02, S03: a CPU with SMEP and SMAP (the nucleus switches them on), XSAVE and
 # AVX; qemu64 with +xsave hangs QEMU 10.0 TCG at the CR4.OSXSAVE write
 QEMU_CPU    ?= Broadwell-noTSX-IBRS
-QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M \
+# W20-S08: four CPUs on multi-threaded TCG for every boot (SMP=1 for one);
+# tests/smoke/smoke.sh and poweroff.py read SMP from the environment.
+SMP         ?= 4
+export SMP
+QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -289,7 +293,7 @@ test-go:
 SMOKE_EXPECT := tests/smoke/expect/boot_to_loader.txt tests/smoke/expect/boot_to_nucleus.txt
 
 smoke: $(BUILD)/disk.img
-	@for e in $(SMOKE_EXPECT); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done
+	@for e in $(SMOKE_EXPECT); do SMP=1 QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/disk.img $$e || exit 1; done   # the one-CPU boot
 
 # Boot the Go kernel, type into its console (tests/smoke/keys/) and check its
 # markers (tests/smoke/expect/boot_to_go.txt).
@@ -567,6 +571,13 @@ net-smoke-run: $(BUILD)/go-dev.img
 mem-bench: $(BUILD)/go.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem-bench.txt 120 tests/smoke/keys/mem-bench.keys
 	python3 tests/smoke/mem-budgets.py $(BUILD)/smoke-mem-bench.log
+# Four CPUs against one (W20-S08, not in make test): cpubench (C, pthreads)
+# and gocpubench (Go) on go.img booted on one CPU, then on four;
+# tests/smoke/smp-budgets.py wants each at least 2.5 times faster on four.
+smp-bench: $(BUILD)/go.img
+	SMP=1 MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/smp-bench-1.txt 240 tests/smoke/keys/smp-bench.keys
+	SMP=4 MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/smp-bench-4.txt 240 tests/smoke/keys/smp-bench.keys
+	python3 tests/smoke/smp-budgets.py $(BUILD)/smoke-smp-bench-1.log $(BUILD)/smoke-smp-bench-4.log
 # How fast the network is (W17-S06, not in make test): a 10 MB download
 # from the host with gofetch and short connections to busybox httpd,
 # against the budgets in tests/smoke/net-budgets.py.
@@ -645,7 +656,7 @@ run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # W20-S06: every suite on one CPU and on four (smp only on four).
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do for n in 1 4; do test $$s = smp -a $$n = 1 && continue; \
-		QEMU="$(QEMU)" QEMU_EXTRA="-smp $$n" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done; done
+		SMP=$$n QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done; done
 
 regress: $(BUILD)/disk.img $(BUILD)/go.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
@@ -659,7 +670,7 @@ census:
 # (ACPI S5, with no debug-exit device: QEMU must turn itself off).
 acpi-smoke: $(BUILD)/disk.img
 	@mkdir -p $(BUILD)/acpi && cp $(BUILD)/disk.img $(BUILD)/acpi/disk.img
-	QEMU="$(QEMU)" QEMU_EXTRA="-smp 4" tests/smoke/smoke.sh $(BUILD)/acpi/disk.img tests/smoke/expect/acpi-smp.txt
+	SMP=4 QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/acpi/disk.img tests/smoke/expect/acpi-smp.txt
 poweroff-smoke: $(BUILD)/go.img
 	QEMU="$(QEMU)" QEMU_CPU="$(QEMU_CPU)" MEM=$(GO_MEM) python3 tests/smoke/poweroff.py $(BUILD)/go.img 90
 

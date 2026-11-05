@@ -1,0 +1,4 @@
+# make smp-bench on 1 CPU (W20-S08; tests/smoke/keys/smp-bench.keys). Append-only.
+BURROW:GO:SELFTEST:OK
+cpubench: 4 threads x
+gocpubench: 4 goroutines x

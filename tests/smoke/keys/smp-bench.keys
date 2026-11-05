@@ -1,0 +1,14 @@
+# make smp-bench (W20-S08): cpubench and gocpubench on go.img, booted once
+# on one CPU and once on four; tests/smoke/smp-budgets.py compares them.
+# Not in make test.
+wait burrow>
+type run /bin/cpubench
+key ret
+wait cpubench:
+wait burrow>
+type run /bin/gocpubench
+key ret
+wait gocpubench:
+wait burrow>
+type poweroff
+key ret
