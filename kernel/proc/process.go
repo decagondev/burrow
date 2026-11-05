@@ -160,7 +160,13 @@ func (p *Process) exit(code, sig int, reason string) {
 
 // fork: a copy of p (memory, descriptors, and the calling thread's
 // registers with RAX = 0) as its child, with one thread.
-func (t *Thread) fork() int64 {
+func (t *Thread) fork() int64 { return t.forkOnto(0) }
+
+// forkOnto is fork whose child starts on stack (0: the caller's). clone's
+// process shape passes one: musl's posix_spawn (and so system()) clones with
+// CLONE_VM|CLONE_VFORK onto a stack holding the function the child runs,
+// and a child on the parent's stack jumped to garbage (BUG-0028).
+func (t *Thread) forkOnto(stack uint64) int64 {
 	p, s := t.p, t.p.sys
 	var regs Regs
 	if err := s.nu.Regs(t.nt, &regs, false); err != nil {
@@ -180,6 +186,9 @@ func (t *Thread) fork() int64 {
 	p.mu.Unlock()
 	c.PPID, c.PGID, c.SID = p.PID, p.PGID, p.SID
 	regs.RAX = 0
+	if stack != 0 {
+		regs.RSP = stack
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tid, err := s.nu.StartThreadFrom(mem.Space(), &regs)

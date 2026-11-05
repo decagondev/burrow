@@ -218,3 +218,26 @@ func TestBUG0027SecondFaultOnAPageAlreadyHandledResumes(t *testing.T) {
 		t.Fatalf("not-present read fault on a backed page = %v, want resume", f)
 	}
 }
+
+// BUG-0028: clone in the process shape onto a new stack (musl's posix_spawn,
+// so system(): CLONE_VM|CLONE_VFORK|SIGCHLD) starts the child on that
+// stack, where __clone left the function it runs; a plain fork keeps the
+// caller's.
+func TestBUG0028VforkCloneStartsOnItsStack(t *testing.T) {
+	r := newRig(t)
+	p := r.spawn()
+	const stack = scratch + 0x800
+	pid := r.call(p, 56, 0x100|0x4000|17, stack, 0, 0, 0) // CLONE_VM|CLONE_VFORK|SIGCHLD
+	if pid <= 0 {
+		t.Fatalf("clone = %d", pid)
+	}
+	kid := r.newestThread(p.TID())
+	if got := r.nu.Snapshot(kid).RSP; got != stack {
+		t.Errorf("child starts with RSP %#x, want the given stack %#x", got, uint64(stack))
+	}
+	parentRSP := r.nu.Snapshot(p.TID()).RSP
+	r.call(p, 57) // fork
+	if got := r.nu.Snapshot(r.newestThread(kid)).RSP; got != parentRSP { // the thread after the first child
+		t.Errorf("fork's child RSP %#x, want the parent's %#x", got, parentRSP)
+	}
+}

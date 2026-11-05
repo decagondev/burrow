@@ -4,7 +4,8 @@
 # into $DOOM_CACHE (default ~/.cache/burrow-doom), refuses either unless its
 # sha256 matches the pin (Freedoom's is the one in its signed CHECKSUM file),
 # compiles doomgeneric's engine with musl-gcc and the Burrow backend
-# (user/doom/doomgeneric_burrow.c, Linux fbdev + evdev only) into
+# (user/doom/doomgeneric_burrow.c, Linux fbdev + evdev only; sound through
+# /dev/dsp by user/doom/i_burrowsound.c since W22-S03) into
 # <out-dir>/doom, and extracts freedoom1.wad there. Never builds inside the
 # unpacked source and runs nothing from it. Docs:
 # docs/04-plan/waves/WAVE-11-doom.md.
@@ -56,7 +57,14 @@ for f in $ENGINE; do
   objs+=("$o")
 done
 "$MUSL_GCC" $CFLAGS -c "$BACKEND" -o "$BUILD/doomgeneric_burrow.o"
-"$MUSL_GCC" -static -o "$OUT/doom" "${objs[@]}" "$BUILD/doomgeneric_burrow.o" -lm
+# W22-S03: i_sound with FEATURE_SOUND, and Burrow's module, every time.
+sound_objs=()
+for f in $SOUND_ENGINE; do
+  "$MUSL_GCC" $CFLAGS $SOUND_FLAGS -I"$ROOT/$SOUND_STUB" -c "$SRC/$f.c" -o "$BUILD/${f}_burrow.o"
+  sound_objs+=("$BUILD/${f}_burrow.o")
+done
+"$MUSL_GCC" $CFLAGS $SOUND_FLAGS -c "$ROOT/$SOUND_MODULE" -o "$BUILD/i_burrowsound.o"
+"$MUSL_GCC" -static -o "$OUT/doom" "${objs[@]}" "$BUILD/doomgeneric_burrow.o" "${sound_objs[@]}" "$BUILD/i_burrowsound.o" -lm
 echo "doom: doomgeneric ${DG_COMMIT:0:7} -> $OUT/doom ($(stat -c %s "$OUT/doom") bytes)"
 
 # BUG-0004: the evdev -> Doom key map, compiled from the backend itself.

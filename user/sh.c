@@ -3,8 +3,11 @@
  * quote, $? is the last status); `;` separates commands; `|` builds
  * pipelines; `<`, `>` and `>>` redirect. Builtins: cd, pwd, exit. Every
  * job runs in its own process group and owns the terminal while it runs,
- * so ^C stops the job and never the shell. Not a full sh: no variables,
- * no globbing, no control flow, no background jobs. */
+ * so ^C stops the job and never the shell. `sh -c LINE` (BUG-0028: what
+ * system() and popen() run) runs one line without job control, never
+ * touching the terminal's foreground group, and exits with its status.
+ * Not a full sh: no variables, no globbing, no control flow, no background
+ * jobs. */
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -57,6 +60,8 @@ static int split(char *line, char **w) {
     w[n] = 0;
     return n;
 }
+
+static int interactive = 1;   /* 0 for sh -c: no process groups, no terminal */
 
 static void run_child(struct cmd *c) {
     if (c->in) {
@@ -111,22 +116,22 @@ static void run_pipeline(struct cmd *cmds, int n) {
         if (i < n - 1 && pipe(fds) != 0) { perror("pipe"); return; }
         pid_t pid = fork();
         if (pid == 0) {
-            setpgid(0, pgid);
+            if (interactive) setpgid(0, pgid);
             if (prev >= 0) { dup2(prev, 0); close(prev); }
             if (fds[1] >= 0) { dup2(fds[1], 1); close(fds[1]); close(fds[0]); }
             run_child(&cmds[i]);
         }
         if (!pgid) pgid = pid;
-        setpgid(pid, pgid);          /* both sides, so no race decides it */
+        if (interactive) setpgid(pid, pgid);   /* both sides, so no race decides it */
         pids[i] = pid;
         if (prev >= 0) close(prev);
         if (fds[1] >= 0) close(fds[1]);
         prev = fds[0];
     }
-    tcsetpgrp(0, pgid);              /* the terminal is the job's: ^C goes there */
+    if (interactive) tcsetpgrp(0, pgid);   /* the terminal is the job's: ^C goes there */
     int status = 0;
     for (int i = 0; i < n; i++) waitpid(pids[i], &status, 0);
-    tcsetpgrp(0, getpgrp());
+    if (interactive) tcsetpgrp(0, getpgrp());
     if (WIFSIGNALED(status)) {
         last_status = 128 + WTERMSIG(status);
         if (WTERMSIG(status) != SIGINT) printf("sh: killed by signal %d\n", WTERMSIG(status));
@@ -162,7 +167,16 @@ static void run_line(char **w, int n) {
     }
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    char line[1024], *w[MAXWORDS];
+    snprintf(status_text, sizeof status_text, "0");
+    if (argc >= 3 && !strcmp(argv[1], "-c")) {   /* system(), popen() */
+        interactive = 0;
+        snprintf(line, sizeof line, "%s", argv[2]);
+        int n = split(line, w);
+        if (n) run_line(w, n);
+        return last_status;
+    }
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = on_sigint;
@@ -170,8 +184,6 @@ int main(void) {
     sigaction(SIGQUIT, &sa, 0);
     setpgid(0, 0);
     tcsetpgrp(0, getpgrp());
-    snprintf(status_text, sizeof status_text, "0");
-    char line[1024], *w[MAXWORDS];
     for (;;) {
         fputs("$ ", stdout);
         fflush(stdout);

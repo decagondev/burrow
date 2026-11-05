@@ -76,5 +76,10 @@ type run /bin/waitstress 100
 key ret
 wait waitstress: 100 rounds ok
 wait burrow> 
+# BUG-0028: system() and posix_spawn (musl's clone onto a new stack)
+type run /bin/spawntest
+key ret
+wait spawntest: ok
+wait burrow> 
 type poweroff
 key ret

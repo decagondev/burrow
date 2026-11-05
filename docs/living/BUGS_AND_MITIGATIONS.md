@@ -35,6 +35,16 @@ None (BUG-0023 closed in W21-S03).
 
 ## Closed
 
+### BUG-0028: system() and posix_spawn crashed the calling program
+- Found: 2026-11-05, W22-S03: Doom built with sound stopped in `I_Error` (an unrelated build mistake), whose error box runs `system()`; the program was killed with a page fault in musl's `posix_spawn` child.
+- Severity: major (every musl program that calls `system()`, `popen()` or `posix_spawn` died; nothing in the tree had called them, which is why it hid since W10).
+- Symptom: `[proc] WARN: pid 3 (doom) killed: page fault at 0x42444c757 (rip 0x443162)`, the rip in `child` (`posix_spawn.lo`).
+- Root cause: two. musl's `posix_spawn` calls `clone(CLONE_VM|CLONE_VFORK|SIGCHLD)` onto a stack of its own, where its `__clone` left the function and argument the child pops; `kernel/proc`'s clone took any process-shaped clone as a plain fork and ignored the stack, so the child popped the parent's stack and jumped to garbage. Behind it, `system()` runs `/bin/sh -c LINE`, and Burrow's `user/sh.c` had no `-c`: it read commands from the terminal for ever.
+- Fix: the process shape of clone starts the child on the stack it is given (`forkOnto`, `kernel/proc/clone.go`, `process.go`; the copy is still a copy, which `posix_spawn`'s pipe-based exec check does not mind). `sh -c LINE` runs one line without job control (no process groups, never the terminal's foreground) and exits with its status.
+- Mitigation: none needed beyond the test; `CLONE_VM` without `CLONE_THREAD` stays a copy, not shared memory.
+- Regression: `TestBUG0028VforkCloneStartsOnItsStack` (`kernel/proc`; fails without the fix) and `user/spawntest` in `make ports-smoke` (`system()`, `posix_spawn`, a missing program), which passes on the host's Linux too.
+- Lesson: a syscall shape nothing used yet is a bug waiting for the first program that does; the shape is cheap to test when it is added.
+
 ### BUG-0023: The console once waited for ever after gohello exited
 - Closed: 2026-11-05, W21-S03.
 - Found: 2026-11-04, W19-S03, in the full `make test`: `SMOKE FAIL [ports]: timed out after 60s`; the log ends at `gohello: ok` (gohello's last line) with no `burrow>` prompt after it and no kernel message.

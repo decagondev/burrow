@@ -35,7 +35,14 @@ for f in $ENGINE; do
 done
 "$CC" $CFLAGS -I"$SYS/include" -DDOOM_WAD="\"/opt/x11/share/doom/$(basename "$WAD")\"" \
   -c "$BACKEND" -o "$BUILD/doomgeneric_x11.o"
-"$CC" -static -o "$OUT/bin/doom" "${objs[@]}" "$BUILD/doomgeneric_x11.o" \
+# W22-S03: the same sound as the fbdev Doom (doom-engine.sh).
+sound_objs=()
+for f in $SOUND_ENGINE; do
+  "$CC" $CFLAGS $SOUND_FLAGS -I"$ROOT/$SOUND_STUB" -c "$SRC/$f.c" -o "$BUILD/${f}_burrow.o"
+  sound_objs+=("$BUILD/${f}_burrow.o")
+done
+"$CC" $CFLAGS $SOUND_FLAGS -c "$ROOT/$SOUND_MODULE" -o "$BUILD/i_burrowsound.o"
+"$CC" -static -o "$OUT/bin/doom" "${objs[@]}" "$BUILD/doomgeneric_x11.o" "${sound_objs[@]}" "$BUILD/i_burrowsound.o" \
   -L"$SYS/lib" -lXext -lX11 -lxcb -lXau -lXdmcp -lm
 "$(dirname "$CC")/x86_64-linux-musl-strip" "$OUT/bin/doom"
 cp "$WAD" "$OUT/share/doom/"

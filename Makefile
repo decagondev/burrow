@@ -317,13 +317,19 @@ devices-smoke: $(BUILD)/go.img $(BUILD)/data.img
 doom-smoke:
 	@if [ -f $(BUILD)/doom-root/doom ]; then $(MAKE) --no-print-directory doom-smoke-run; \
 	else echo "DOOM SMOKE SKIP (make doom downloads and builds it)"; fi
+# W22-S03: with an AC'97 that QEMU records; the menu's effects and a pistol
+# shot in E1M1 must be in the file as separate sounds.
+DOOM_WAV   := $(BUILD)/doom-smoke.wav
+DOOM_SOUND := -audiodev wav,id=snd0,path=$(DOOM_WAV) -device AC97,audiodev=snd0
 doom-smoke-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
+	rm -f $(DOOM_WAV)
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE) $(DOOM_SOUND)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
+	python3 tests/smoke/checkwav.py $(DOOM_WAV) sounds 4
 
 # Doom's own benchmark (W11-S06, RISKS R-07): -timedemo demo1 as fast as it
 # goes (about 70 s in QEMU, so not part of make test); fails below 20 fps.
 doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE) -audiodev none,id=snd0 -device AC97,audiodev=snd0" tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom-bench.txt 300 tests/smoke/keys/doom-bench.keys
 	@python3 -c 'import re,sys; m=re.search(r"\(([0-9.]+) fps\)", open(sys.argv[1], errors="replace").read()); fps=float(m.group(1)) if m else 0; print("DOOM BENCH %.1f fps (timedemo demo1)" % fps); sys.exit(fps < 20)' $(BUILD)/smoke-doom-bench.log
 
 # Disk writes (W13-S03): a kernel argument (disktest=hdb) makes the Go kernel
@@ -358,7 +364,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest $(BUILD)/user/waitstress
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest $(BUILD)/user/waitstress $(BUILD)/user/spawntest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -369,6 +375,7 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
 	$(BUILD)/user/linktest /tmp/linktest-linux > $(BUILD)/linktest-linux.log  # W19-S05 (an absolute directory)
 	$(BUILD)/user/waitstress 100 > $(BUILD)/waitstress-linux.log  # W20-S01
+	$(BUILD)/user/spawntest > $(BUILD)/spawntest-linux.log  # BUG-0028: the host's Linux agrees
 	@# W19-S03, S04: credtest and permtest need root on Linux (and a disk without nosuid for --exec)
 	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
 		$(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \
@@ -394,7 +401,7 @@ x11-census: $(BUILD)/busybox
 # and the WAD: scripts/x11-doom.sh, /opt/x11/bin/doom, /opt/x11/share/doom.
 X11_DRIVE := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=1,media=disk
 X11_DOOM := $(if $(wildcard $(BUILD)/doom-root/freedoom1.wad),$(BUILD)/x11-root/bin/doom)
-$(BUILD)/x11-root/bin/doom: user/x11/doom/doomgeneric_x11.c scripts/x11-doom.sh scripts/doom-engine.sh $(BUILD)/doom-root/doom $(BUILD)/doom-root/freedoom1.wad $(BUILD)/x11-root/bin/Xfbdev
+$(BUILD)/x11-root/bin/doom: user/x11/doom/doomgeneric_x11.c user/doom/i_burrowsound.c scripts/x11-doom.sh scripts/doom-engine.sh $(BUILD)/doom-root/doom $(BUILD)/doom-root/freedoom1.wad $(BUILD)/x11-root/bin/Xfbdev
 	scripts/x11-doom.sh $(BUILD)/x11-root $(BUILD)/doom-root/freedoom1.wad
 $(BUILD)/x11-data.img: $(BUILD)/x11-root/bin/Xfbdev $(X11_DOOM) user/x11/x11.env user/x11/startx user/x11/xinitrc $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/x11/x11.env $(BUILD)/x11-root/x11.env

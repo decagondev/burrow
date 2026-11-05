@@ -31,7 +31,7 @@ func sysCloneFn(t *Thread, a [6]uint64) (int64, bool) {
 	flags := a[0]
 	switch {
 	case flags&cloneThread == 0: // a new process: fork (CLONE_VM|CLONE_VFORK copies too)
-		return ok(t.fork())
+		return ok(t.forkOnto(a[1])) // on the stack it was given (BUG-0028)
 	case flags&threadNeeds != threadNeeds || flags&(cloneFS|cloneFiles) != cloneFS|cloneFiles:
 		return ok(-int64(syscall.EINVAL)) // a thread shares memory, handlers, files and cwd
 	}

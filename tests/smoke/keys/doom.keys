@@ -23,6 +23,9 @@ key ret
 waitpixel 240 575 #8b8b8b
 waitpixel 780 535 #9f9f9f
 screendump build/screen-doom-e1m1.ppm
+# W22-S03: a pistol shot, which checkwav.py must hear (Ctrl fires)
+key ctrl
+sleep 1
 key up
 key up
 key up

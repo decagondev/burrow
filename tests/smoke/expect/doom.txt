@@ -4,6 +4,7 @@
 burrow> run /bin/doom -iwad /mnt/freedoom1.wad
  adding /mnt/freedoom1.wad
 Freedoom: Phase 1
+i_burrowsound: /dev/dsp at 22050 Hz, 8 channels mixed
 R_Init: Init DOOM refresh daemon
 I_InitGraphics: framebuffer: x_res: 640, y_res: 400
 I_InitGraphics: Auto-scaling factor: 2

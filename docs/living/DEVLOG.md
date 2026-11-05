@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W22-S03 Doom makes noise
+
+**Did:** a sound module for doomgeneric (eight channels of Doom's effects mixed in a thread into `/dev/dsp`, about 0.1 s ahead of the ear); `doom-smoke` records it and hears eight separate sounds, the pistol among them; the timedemo still runs at 127.8 fps. Fixed BUG-0028 on the way.
+
+**Surprise:** BUG-0028. The first Doom with sound died in musl's `posix_spawn`: a build slip made Doom call `I_Error`, whose error box runs `system()`, and nothing on Burrow had ever called `system()`. Two holes were behind it: the fork shape of `clone` ignored the new stack musl's vfork-style spawn passes, and Burrow's `sh` had no `-c`.
+
+**Next:** W22-S04: virtio and the tablet.
+
 ## 2026-11-05 — W22-S02 AC'97 and /dev/dsp
 
 **Did:** an AC'97 driver (codec set-up, a 32-buffer ring of DMA pages, interrupts on a shared line) and `/dev/dsp` with OSS's playback interface over it; `user/tone` plays two tones that QEMU records to a WAV file and `checkwav.py` measures: 440 Hz for 1.0 s, 880 Hz for 0.5 s. Burrow makes sound.

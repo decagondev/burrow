@@ -219,4 +219,7 @@ burrow> run /bin/waitstress 100
 waitstress: 50 rounds
 waitstress: 100 rounds
 waitstress: 100 rounds ok
+spawntest: system ran echo
+spawntest: posix_spawn ran echo
+spawntest: ok
 burrow> poweroff

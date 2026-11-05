@@ -2,13 +2,13 @@
 """checkwav.py - what a QEMU -audiodev wav file heard (W22-S02).
 
 Usage: checkwav.py <file.wav> tone
-       checkwav.py <file.wav> loud <after-seconds>
+       checkwav.py <file.wav> sounds <at-least>
 
 tone: the file must hold user/tone.c's two tones, in order: 440 Hz for at
 least 0.9 s, then 880 Hz for at least 0.4 s, each within 2 %, told apart
 by the pitch of each 100 ms (they may follow each other with no silence).
-loud: something well above the noise floor after the given second (a
-game's sound effect).
+sounds: at least that many separate sounds (a game's effects: Doom's menu
+and a pistol shot in make doom-smoke).
 
 Sounds are found as runs of 10 ms windows whose level is above a threshold;
 a run's pitch is its zero crossings per second over two. QEMU may leave the
@@ -100,11 +100,11 @@ def main():
         if [hz for hz, _ in tones] != [440, 880] or tones[0][1] < 0.9 - PITCH_WINDOW_S or tones[1][1] < 0.4 - PITCH_WINDOW_S:
             sys.exit('checkwav: FAIL want 440 Hz for 0.9 s, then 880 Hz for 0.4 s')
         print('checkwav: PASS (440 Hz, then 880 Hz)')
-    elif mode == 'loud':
-        after = float(sys.argv[3])
-        if not any(b > after for a, b, _ in found):
-            sys.exit(f'checkwav: FAIL nothing loud after {after} s')
-        print(f'checkwav: PASS (sound after {after} s)')
+    elif mode == 'sounds':
+        least = int(sys.argv[3])
+        if len(found) < least:
+            sys.exit(f'checkwav: FAIL {len(found)} separate sounds, want at least {least}')
+        print(f'checkwav: PASS ({len(found)} separate sounds)')
     else:
         sys.exit(f'checkwav: unknown mode {mode}')
 
