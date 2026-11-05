@@ -22,4 +22,5 @@ BURROW:LOADER:OK
 [nucleus] sched ok
 [nucleus] syscall gate ok
 [nucleus] irq ok
+[nucleus] smp: 1 CPU online
 BURROW:NUCLEUS:OK

@@ -22,6 +22,10 @@ _Static_assert(sizeof(struct syscall_frame) == 16 * 8, "syscall.asm push count")
 
 /* EFER.SCE, STAR (kernel 0x08, SYSRET base 0x18), LSTAR, FMASK. */
 void syscall_init(void);
+void syscall_cpu_init(void);        /* the same MSRs on an AP (smp.c) */
+/* LSTAR: syscall_entry_user (swapgs first) while a user thread runs on this
+ * CPU, syscall_entry_kernel otherwise (ADR-0011); sched.c switches it. */
+void syscall_set_entry(int user);
 long nu_syscall_dispatch(struct syscall_frame *f);   /* called by syscall.asm only */
 
 /* Go kernel text range, for caller classification (syscall.asm). */

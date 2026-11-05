@@ -643,7 +643,7 @@ run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
-	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
+	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" QEMU_EXTRA="$$(test $$s = smp && echo -smp 4)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
 
 regress: $(BUILD)/disk.img $(BUILD)/go.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img

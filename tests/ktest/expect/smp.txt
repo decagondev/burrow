@@ -1,0 +1,11 @@
+# Ordered markers for ktest suite "smp" (tests/ktest/smp.txt, -smp 4). Append-only.
+[nucleus] acpi ok (4 CPUs, apic ids 0 1 2 3;
+[nucleus] smp: cpu 1 online
+[nucleus] smp: cpu 2 online
+[nucleus] smp: cpu 3 online
+[nucleus] smp: 4 CPUs online
+[ktest] running suite
+[ktest] smp_cpus_online ok
+[ktest] smp_percpu ok
+[ktest] smp_spin_counter ok
+BURROW:KTEST:OK

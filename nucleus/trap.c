@@ -26,7 +26,6 @@ extern const uint64_t trap_stub_table[256];          /* trap.asm */
 extern const struct fixup __fixup_start[], __fixup_end[];   /* linker.ld */
 extern char boot_stack[], boot_stack_top[];          /* entry.asm */
 
-struct percpu g_percpu;
 volatile struct trap_record trap_last;
 static struct idt_gate g_idt[256] __attribute__((aligned(16)));
 static irq_handler g_handlers[256];
@@ -53,10 +52,16 @@ static void set_gate(unsigned v, uint64_t handler, uint8_t ist) {
 }
 
 void trap_init(void) {
-    g_percpu.kstack_top = (uint64_t)(uintptr_t)boot_stack_top;
-    g_percpu.kstack_bottom = (uint64_t)(uintptr_t)boot_stack;
+    this_cpu()->kstack_top = (uint64_t)(uintptr_t)boot_stack_top;
+    this_cpu()->kstack_bottom = (uint64_t)(uintptr_t)boot_stack;
     for (unsigned v = 0; v < 256; v++)
         set_gate(v, trap_stub_table[v], v == VEC_DF ? IST_DF : v == 2 ? IST_NMI : IST_IRQ);
+    trap_init_cpu();
+}
+
+/* Loads the one IDT on this CPU (every CPU shares it; the IST stacks it
+ * names are per CPU, in each CPU's TSS). */
+void trap_init_cpu(void) {
     struct idtr r = { sizeof g_idt - 1, (uint64_t)(uintptr_t)g_idt };
     __asm__ volatile("lidt %0" :: "m"(r));
 }

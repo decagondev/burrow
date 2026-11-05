@@ -30,6 +30,7 @@
 #include "ktest.h"
 #include "protect.h"
 #include "acpi.h"
+#include "smp.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
 
@@ -72,6 +73,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     sched_init();
     syscall_init();
     irq_init();
+    smp_init();
 
     const struct boot_module *kt = boot_module_find("ktest");
     if (kt) {

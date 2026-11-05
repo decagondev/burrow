@@ -13,3 +13,5 @@ uthread_regs
 uthread_fault_resumes
 uthread_interrupt
 uthread_fork_exec
+# W20-S05: ring 3 reloads GS; the kernel's per-CPU base must survive
+uthread_gs_reload

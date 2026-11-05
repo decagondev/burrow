@@ -17,6 +17,7 @@
 #define SVR_ENABLE        (1u << 8)
 #define ICR_SELF          (1u << 18)   /* destination shorthand 01 = self */
 #define ICR_PENDING       (1u << 12)
+#define LVT_MASKED        (1u << 16)
 #define LVT_EXTINT        (7u << 8)    /* delivery mode ExtINT: the 8259 supplies the vector */
 
 static volatile uint32_t *g_lapic;
@@ -71,6 +72,22 @@ void lapic_init(void) {
     kprintf("[nucleus] lapic ok (id=%u, version=%x, base=%llx), pic masked\n",
             lapic_read(LAPIC_ID) >> 24, lapic_read(LAPIC_VERSION) & 0xFF,
             (unsigned long long)(base & ~0xFFFull));
+}
+
+/* An AP's own local APIC (W20-S05): the same MMIO page (each CPU sees its
+ * own there); LINT0 masked, since only the BSP takes the 8259's ExtINT. */
+void lapic_init_cpu(void) {
+    wrmsr(MSR_APIC_BASE, rdmsr(MSR_APIC_BASE) | APIC_BASE_ENABLE);
+    lapic_write(LAPIC_TPR, 0);
+    lapic_write(LAPIC_SVR, SVR_ENABLE | VEC_SPURIOUS);
+    lapic_write(LAPIC_LVT_LINT0, LVT_MASKED);
+}
+
+/* A fixed IPI (or INIT/STARTUP: icr_lo's delivery mode) to one APIC id. */
+void lapic_send_ipi(uint8_t apic_id, uint32_t icr_lo) {
+    lapic_write(LAPIC_ICR_HI, (uint32_t)apic_id << 24);
+    lapic_write(LAPIC_ICR_LO, icr_lo);
+    while (lapic_read(LAPIC_ICR_LO) & ICR_PENDING) cpu_pause();
 }
 
 void lapic_self_ipi(uint8_t vector) {

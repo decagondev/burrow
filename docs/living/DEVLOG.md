@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S05 Application processors
+
+**Did:** per-CPU state behind GS, with `swapgs` on every ring-3 entry and exit and two SYSCALL entries that the scheduler switches between; a GDT, TSS and stacks for each CPU; a trampoline that takes an AP from real mode straight to long mode; INIT-SIPI-SIPI; APs that idle and run a function from their mailbox. Four CPUs come up on QEMU, and a ktest has all of them add to one spinlocked counter.
+
+**Surprise:** the wave plan said `swapgs` was not needed. It is: a ring-3 `mov gs, ax` sets GS's base, and the next entry would have read the per-CPU data through it. SYSCALL leaves no free register to decide whether to swap, so there are now two entries (ADR-0011), and a ktest reloads GS in ring 3.
+
+**Next:** W20-S06: scheduling on every CPU (PIT-60's list first).
+
 ## 2026-11-05 — W20-S04 ACPI
 
 **Did:** a host-tested ACPI reader (RSDP, RSDT/XSDT, MADT, FADT, `\_S5` from the DSDT), the CPU list at boot, and a real power-off: `poweroff` with no test device now turns QEMU off through ACPI S5.

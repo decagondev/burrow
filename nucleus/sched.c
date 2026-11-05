@@ -13,6 +13,7 @@
 #include "kprintf.h"
 #include "lib_string.h"
 #include "panic.h"
+#include "syscall.h"
 
 #define MSR_FS_BASE   0xC0000100u
 /* Kernel stacks: slot i at KSTACK_REGION + i * KSTACK_SLOT; the first page of
@@ -31,7 +32,7 @@ static uint32_t g_next_id;
 static uint32_t g_slice;
 static uint64_t g_switches;
 
-struct thread *thread_current(void) { return g_percpu.current; }
+struct thread *thread_current(void) { return (struct thread *)(uintptr_t)read_gs_qword(16); }   /* one load: percpu.current */
 uint32_t thread_id(const struct thread *t) { return t->id; }
 uint64_t sched_switch_count(void) { return g_switches; }
 
@@ -48,7 +49,7 @@ static struct thread *pick_next(struct thread *from) {
 
 /* Interrupts OFF. Picks the next thread and switches to it (PIT-22 order). */
 static void schedule(void) {
-    struct thread *prev = g_percpu.current, *next = pick_next(prev);
+    struct thread *prev = this_cpu()->current, *next = pick_next(prev);
     g_slice = 0;
     if (next == prev) {                 /* also: woken again before it could switch out */
         prev->state = T_RUNNING;
@@ -56,12 +57,13 @@ static void schedule(void) {
     }
     if (prev->state == T_RUNNING) prev->state = T_RUNNABLE;
     next->state = T_RUNNING;
-    g_percpu.current = next;
-    g_percpu.kstack_top = next->kstack_top;
-    g_percpu.kstack_bottom = next->kstack_bottom;
+    this_cpu()->current = next;
+    this_cpu()->kstack_top = next->kstack_top;
+    this_cpu()->kstack_bottom = next->kstack_bottom;
     tss_set_rsp0(next->kstack_top);
     if (next->fs_base != prev->fs_base) wrmsr(MSR_FS_BASE, next->fs_base);
     if (next->cr3 != prev->cr3) write_cr3(next->cr3);   /* flushes the TLB's user half */
+    if ((next->uspace != 0) != this_cpu()->lstar_user) syscall_set_entry(next->uspace != 0);   /* ADR-0011 */
     fpu_save(prev->fx);
     fpu_restore(next->fx);
     g_switches++;
@@ -79,7 +81,7 @@ static void on_tick(void) {
             t->state = T_RUNNABLE;
         }
     }
-    if (++g_slice >= TIMESLICE_TICKS || g_percpu.current == g_idle) schedule();
+    if (++g_slice >= TIMESLICE_TICKS || this_cpu()->current == g_idle) schedule();
 }
 
 void thread_bootstrap(void (*fn)(void *), void *arg);   /* from switch.asm */
@@ -203,9 +205,9 @@ void sched_init(void) {
     main->cr3 = vmm_kernel()->pt.root;
     main->kstack_bottom = (uint64_t)(uintptr_t)boot_stack;
     main->kstack_top = (uint64_t)(uintptr_t)boot_stack_top;
-    g_percpu.current = main;
-    g_percpu.kstack_top = main->kstack_top;
-    g_percpu.kstack_bottom = main->kstack_bottom;
+    this_cpu()->current = main;
+    this_cpu()->kstack_top = main->kstack_top;
+    this_cpu()->kstack_bottom = main->kstack_bottom;
     tss_set_rsp0(main->kstack_top);
 
     g_idle = thread_create("idle", idle_loop, 0);
@@ -223,7 +225,7 @@ void thread_yield(void) {
 }
 
 static void mark_blocked(uint64_t timeout_ns) {
-    struct thread *t = g_percpu.current;
+    struct thread *t = this_cpu()->current;
     t->timed_out = 0;
     t->wake_ns = timeout_ns ? time_monotonic_ns() + timeout_ns : 0;
     t->state = T_BLOCKED;
@@ -248,7 +250,7 @@ void thread_wake(struct thread *t) {
 
 void thread_sleep_ns(uint64_t ns) {
     uint64_t f = irq_save();
-    struct thread *t = g_percpu.current;
+    struct thread *t = this_cpu()->current;
     t->wake_ns = time_monotonic_ns() + (ns ? ns : 1);
     t->state = T_SLEEPING;
     schedule();
@@ -257,7 +259,7 @@ void thread_sleep_ns(uint64_t ns) {
 
 void thread_exit(void) {
     cpu_cli();
-    g_percpu.current->state = T_DEAD;
+    this_cpu()->current->state = T_DEAD;
     schedule();
     panic("dead thread was scheduled");
 }
@@ -279,6 +281,6 @@ struct thread *thread_find(uint32_t id) {
 void thread_set_fs_base(struct thread *t, uint64_t fs) {
     uint64_t f = irq_save();
     t->fs_base = fs;
-    if (t == g_percpu.current) wrmsr(MSR_FS_BASE, fs);
+    if (t == this_cpu()->current) wrmsr(MSR_FS_BASE, fs);
     irq_restore(f);
 }

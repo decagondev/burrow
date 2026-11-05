@@ -15,6 +15,7 @@
 #include "cpu.h"
 #include "kprintf.h"
 #include "panic.h"
+#include "percpu.h"
 #include "irq.h"
 #include "vmm.h"
 #include "uspace.h"
@@ -196,16 +197,28 @@ void syscall_bad_caller(uint64_t rip) {
           (unsigned long long)rip);
 }
 
-extern void syscall_entry(void);
+extern void syscall_entry_kernel(void), syscall_entry_user(void);
 
 /* syscall.asm compares CR3 with this: anything else is a user thread. */
 uint64_t g_kernel_cr3;
 
-void syscall_init(void) {
-    g_kernel_cr3 = vmm_kernel()->pt.root;
+/* This CPU's SYSCALL MSRs; LSTAR starts at the kernel entry (sched.c
+ * switches it to the user entry for user threads, ADR-0011). */
+void syscall_cpu_init(void) {
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_SCE);
     wrmsr(MSR_STAR, ((uint64_t)SEL_UCODE32 << 48) | ((uint64_t)SEL_KCODE << 32));
-    wrmsr(MSR_LSTAR, (uint64_t)(uintptr_t)syscall_entry);
+    wrmsr(MSR_LSTAR, (uint64_t)(uintptr_t)syscall_entry_kernel);
     wrmsr(MSR_FMASK, FMASK_BITS);
-    kprintf("[nucleus] syscall gate ok (lstar=%p)\n", (void *)syscall_entry);
+    this_cpu()->lstar_user = 0;
+}
+
+void syscall_set_entry(int user) {
+    wrmsr(MSR_LSTAR, (uint64_t)(uintptr_t)(user ? syscall_entry_user : syscall_entry_kernel));
+    this_cpu()->lstar_user = user;
+}
+
+void syscall_init(void) {
+    g_kernel_cr3 = vmm_kernel()->pt.root;
+    syscall_cpu_init();
+    kprintf("[nucleus] syscall gate ok (lstar=%p)\n", (void *)syscall_entry_kernel);
 }

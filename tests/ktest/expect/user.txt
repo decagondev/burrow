@@ -12,4 +12,5 @@
 [ktest] uthread_fault_resumes ok
 [ktest] uthread_interrupt ok
 [ktest] uthread_fork_exec ok
+[ktest] uthread_gs_reload ok
 BURROW:KTEST:OK

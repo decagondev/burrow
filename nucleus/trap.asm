@@ -9,6 +9,11 @@
 ; The handler then runs on a stack that belongs to this thread alone, so it
 ; may switch threads; the IST stack is free again for the next trap.
 ; #DF and NMI (IST2/IST3) skip the copy: they only report and halt.
+;
+; Per-CPU data is behind GS (ADR-0011): an entry from ring 3 (saved CS & 3)
+; swaps to the kernel's GS base first, an exit to ring 3 swaps back last.
+; #DF and NMI may arrive between a swapgs and its iretq, so they look at
+; GS_BASE itself (kernel bases have bit 63 set; user ones are 0).
 bits 64
 default rel
 
@@ -16,9 +21,10 @@ FRAME_SIZE   equ 22*8
 FRAME_RSP    equ 20*8            ; offset of the CPU-pushed RSP in the frame
 PERCPU_TOP   equ 0
 PERCPU_BOT   equ 8
+FRAME_CS     equ 24              ; CS at trap_common's entry: [rsp] vector, error, RIP, CS
+MSR_GS_BASE  equ 0xC0000101
 
 extern trap_dispatch
-extern g_percpu
 global trap_stub_table, trap_resume
 
 %macro SAVE_GPRS 0
@@ -61,11 +67,15 @@ section .text
 
 trap_common:
     cld
+    test byte [rsp + FRAME_CS], 3
+    jz .kernel_gs
+    swapgs                               ; from ring 3: the kernel's GS base
+.kernel_gs:
     SAVE_GPRS
     mov rsi, rsp                         ; source: frame on the IST stack
     mov rax, [rsi + FRAME_RSP]           ; interrupted RSP
-    mov rcx, [g_percpu + PERCPU_TOP]
-    cmp rax, [g_percpu + PERCPU_BOT]
+    mov rcx, [gs:PERCPU_TOP]
+    cmp rax, [gs:PERCPU_BOT]
     jb .at_top
     cmp rax, rcx
     ja .at_top
@@ -83,11 +93,21 @@ trap_common:
 trap_resume:                             ; RSP -> struct trap_frame: restore it, iretq.
     RESTORE_GPRS                         ; Also how a new Go thread starts (sched.c).
     add rsp, 16                          ; vector, error code
+    test byte [rsp + 8], 3               ; CS we return to
+    jz .to_kernel
+    swapgs                               ; to ring 3: the user's GS base
+.to_kernel:
     iretq
 
 trap_common_ist:                         ; #DF, NMI: report in place, never return
     cld
     SAVE_GPRS
+    mov ecx, MSR_GS_BASE
+    rdmsr
+    test edx, edx
+    js .kernel_gs                        ; already the kernel's
+    swapgs
+.kernel_gs:
     mov rdi, rsp
     and rsp, -16
     call trap_dispatch

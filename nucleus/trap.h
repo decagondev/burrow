@@ -33,6 +33,7 @@ extern volatile struct trap_record trap_last;   /* last fault resolved by a fixu
 typedef void (*irq_handler)(struct trap_frame *f);
 
 void trap_init(void);
+void trap_init_cpu(void);   /* lidt on an AP (smp.c) */
 void trap_set_handler(uint8_t vector, irq_handler h);   /* vectors >= 32 only */
 const char *trap_name(uint64_t vector);
 

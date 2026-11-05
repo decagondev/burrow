@@ -1,4 +1,4 @@
-/* gdt.h - the nucleus's own GDT and its single TSS.
+/* gdt.h - the nucleus's own GDT and TSS, one of each per CPU (W20-S05).
  *
  * Selector order is fixed by SYSCALL/SYSRET (STAR MSR), BOOT_PROTOCOL.md §7:
  *   SYSCALL loads CS = STAR[47:32] = 0x08, SS = +8  = 0x10
@@ -23,8 +23,11 @@
 
 #define IST_STACK_BYTES 16384u
 
-/* Loads the GDT, reloads every segment register and the task register. */
+/* Loads the GDT, reloads every segment register and the task register,
+ * and binds GS to the CPU's struct percpu: the BSP's (cpu 0, static IST
+ * stacks), or an AP's with the IST stack tops it was given (smp.c). */
 void gdt_init(void);
+void gdt_init_cpu(uint32_t cpu, const uint64_t ist_top[3]);
 /* Stack the CPU switches to on a ring 3 -> ring 0 transition (W9). */
 void tss_set_rsp0(uint64_t rsp0);
 #endif

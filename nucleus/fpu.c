@@ -64,6 +64,15 @@ void fpu_init(void) {
         kprintf("[nucleus] sse ok (fxsave per thread, mxcsr=%x)\n", mxcsr);
 }
 
+/* An AP (W20-S05): CR0 and CR4 came from the BSP through the trampoline;
+ * XCR0, the x87 state and MXCSR are the CPU's own. */
+void fpu_init_cpu(void) {
+    if (g_fpu_xsave) xsetbv0(g_fpu_mask);
+    __asm__ volatile("fninit");
+    uint32_t mxcsr = 0x1F80;
+    __asm__ volatile("ldmxcsr %0" :: "m"(mxcsr));
+}
+
 int fpu_has_avx(void) { return (g_fpu_mask & XCR0_AVX) != 0; }
 
 void fpu_init_area(uint8_t *area) { memcpy(area, g_clean, FPU_AREA_BYTES); }

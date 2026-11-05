@@ -1,4 +1,8 @@
 # Ordered markers for make acpi-smoke (W20-S04): the nucleus on QEMU with -smp 4. Append-only.
 [nucleus] protections: smep on, smap on, nx on ok
 [nucleus] acpi ok (4 CPUs, apic ids 0 1 2 3; I/O APIC 0 at fec00000; S5 found on port 604)
+[nucleus] smp: cpu 1 online
+[nucleus] smp: cpu 2 online
+[nucleus] smp: cpu 3 online
+[nucleus] smp: 4 CPUs online
 BURROW:NUCLEUS:OK

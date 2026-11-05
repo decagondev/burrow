@@ -16,6 +16,7 @@ Two maps matter: the **physical** layout while booting (fixed addresses, chosen 
 | `0x06000 - 0x07BFF` | ~7 KiB | Real/protected-mode stack (grows down from `0x7C00`) | `stage1.asm` |
 | `0x07C00 - 0x07DFF` | 512 B | stage1 | BIOS convention |
 | `0x07E00 - 0x0BDFF` | 16 KiB | stage2 slot | `STAGE2_ADDR` |
+| `0x08000 - 0x08FFF` | 4 KiB | after boot: the APs' trampoline (`nucleus/ap.asm`, copied there by `smp_init`; SIPI vector 0x08; W20-S05) | `TRAMPOLINE_PA` |
 | `0x10000 - 0x4FFFF` | 256 KiB max | loader image + .bss | `LOADER_ADDR`, `LOADER_MAX_SECT` |
 | `0x50000 - 0x7FFFF` | 192 KiB | loader stack (top `0x80000`) | `LOADER_STACK_TOP` |
 | `0x80000 - 0x9FBFF` | ~127 KiB | free (check E820) | — |
@@ -61,6 +62,7 @@ x86-64 has a 48-bit canonical address space: a lower half `0x0000_0000_0000_0000
 | `0xFFFF_8000_0000_0000 - +RAM size` | nucleus | **physmap**: all physical RAM mapped linearly (below 4 GiB up to the top of RAM; above 4 GiB only the usable ranges, so the PCI hole is never mapped as RAM, W14-S01) | S, NX |
 | `0xFFFF_FFFF_8000_0000 - ...` | nucleus | nucleus image (`-mcmodel=kernel`, loaded at phys 1 MiB) | S |
 | `0xFFFF_FFFF_C000_0000 - +64 × 20 KiB` | nucleus | kernel stacks: slot i = 4 KiB unmapped guard + 16 KiB stack (`KSTACK_REGION`, `nucleus/sched.c`) | S, NX |
+| `0xFFFF_FFFF_C020_0000 - +16 × 80 KiB` | nucleus | AP stacks (W20-S05): per CPU an idle stack and IST1-3, each 4 KiB guard + 16 KiB (`AP_STACK_REGION`, `nucleus/smp.c`; the BSP's IST stacks are static) | S, NX |
 
 Since W5 the nucleus drops the loader's identity map (PML4[0]) in `vmm_init`, so nothing is mapped below `0x0000_8000_0000_0000` until the Go kernel (W6) reserves it. Device registers are mapped uncached at `physmap_base + phys` (`vm_map_mmio`, e.g. the LAPIC at `0xFEE00000`); since W8 the Go kernel asks for its own with `nu_mmio_map`, e.g. the BGA framebuffer (PCI BAR0, `0xFD000000` on QEMU, 3 MiB at 1024x768x32) at `physmap_base + 0xFD000000`. Go reads boot modules (initrd, the module table) through the physmap too (`amd64.PhysBytes`). Hint-less `vm_reserve` calls are placed from `0x7D00_0000_0000` up (`VM_SEARCH_BASE`); a free hint is honoured. As built in W6 (Go 1.27.3): the Go kernel's segments at `0x7dff_ffff_f000` (R X), `0x7e00_000a_f000` (R), `0x7e00_0018_d000` (RW + bss); its 1 MiB m0 stack and the runtime's hint-less maps from `0x7D00_0000_0000`; the heap at a random hint such as `0x19f9_xxxx_xxxx`.
 

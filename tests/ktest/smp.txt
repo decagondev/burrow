@@ -1,0 +1,4 @@
+# Suite "smp" (W20-S05): the application processors, on QEMU -smp 4 (Makefile).
+smp_cpus_online
+smp_percpu
+smp_spin_counter

@@ -31,6 +31,13 @@ static inline void write_cr4(uint64_t v) { __asm__ volatile("mov %0, %%cr4" :: "
 static inline void invlpg(uint64_t va) { __asm__ volatile("invlpg (%0)" :: "r"(va) : "memory"); }
 static inline uint16_t read_cs(void) { uint16_t v; __asm__ volatile("mov %%cs, %0" : "=r"(v)); return v; }
 static inline uint16_t read_tr(void) { uint16_t v; __asm__ volatile("str %0" : "=r"(v)); return v; }
+/* Per-CPU data (W20-S05): a qword at GS_BASE + off (nucleus/percpu.h). */
+static inline uint64_t read_gs_qword(uint64_t off) {
+    uint64_t v;
+    __asm__ volatile("mov %%gs:(%1), %0" : "=r"(v) : "r"(off) : "memory");
+    return v;
+}
+static inline void cpu_pause(void) { __asm__ volatile("pause" ::: "memory"); }
 static inline uint64_t rdtsc(void) {
     uint32_t lo, hi;
     __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
@@ -39,6 +46,8 @@ static inline uint64_t rdtsc(void) {
 static inline uint64_t read_rflags(void) { uint64_t v; __asm__ volatile("pushfq; pop %0" : "=r"(v)); return v; }
 static inline void cpu_cli(void) { __asm__ volatile("cli" ::: "memory"); }
 static inline void cpu_sti(void) { __asm__ volatile("sti" ::: "memory"); }
+/* sti then hlt: an interrupt pending at the sti ends the hlt (one-instruction shadow). */
+static inline void cpu_sti_hlt(void) { __asm__ volatile("sti; hlt" ::: "memory"); }
 #define RFLAGS_IF (1ull << 9)
 /* Disable interrupts, return the previous RFLAGS for irq_restore. On one CPU
  * this alone makes a short section atomic with respect to IRQ handlers. */

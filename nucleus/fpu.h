@@ -18,6 +18,7 @@ extern int g_fpu_xsave;          /* fpu.c: 1 when switches use XSAVE */
 extern uint64_t g_fpu_mask;      /* the XCR0 components saved */
 
 void fpu_init(void);                               /* CR0/CR4/XCR0, clean template */
+void fpu_init_cpu(void);                           /* on an AP: XCR0, fninit, MXCSR (W20-S05) */
 void fpu_init_area(uint8_t *area);                 /* new thread: clean state */
 int fpu_has_avx(void);                             /* AVX state is kept per thread */
 /* set_legacy writes FXSAVE-format registers into an area (a fork child, a
