@@ -100,6 +100,7 @@ func (p *Process) exit(code, sig int, reason string) {
 	threads := make([]*Thread, 0, len(p.threads))
 	for _, t := range p.threads {
 		t.exited = true
+		t.wakeLocked() // a handler blocked for this thread returns, and answers nobody (BUG-0026)
 		threads = append(threads, t)
 	}
 	p.threads = map[int]*Thread{}

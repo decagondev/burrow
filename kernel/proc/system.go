@@ -248,7 +248,9 @@ func (s *System) handle(r Request) {
 		t.stopped(true, sig, sigInfo{signo: int32(sig), code: siKernel, addr: r.Args[0], what: what}, r.Args[1])
 		return
 	}
+	t.enter(r.Nr)
 	res, exited := t.syscall(r.Nr, r.Args)
+	t.leave()
 	if !exited {
 		t.finish(res, r.Nr) // a pending signal runs before the thread returns
 	}

@@ -176,6 +176,12 @@ var neverRestarted = map[uint64]bool{7: true, 271: true, 34: true, 35: true, 130
 // pending signal runs its handler (or its default action) first.
 func (t *Thread) finish(res int64, nr uint64) {
 	p, s := t.p, t.p.sys
+	p.mu.Lock()
+	gone := t.exited
+	p.mu.Unlock()
+	if gone { // its process ended while the call waited: the nucleus thread is
+		return // gone, a reply would only fail (BUG-0026; ids are never reused)
+	}
 	sig, act, info := t.takeSignal()
 	if sig == 0 {
 		p.mu.Lock()

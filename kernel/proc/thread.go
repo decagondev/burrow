@@ -11,6 +11,7 @@ package proc
 import (
 	"encoding/binary"
 	"path"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -32,6 +33,9 @@ type Thread struct {
 	altSize     uint64
 	clearTID    uint64 // set_tid_address / CLONE_CHILD_CLEARTID
 	exited      bool
+
+	inNr    atomic.Int64 // the system call in flight, -1 for none (dump.go)
+	inSince atomic.Int64 // when it began, Unix nanoseconds
 }
 
 // thandler is a system call that needs the calling thread.
@@ -43,6 +47,7 @@ var ttable = map[uint64]thandler{}
 // (s.mu held).
 func (p *Process) addThread(nt uint64, tid int) *Thread {
 	t := &Thread{p: p, nt: nt, TID: tid, sigWake: make(chan struct{})}
+	t.inNr.Store(-1)
 	p.mu.Lock()
 	p.threads[tid] = t
 	if tid == p.PID {

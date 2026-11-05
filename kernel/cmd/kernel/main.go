@@ -136,6 +136,8 @@ func main() {
 		k.procs.SetNetwork(k.net.Stack) // AF_INET sockets (W17-S03)
 	}
 	keys.term.Store(k.tty)
+	dump := func() { k.procs.Dump(out) } // SysRq (W20-S01): every process and thread, for a hang
+	keys.sysrq.Store(&dump)
 	go k.procs.Serve() // the one dispatcher for every user syscall (W9)
 	con := console.New(out, input)
 	k.con = con

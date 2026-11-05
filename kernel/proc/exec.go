@@ -120,6 +120,7 @@ func (t *Thread) endOthers() {
 	for tid, o := range p.threads {
 		if o != t {
 			o.exited = true
+			o.wakeLocked() // its blocked handler returns, and answers nobody (BUG-0026)
 			others = append(others, o)
 			delete(p.threads, tid)
 		}

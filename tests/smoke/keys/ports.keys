@@ -71,5 +71,10 @@ type run /bin/linktest /tmp/linktest
 key ret
 wait linktest: ok
 wait burrow> 
+# W20-S01: children ending in every way while their parent waits (BUG-0023's shape; passed on the host's Linux first)
+type run /bin/waitstress 100
+key ret
+wait waitstress: 100 rounds ok
+wait burrow> 
 type poweroff
 key ret

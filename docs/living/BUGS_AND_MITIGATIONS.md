@@ -38,9 +38,20 @@ flowchart LR
 - Root cause: unknown. Suspected: the exit of a multi-threaded Go program (exit_group while the runtime's threads are in `futex`, `nanosleep` or `tgkill`'s SIGURG preemption) racing with the wait for it. Checked and ruled out: S03's new `p.mu` lookups (`Cred`, `mayKill`) nest no locks, and `send`, which `tgkill` already called, took `p.mu` before them.
 - Fix: none yet. Next time: keep the log of a failing run (`for i in $(seq 20); do make ports-smoke | grep -a SMOKE; grep -q FAIL ... && cp build/smoke-ports.log build/smoke-ports-fail-$i.log; done`), and the kernel's thread list at the hang.
 - Regression: none possible until it reproduces.
+- W20-S01's hunt: a hang watchdog now makes every timed-out smoke end with a dump of every process, thread and kernel goroutine (`tests/smoke/sendkeys.py` sends Alt+SysRq; `proc.System.Dump`); `user/waitstress` (children exiting at once, with threads running, from a thread, killed while asleep, leaving orphans, exec'ing) ran about 5,000 rounds and `gohello` 255 times over 17 boots, three at a time on a loaded host, without a hang. It found BUG-0026 instead (handlers leaked by threads that end while blocked), which is not this one's cause: the nucleus never reuses thread ids, so a stale reply only fails. Still open; the next sighting comes with its dump.
 - Lesson: (open)
 
 ## Closed
+
+### BUG-0026: A thread that ended while blocked left its handler waiting for ever
+- Found: 2026-11-05, W20-S01, in the first hang dump (`waitstress` in ports-smoke, timed out for an unrelated reason): 30 goroutines in `sysPauseFn` for threads of processes long gone.
+- Severity: major (a leak without bound: every thread blocked in a system call when its process ends keeps a goroutine, its Thread and its Process for the life of the kernel).
+- Symptom: `[dump]   burrow/kernel/proc.sysPauseFn(...)` thirty times, for thread ids far below the live ones.
+- Root cause: blocking calls wait on the thread's `sigWake` channel (`t.cancel()`), which only a deliverable signal closes. `exit` (and `execve` ending the other threads) marked the threads exited and killed them in the nucleus but never closed their channels, so a thread in `pause`, a blocking read, `poll` or a futex wait, other than the one ending the process, waited for ever. A signal aimed at the dying thread itself did close it, which is why the obvious test passed.
+- Fix: `exit` and `execve`'s `endOthers` close each ended thread's wake channel; `finish` sends no reply for a thread that has ended (`kernel/proc/process.go`, `exec.go`, `signal.go`).
+- Mitigation: the hang dump lists every handler goroutine, so a leak shows up in any dump; waitstress in `make test`.
+- Regression: `TestBUG0026AKilledProcessLeavesNoHandlers` (`kernel/proc`): one thread paused, another calls `exit_group`; no pause handler may survive. On Burrow, 100 waitstress rounds then a dump show none left (30 before).
+- Lesson: a test that kills the blocked thread itself tests the easy case; the leak was in the threads nobody signalled.
 
 ### BUG-0025: fstat of a file open for writing said 0644 and root
 - Found: 2026-11-04, W19-S06, the first run of the M19 demo: after `passwd alice`, `/etc/shadow` was mode 0644 (it had been 0600), readable by everyone.
@@ -323,3 +334,11 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-57 | W19 | The path walker changes every path: `..` stops being textual | S05: the full `make test` before anything else; host tests for loops, links across mounts, `..` after a link |
 | PIT-58 | W19 | Set-user-id programs are an attack surface (`LD_LIBRARY_PATH`, a set-uid file rewritten by its user) | S03/S04: `AT_SECURE` for set-id programs; a non-root write drops the set-uid bit, as Linux |
 | PIT-59 | W19 | A program run from a disk reads its pages at first touch (W18-S02): it must not change under it | not done in W19 (an open risk, UNIX.md says so): `ETXTBSY` and keeping a deleted program's inode until its last mapping goes are for later |
+| PIT-60 | W20 | Races one CPU hid: code that relied on interrupts-off for exclusion (scheduler, IRQ pending bits, `trap_last`, the uthread FIFO, the futex table) | S05: list every global the nucleus writes before S06 lets a second CPU run threads |
+| PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
+| PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
+| PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |
+| PIT-64 | W20 | XSAVE area size and alignment (CPUID-sized, 64-byte aligned, copied whole by clone) | S03 |
+| PIT-65 | W20 | SMAP finds the nucleus touching user memory | S02: each access bracketed or fixed; a ktest proves an unbracketed one faults |
+| PIT-66 | W20 | Multi-threaded TCG changes timing everywhere | every keys file waits for text, not time; budgets measured again on four CPUs (S08) |
+| PIT-67 | W20 | Go's runtime on many Ps: more Ms in the nucleus, SIGURG preemption aimed at threads on other CPUs, parallel GC | S06-S08: an IPI stops a thread at its next return; the census is rerun |

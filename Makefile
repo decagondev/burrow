@@ -340,7 +340,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest $(BUILD)/user/waitstress
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -350,13 +350,14 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/shmtest > $(BUILD)/shmtest-linux.log  # W18-S03
 	LD_LIBRARY_PATH=$(BUILD)/user/lib $(BUILD)/user/dynhello > $(BUILD)/dynhello-linux.log  # W18-S05
 	$(BUILD)/user/linktest /tmp/linktest-linux > $(BUILD)/linktest-linux.log  # W19-S05 (an absolute directory)
+	$(BUILD)/user/waitstress 100 > $(BUILD)/waitstress-linux.log  # W20-S01
 	@# W19-S03, S04: credtest and permtest need root on Linux (and a disk without nosuid for --exec)
 	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
 		$(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \
 	elif sudo -n true 2>/dev/null; then sudo -n $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
 		sudo -n $(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \
 	else echo "CREDTEST PERMTEST LINUX SKIP (need root or sudo -n)"; fi
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 60 tests/smoke/keys/ports.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/ports.txt 120 tests/smoke/keys/ports.keys
 
 # The X11 desktop (W16-S01): `make x11` fetches the X libraries, TinyX, dwm,
 # st and dmenu once (scripts/x11.sh, sha256-pinned, ~/.cache/burrow-x11) and

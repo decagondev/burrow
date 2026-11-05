@@ -215,4 +215,8 @@ linktest: link-of-a-directory ok
 linktest: link-to-an-existing-name ok
 linktest: cleanup ok
 linktest: ok
+burrow> run /bin/waitstress 100
+waitstress: 50 rounds
+waitstress: 100 rounds
+waitstress: 100 rounds ok
 burrow> poweroff

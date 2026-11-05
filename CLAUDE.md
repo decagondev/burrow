@@ -105,6 +105,7 @@ Expected `make test` tail: `N checks, 0 failures`, `SMOKE PASS [boot_to_loader]`
 - **Typing into a boot:** `tests/smoke/smoke.sh <img> <expect> <timeout> <keys-file>` (steps `wait`/`type`/`key`, sent with QEMU `sendkey` by `tests/smoke/sendkeys.py`, and `mouse <dx> <dy>` (split into steps of at most 400: QEMU's PS/2 queue is small and merges what does not fit), `click`/`press`/`release <button>` through `mouse_move`/`mouse_button`; the monitor socket lives in `/tmp` because WSL's `/mnt/c` has no Unix sockets).
 - **Ring-3 ktests** (`nucleus/ktest_uthread.c`) build a process from hand-assembled machine code and play the Go dispatcher themselves through `nu()` (`ktest_nu.h`).
 - **Go drivers:** host-test with `haltest` (`FakePorts`, `FakeIRQ`, `Fake8042`) and `kernel/hostsim`; the on-target proof is a marker in `boot_to_go.txt`.
+- **A hang leaves a dump (W20-S01):** when a keys step times out, `sendkeys.py` presses Alt+SysRq, and the kernel prints every process, thread (the syscall it is in) and `kernel/proc` goroutine (`[dump] ...` lines, `proc.System.Dump`) before QEMU is stopped; read those first.
 - Smoke logs go to `build/smoke-<name>.log`. They are read as text whatever bytes a program writes (`grep -a`: Qt's linuxfb writes a NUL, W15-S03).
 
 ## Coding rules (`docs/06-guides/CODING_STANDARDS.md`)

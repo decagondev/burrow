@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S01 A hang watchdog
+
+**Did:** a dump of every process, thread and kernel goroutine, on Alt+SysRq, which the smoke harness now presses whenever a boot hangs; `waitstress`, children ending in six ways while their parent waits, in `make test`. BUG-0023 did not show in 17 boots; the first dump found a leak instead (BUG-0026): handlers of threads that ended while blocked never returned.
+
+**Surprise:** the tool paid for itself before it was finished: the first dump came from a run that had only run out of time, and showed thirty goroutines that had no business existing. And QEMU's `sysrq` key is PrintScreen; only Alt+SysRq gives the scancode the console expects.
+
+**Next:** W20-S02: SMEP, SMAP and NX everywhere.
+
 ## 2026-11-04 — W19 done: a multi-user Unix (M19)
 
 **Did:** the wave in six slices. ext2 read (S01) and written (S02), checked by e2fsprogs at every step; users and groups with Linux's rules (S03); owners and permissions (S04); one path walker with symbolic and hard links (S05); busybox's login tools, an ext2 root disk and the demo (S06). Burrow boots to `login:`, keeps people out of each other's files, and remembers it across reboots.

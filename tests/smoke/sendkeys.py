@@ -103,6 +103,9 @@ def pixel(path, x, y):
     return '#%02x%02x%02x' % tuple(data[o:o + 3])
 
 
+DUMP_WAIT_S = 3  # time for the kernel's dump to reach the log
+
+
 def main():
     mon, log, keys = sys.argv[1:4]
     deadline = time.time() + float(sys.argv[4] if len(sys.argv) > 4 else 30)
@@ -118,58 +121,65 @@ def main():
         s.sendall(f'sendkey {name}\n'.encode())
         time.sleep(KEY_DELAY_S)
 
-    cursor = 0
-    with open(keys) as f:
-        for raw in f:
-            line = raw.rstrip('\n')
-            if not line.strip() or line.lstrip().startswith('#'):
-                continue
-            op, _, arg = line.partition(' ')
-            if op == 'wait':
-                cursor = wait_for(log, arg, deadline, cursor)
-            elif op == 'type':
-                for ch in arg:
-                    press(key_name(ch))
-            elif op == 'key':
-                press(arg)
-            elif op == 'mouse':
-                # QEMU's PS/2 queue holds a few packets of at most 127 each;
-                # motion that does not fit waits until the next input event and
-                # merges with it. So a long move goes in steps the queue takes,
-                # each given time to drain (W15-S04: -2000 then +530 arrived
-                # as one net move).
-                dx, dy = (int(v) for v in arg.split())
-                while dx or dy:
-                    sx = max(-MOUSE_STEP, min(MOUSE_STEP, dx))
-                    sy = max(-MOUSE_STEP, min(MOUSE_STEP, dy))
-                    s.sendall(f'mouse_move {sx} {sy}\n'.encode())
-                    dx, dy = dx - sx, dy - sy
-                    time.sleep(MOUSE_DELAY_S)
-            elif op == 'click':
-                for state in (BUTTONS[arg], 0):
+    try:
+        cursor = 0
+        with open(keys) as f:
+            for raw in f:
+                line = raw.rstrip('\n')
+                if not line.strip() or line.lstrip().startswith('#'):
+                    continue
+                op, _, arg = line.partition(' ')
+                if op == 'wait':
+                    cursor = wait_for(log, arg, deadline, cursor)
+                elif op == 'type':
+                    for ch in arg:
+                        press(key_name(ch))
+                elif op == 'key':
+                    press(arg)
+                elif op == 'mouse':
+                    # QEMU's PS/2 queue holds a few packets of at most 127 each;
+                    # motion that does not fit waits until the next input event and
+                    # merges with it. So a long move goes in steps the queue takes,
+                    # each given time to drain (W15-S04: -2000 then +530 arrived
+                    # as one net move).
+                    dx, dy = (int(v) for v in arg.split())
+                    while dx or dy:
+                        sx = max(-MOUSE_STEP, min(MOUSE_STEP, dx))
+                        sy = max(-MOUSE_STEP, min(MOUSE_STEP, dy))
+                        s.sendall(f'mouse_move {sx} {sy}\n'.encode())
+                        dx, dy = dx - sx, dy - sy
+                        time.sleep(MOUSE_DELAY_S)
+                elif op == 'click':
+                    for state in (BUTTONS[arg], 0):
+                        s.sendall(f'mouse_button {state}\n'.encode())
+                        time.sleep(0.1)
+                elif op in ('press', 'release'):   # hold a button across mouse steps (a drag)
+                    state = BUTTONS[arg] if op == 'press' else 0
                     s.sendall(f'mouse_button {state}\n'.encode())
                     time.sleep(0.1)
-            elif op in ('press', 'release'):   # hold a button across mouse steps (a drag)
-                state = BUTTONS[arg] if op == 'press' else 0
-                s.sendall(f'mouse_button {state}\n'.encode())
-                time.sleep(0.1)
-            elif op == 'sleep':
-                time.sleep(float(arg))
-            elif op == 'screendump':
-                dump(os.path.abspath(arg))
-            elif op == 'waitpixel':
-                x, y, want = arg.split()
-                probe = os.path.abspath(log + '.probe.ppm')
-                while True:
-                    dump(probe)
-                    if pixel(probe, int(x), int(y)) == want.lower():
-                        break
-                    if time.time() > deadline:
-                        raise SystemExit(f'sendkeys: pixel ({x},{y}) never became {want}')
-                    time.sleep(0.2)
-            else:
-                raise SystemExit(f'sendkeys: unknown step {line!r}')
-    s.close()
+                elif op == 'sleep':
+                    time.sleep(float(arg))
+                elif op == 'screendump':
+                    dump(os.path.abspath(arg))
+                elif op == 'waitpixel':
+                    x, y, want = arg.split()
+                    probe = os.path.abspath(log + '.probe.ppm')
+                    while True:
+                        dump(probe)
+                        if pixel(probe, int(x), int(y)) == want.lower():
+                            break
+                        if time.time() > deadline:
+                            raise SystemExit(f'sendkeys: pixel ({x},{y}) never became {want}')
+                        time.sleep(0.2)
+                else:
+                    raise SystemExit(f'sendkeys: unknown step {line!r}')
+        s.close()
+    except SystemExit:
+        # W20-S01: before giving up, ask the kernel what everyone is doing
+        # (SysRq prints every process and thread to the serial log)
+        s.sendall(b'sendkey alt-sysrq\n')  # plain sysrq is PrintScreen's sequence; Alt+SysRq is 0x54
+        time.sleep(DUMP_WAIT_S)
+        raise
 
 
 if __name__ == '__main__':

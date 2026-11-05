@@ -28,7 +28,9 @@ if [ -n "$KEYS" ]; then
   MON="$(mktemp -u "${TMPDIR:-/tmp}/burrow-qemu-${NAME}.XXXXXX")"   # not on DrvFs: no sockets there
   trap 'rm -f "$MON"' EXIT
   MONITOR=(-monitor "unix:$MON,server,nowait")
-  python3 "$(dirname "$0")/sendkeys.py" "$MON" "$LOG" "$KEYS" "$TIMEOUT" &
+  # sendkeys gives up a little before QEMU is killed, so the kernel's dump
+  # (SysRq, W20-S01) of a hang still reaches the log
+  python3 "$(dirname "$0")/sendkeys.py" "$MON" "$LOG" "$KEYS" "$((TIMEOUT > 12 ? TIMEOUT - 6 : TIMEOUT))" &
 fi
 
 set +e
