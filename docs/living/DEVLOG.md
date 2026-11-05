@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W21 done: a firmware framebuffer (M21)
+
+**Did:** the wave in five slices. stage2 sets a VBE mode from a `video` payload, padded scanline and all (S01); the mode goes up in boot_info, checked by the nucleus (S02); the Go kernel draws on it in any pixel layout, DISPI only as the fallback (S03); the framebuffer is write-combining in the kernel and in programs (S04); and `make fb-smoke` runs the console, fbtest, paint, Doom and X at 1280x1024 with a 5248-byte pitch (S05).
+
+**Surprise:** two old bugs surfaced on the way, neither in the framebuffer's code: BUG-0023, the rare hang open since W19 (two kills of one thread, found by W20's hang dump once four CPUs made it common), and a framebuffer mapped with two memory types since W11. The odd geometry itself found nothing: the habit of stepping by `line_length` from W8 (PIT-27) had held everywhere.
+
+**Learned:** QEMU's tidy defaults hide whole classes of mistakes (a tight pitch, XRGB pixels, ignored memory types); asking it for the untidy case on purpose, and testing the layouts it never offers on the host, is how the emulator keeps standing in for real hardware.
+
+**Next:** the rest of E18 (sound, an absolute pointer), or UEFI and GOP for real machines; PIT-59 remains open.
+
+## 2026-11-05 — W21-S05 A hostile geometry, M21
+
+**Did:** `make fb-smoke`: two images at 1280x1024 with a padded 5248-byte pitch run the console, fbtest's bars, a paint stroke, Doom's title, and Xfbdev with xhello, checked by 35 pixels at the right and bottom edges. Docs on drawing by `line_length` in ARCHITECTURE.md, DESKTOP.md and PORTING.md.
+
+**Surprise:** nothing needed fixing. Every program that draws on the framebuffer already took its size from fbdev and stepped by the pitch.
+
+**Next:** the wave summary above.
+
 ## 2026-11-05 — W21-S04 A write-combining framebuffer
 
 **Did:** the PAT's entry 1 is write-combining on every CPU; `nu_mmio_map` maps a framebuffer WC and refuses to map a page with a second cache type; a program's mmap of `/dev/fb0` is WC too, through mprotect and fork. `make fb-bench` prints fill and scroll times as a baseline.

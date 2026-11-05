@@ -1,0 +1,38 @@
+# Pixels of make fb-smoke (W21-S05, tests/smoke/keys/fb-odd.keys): 1280x1024
+# with a 5248-byte pitch. A stride computed from the width would shear every
+# row by 32 pixels more than the last, so the checks sit at the right and
+# bottom edges, where that shows first. Append-only.
+# The console: the band to the right edge, the paper to the bottom corner.
+size  build/screen-fb-console.ppm 1280 1024
+pixel build/screen-fb-console.ppm 1279 0 #5dc9e2
+pixel build/screen-fb-console.ppm 1279 95 #5dc9e2
+pixel build/screen-fb-console.ppm 1279 96 #1e1e28
+pixel build/screen-fb-console.ppm 0 1023 #1e1e28
+pixel build/screen-fb-console.ppm 1279 1023 #1e1e28
+# fbtest: eight 160-pixel bars from line_length, white to black, edge to edge.
+size  build/screen-fb-bars.ppm 1280 1024
+pixel build/screen-fb-bars.ppm 0 0 #ffffff
+pixel build/screen-fb-bars.ppm 159 1023 #ffffff
+pixel build/screen-fb-bars.ppm 160 1023 #ffff00
+pixel build/screen-fb-bars.ppm 800 512 #ff0000
+pixel build/screen-fb-bars.ppm 1119 1023 #0000ff
+pixel build/screen-fb-bars.ppm 1120 0 #000000
+pixel build/screen-fb-bars.ppm 1279 1023 #000000
+# paint: the red swatch, the stroke dragged from (96,332) to (496,332), and
+# white paper to the far corner.
+size  build/screen-fb-paint.ppm 1280 1024
+pixel build/screen-fb-paint.ppm 96 32 #ff0000
+pixel build/screen-fb-paint.ppm 100 332 #ff0000
+pixel build/screen-fb-paint.ppm 498 332 #ff0000
+pixel build/screen-fb-paint.ppm 511 63 #808080
+pixel build/screen-fb-paint.ppm 512 63 #ffffff
+pixel build/screen-fb-paint.ppm 1279 1023 #ffffff
+# Doom's title, scaled 2x to 1280x800 and centred (rows 112-911), black above
+# and below; its last row and the version text near the right edge.
+size  build/screen-fb-doom.ppm 1280 1024
+pixel build/screen-fb-doom.ppm 1279 111 #000000
+pixel build/screen-fb-doom.ppm 640 112 #680101
+pixel build/screen-fb-doom.ppm 0 911 #500101
+pixel build/screen-fb-doom.ppm 0 912 #000000
+pixel build/screen-fb-doom.ppm 1230 870 #ff801c
+pixel build/screen-fb-doom.ppm 1279 1023 #000000

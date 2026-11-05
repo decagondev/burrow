@@ -1,0 +1,4 @@
+# make fb-smoke, its X half (W21-S05; keys tests/smoke/keys/fb-x11.keys). Append-only.
+[bga] INFO: 1280x1024x32 linear framebuffer at 0xfd000000 (pitch 5248, vbe)
+xhello: exposed
+fb-x11: done

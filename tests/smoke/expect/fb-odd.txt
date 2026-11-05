@@ -1,0 +1,7 @@
+# make fb-smoke (W21-S05; keys tests/smoke/keys/fb-odd.keys). Append-only.
+[stage2] vbe: 1280x1024x32 pitch 5248 at
+[nucleus] framebuffer 1280x1024x32 pitch 5248 at
+[bga] INFO: 1280x1024x32 linear framebuffer at 0xfd000000 (pitch 5248, vbe)
+fbtest: 1280x1024, 32 bpp, red at bit 16, line_length 5248
+paint: 1 strokes, last colour ff0000
+Auto-scaling

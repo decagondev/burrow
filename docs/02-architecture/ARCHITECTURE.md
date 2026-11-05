@@ -332,6 +332,37 @@ flowchart LR
     wake["thread_wake"] -- "IPI 0xF0 to an idle CPU" --> ap1
 ```
 
+### 7.6 Framebuffer and firmware (Wave 21)
+
+The screen's mode comes from the firmware, as on real hardware, not from
+QEMU's Bochs registers. An image asks for a mode with a small `video`
+payload (`mkimage -video WxHxB[,pitch]`); stage2's last real-mode step
+(`boot/vbe16.inc`) walks the VBE mode list, sets a linear direct-colour
+mode, asks for a padded scanline with 4F06 when told to, and records base,
+size, pitch, depth and colour fields in boot_info (version 3). The nucleus
+checks that descriptor (`nucleus/fbdesc.c`) and clears it if it is wrong;
+the Go kernel's display driver maps it write-combining (the PAT's entry 1
+is WC on every CPU) and hands `gfx` the geometry and pixel format, and only
+an image that asked for nothing (or a mode the BIOS lacks) gets a DISPI mode
+instead. `/dev/fb0` reports the mode as it is, `line_length` included, and
+maps it into programs write-combining too, so a page never has two memory
+types.
+
+```mermaid
+flowchart LR
+    req["video payload<br/>WxHxB, pitch"] --> s2["stage2: VBE<br/>4F00 4F01 4F02 4F06"]
+    s2 --> bi[("boot_info v3<br/>fb_* fields")]
+    bi --> chk["nucleus: fbdesc check"]
+    chk -- "ok" --> drv["display driver:<br/>map WC, gfx.Format"]
+    chk -- "none or refused" --> dispi["DISPI 1024x768x32"]
+    dispi --> drv
+    drv --> con["console"] & fb0["/dev/fb0: X, Qt, Doom"]
+```
+
+Programs must take the geometry from `FBIOGET_VSCREENINFO` and step rows by
+`line_length`; `make fb-smoke` boots 1280x1024 with a 5248-byte pitch to
+keep that true.
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

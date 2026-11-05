@@ -1,0 +1,47 @@
+# make fb-smoke (W21-S05): go-doom.img asking stage2 for 1280x1024x32 with
+# a padded 5248-byte scanline. The console, fbtest's bars, a paint stroke
+# and Doom's title must all come out straight at a geometry no program
+# hard-codes; the screen checks look near the right and bottom edges, where
+# a stride computed from the width shows first.
+wait burrow>
+type ls /bin
+key ret
+wait wc
+wait burrow>
+screendump build/screen-fb-console.ppm
+type run /bin/fbtest
+key ret
+wait fbtest: bars drawn
+screendump build/screen-fb-bars.ppm
+key ret
+wait fbtest: done
+wait burrow>
+# paint: the cursor starts at the centre (640,512); up to the red swatch
+# (96,32) and click, down to (96,332), then drag right to (496,332).
+type run /bin/paint
+key ret
+wait paint: ready
+mouse -544 -480
+click left
+mouse 0 300
+press left
+mouse 200 0
+mouse 200 0
+release left
+sleep 1
+screendump build/screen-fb-paint.ppm
+key esc
+wait paint: 1 strokes, last colour ff0000
+wait burrow>
+type run /bin/doom -iwad /mnt/freedoom1.wad
+key ret
+wait Auto-scaling
+sleep 4
+screendump build/screen-fb-doom.ppm
+key esc
+key up
+key ret
+key y
+wait burrow>
+type poweroff
+key ret

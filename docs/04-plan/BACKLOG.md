@@ -87,7 +87,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
   - [x] E07.F04.S01 As a kernel dev, I want the firmware's framebuffer (address, geometry, pitch, pixel format) in boot_info, so that nothing above stage2 needs to know how the mode was set. [W21-S02]
   - [x] E07.F04.S02 As a user, I want the console and `/dev/fb0` to work at whatever geometry and pixel format the firmware gave, so that a screen that is not 1024x768 XRGB still shows Burrow. [W21-S03]
   - [x] E07.F04.S03 As a user, I want the framebuffer mapped write-combining, so that drawing on real hardware is not one bus transaction per pixel. [W21-S04]
-  - [ ] E07.F04.S04 As a porter, I want a smoke test at an odd resolution with a padded pitch, so that a program assuming `pitch == width*4` or 1024x768 fails in the emulator. [W21]
+  - [x] E07.F04.S04 As a porter, I want a smoke test at an odd resolution with a padded pitch, so that a program assuming `pitch == width*4` or 1024x768 fails in the emulator. [W21-S05]
 - E07.F05 Block layer + Go ATA PIO driver; conformance tests shared with a RAM disk (Liskov).
 - E07.F06 FAT32 read-only (then ext2 later) for a data partition.
 

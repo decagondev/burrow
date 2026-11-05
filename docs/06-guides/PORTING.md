@@ -40,6 +40,10 @@ Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisio
 - **A Windows-backed checkout** cannot hold files whose names differ only in case (the Linux UAPI headers have such pairs): link to such trees instead of copying them.
 - **Smoke waits** match the serial log, which also holds the echo of what was typed: wait for output the command line does not contain.
 
+## Drawing on /dev/fb0 (W21)
+
+The framebuffer's mode is the firmware's, not a constant: read `xres`, `yres`, `bits_per_pixel` and the colour fields with `FBIOGET_VSCREENINFO`, and step from one row to the next by `line_length` from `FBIOGET_FSCREENINFO`, never by the width times four (a padded scanline is normal on real hardware; `make fb-smoke` boots one). The mapping is write-combining: writes are fast, reads back from the framebuffer are slow, so draw into memory and copy rows out. `user/fbtest.c`, `user/paint.c` and the Doom backend show the pattern; Xfbdev and Qt's linuxfb already follow it.
+
 ## Dynamic linking (W18)
 
 Burrow runs dynamically linked programs since W18: `execve` loads the program and the interpreter its `PT_INTERP` names, starts the interpreter with `AT_BASE` in the auxiliary vector, and musl's loader does the rest. The initrd's `/lib` holds musl's loader, `/lib/ld-musl-x86_64.so.1` (the `libc.so` of the host's `musl-gcc`, `MUSL_LOADER` in the Makefile), and the libraries; `/lib` is on the loader's default path, so nothing needs `LD_LIBRARY_PATH`. To port a dynamic program: build it with `musl-gcc` without `-static` (shared libraries with `-shared -fPIC`), check it on the host's Linux first with `LD_LIBRARY_PATH` at the build's libraries, and put its libraries in the initrd's `/lib`; `user/dyn/` (`dynhello`, a library it links against and a plug-in it opens with `dlopen`) is the example. Everything that existed before W18 is still static, and static stays the simpler way to ship one program; dynamic linking is for sharing code between several and for plug-ins. Shared Qt and X libraries are later work.

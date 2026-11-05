@@ -1,0 +1,11 @@
+# Pixels of make fb-smoke's X half (W21-S05, tests/smoke/keys/fb-x11.keys):
+# Xfbdev at 1280x1024 with a 5248-byte pitch, xhello's window at (20,20).
+# Its rectangles and background, and the root weave to the far corner (a
+# wrong stride would break the weave's pattern there). Append-only.
+size  build/screen-fb-x11.ppm 1280 1024
+pixel build/screen-fb-x11.ppm 140 120 #e03030
+pixel build/screen-fb-x11.ppm 340 120 #30c050
+pixel build/screen-fb-x11.ppm 540 120 #3060e0
+pixel build/screen-fb-x11.ppm 40 380 #202430
+pixel build/screen-fb-x11.ppm 1278 1022 #ffffff
+pixel build/screen-fb-x11.ppm 1279 1023 #000000

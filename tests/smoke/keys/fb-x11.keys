@@ -1,0 +1,19 @@
+# make fb-smoke, its X half (W21-S05): Xfbdev on /dev/fb0 at 1280x1024 with
+# the padded 5248-byte pitch, xhello as its client. With no window manager
+# keys go to the window under the pointer, which starts below xhello's
+# window at this size, so the shell stops xhello and the server itself.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xhello & sleep 10; kill %2; kill %1; wait; echo fb-x11: done
+key ret
+wait xhello: exposed
+sleep 2
+screendump build/screen-fb-x11.ppm
+wait fb-x11: done
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

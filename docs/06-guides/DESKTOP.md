@@ -36,6 +36,8 @@ dwm tiles windows: the newest is the master on the left, the others stack on the
 | Alt+Shift+c | close the focused window |
 | Alt+Shift+q | quit dwm: the session ends, the console comes back |
 
+The screen is whatever mode the boot image asked the firmware for (W21: 1024x768 by default; `make fb-smoke` runs X at 1280x1024 with a padded scanline), and Xfbdev takes its size from `/dev/fb0`, so nothing in the session should assume 1024x768.
+
 Doom asks for a fixed 640x400, so dwm floats it above the tiled windows instead of tiling it. Its keys are Doom's: arrows, Ctrl fires, Space opens doors, Escape is the menu (Quit Game ends it).
 
 ## Your session
