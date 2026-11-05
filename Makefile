@@ -67,11 +67,15 @@ QEMU_CPU    ?= Broadwell-noTSX-IBRS
 # tests/smoke/smoke.sh and poweroff.py read SMP from the environment.
 SMP         ?= 4
 export SMP
-QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi \
+# W22-S02: an AC'97 for the interactive targets; RUN_AUDIO=pa plays through
+# PulseAudio (WSLg), none keeps the card but makes no sound.
+RUN_AUDIO ?= none
+RUN_SOUND  = -audiodev $(RUN_AUDIO),id=snd0 -device AC97,audiodev=snd0
+QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -267,7 +271,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -689,6 +693,16 @@ vbe-smoke: $(BOOT_PARTS)
 	QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/vbe/none.img tests/smoke/expect/vbe-none.txt
 
 # kernel/fs/fat against mkfs.fat/fsck.fat/mtools, both ways (skips without them).
+# W22-S02: sound. go.img with an AC'97 whose output QEMU records in a WAV
+# file; tone plays 440 Hz then 880 Hz through /dev/dsp, and
+# tests/smoke/checkwav.py measures both.
+SOUND_WAV := $(BUILD)/sound-smoke.wav
+sound-smoke: $(BUILD)/go.img
+	rm -f $(SOUND_WAV)
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-audiodev wav,id=snd0,path=$(SOUND_WAV) -device AC97,audiodev=snd0" \
+		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/sound.txt 120 tests/smoke/keys/sound.keys
+	python3 tests/smoke/checkwav.py $(SOUND_WAV) tone
+
 # W21-S05: a geometry no program hard-codes. VIDEO_ODD is asked of stage2 by
 # two images: go-doom's (the console, fbtest, paint, Doom's title) and
 # go-dev's with the X disk (Xfbdev and xhello). Screens checked at the edges

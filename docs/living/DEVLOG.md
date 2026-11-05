@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W22-S02 AC'97 and /dev/dsp
+
+**Did:** an AC'97 driver (codec set-up, a 32-buffer ring of DMA pages, interrupts on a shared line) and `/dev/dsp` with OSS's playback interface over it; `user/tone` plays two tones that QEMU records to a WAV file and `checkwav.py` measures: 440 Hz for 1.0 s, 880 Hz for 0.5 s. Burrow makes sound.
+
+**Surprise:** the card came up on IRQ 11 beside the e1000, as the plan feared, and S01 made that a non-event. The one wrong guess was in the test: the two tones followed each other with no silence, so the checker had to tell them apart by pitch.
+
+**Next:** W22-S03: Doom makes noise.
+
 ## 2026-11-05 — W22-S01 Shared interrupt lines
 
 **Did:** `driver.Lines`: one goroutine per interrupt line calls every driver registered on it, each checks its own device and says whether the interrupt was its own; unclaimed interrupts are counted and logged once. The e1000 moved onto it; the boot log lists the lines (`irq 11: e1000`).

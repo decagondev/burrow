@@ -26,7 +26,8 @@ import (
 	"burrow/kernel/bootinfo"
 	"burrow/kernel/console"
 	"burrow/kernel/driver"
-	_ "burrow/kernel/drivers/ata" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/ac97" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/ata"
 	_ "burrow/kernel/drivers/bga"
 	_ "burrow/kernel/drivers/e1000"
 	_ "burrow/kernel/drivers/pci"

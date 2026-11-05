@@ -1,0 +1,7 @@
+# make sound-smoke (W22-S02; keys tests/smoke/keys/sound.keys). Append-only.
+[ac97] INFO: ac97 at io
+[driver] INFO: started: [ac97 ata bga e1000 pci ps2 rtc serial]
+[driver] INFO: irq 11: ac97, e1000
+tone: 48000 Hz s16 stereo, 31 of 31 fragments of 4096 bytes free
+tone: 22050 Hz u8 mono
+tone: ok

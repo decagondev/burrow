@@ -1,0 +1,9 @@
+# make sound-smoke (W22-S02): tone through /dev/dsp on go.img with an AC'97
+# that QEMU records; tests/smoke/checkwav.py measures what it heard.
+wait burrow>
+type run /bin/tone
+key ret
+wait tone: ok
+wait burrow>
+type poweroff
+key ret

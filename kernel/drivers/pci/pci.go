@@ -29,6 +29,7 @@ const (
 	offID      = 0x00 // vendor 15:0, device 31:16
 	offCommand = 0x04 // command 15:0, status 31:16 (its bits clear when written as 1)
 
+	cmdIO        = 1 << 0
 	cmdMemory    = 1 << 1
 	cmdBusMaster = 1 << 2
 	offClass     = 0x08 // revision 7:0, prog-if 15:8, subclass 23:16, class 31:24
@@ -59,6 +60,13 @@ func EnableBusMaster(cw ConfigWriter, d Device) {
 	cw.Write32(d.Bus, d.Dev, d.Fn, offCommand, cmd|cmdMemory|cmdBusMaster)
 }
 
+// EnableIOBusMaster lets d answer at its I/O BARs and reach memory itself
+// (an AC'97: its registers are ports, its buffers DMA; W22-S02).
+func EnableIOBusMaster(cw ConfigWriter, d Device) {
+	cmd := cw.Read32(d.Bus, d.Dev, d.Fn, offCommand) & 0xFFFF
+	cw.Write32(d.Bus, d.Dev, d.Fn, offCommand, cmd|cmdIO|cmdBusMaster)
+}
+
 // Address is the value written to 0xCF8 for one word.
 func Address(bus, dev, fn, off uint8) uint32 {
 	return enableBit | uint32(bus)<<16 | uint32(dev&0x1F)<<11 | uint32(fn&7)<<8 | uint32(off&0xFC)
@@ -86,6 +94,14 @@ func (d Device) MemBase(i int) uint64 {
 		return 0
 	}
 	return uint64(d.BAR[i] &^ 0xF)
+}
+
+// IOBase is an I/O BAR's port (flag bits cleared); 0 for a memory BAR.
+func (d Device) IOBase(i int) uint16 {
+	if d.BAR[i]&1 == 0 {
+		return 0
+	}
+	return uint16(d.BAR[i] &^ 3)
 }
 
 func (d Device) String() string {
