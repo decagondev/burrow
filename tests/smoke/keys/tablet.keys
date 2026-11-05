@@ -1,0 +1,9 @@
+# make tablet-smoke (W22-S04): go.img with QEMU's virtio tablet. A button
+# press goes to the active pointer, the tablet once its driver is ready:
+# the driver logs the first event it is handed.
+wait burrow>
+press left
+release left
+wait first event
+type poweroff
+key ret

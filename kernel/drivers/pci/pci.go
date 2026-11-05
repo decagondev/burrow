@@ -96,6 +96,16 @@ func (d Device) MemBase(i int) uint64 {
 	return uint64(d.BAR[i] &^ 0xF)
 }
 
+// MemBase64 is a memory BAR's address, its high half from the next BAR when
+// the type bits (2:1) say it is 64-bit (a virtio device's, W22-S04).
+func (d Device) MemBase64(i int) uint64 {
+	base := d.MemBase(i)
+	if d.BAR[i]&1 == 0 && (d.BAR[i]>>1)&3 == 2 && i+1 < len(d.BAR) {
+		base |= uint64(d.BAR[i+1]) << 32
+	}
+	return base
+}
+
 // IOBase is an I/O BAR's port (flag bits cleared); 0 for a memory BAR.
 func (d Device) IOBase(i int) uint16 {
 	if d.BAR[i]&1 == 0 {

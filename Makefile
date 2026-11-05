@@ -71,11 +71,17 @@ export SMP
 # PulseAudio (WSLg), none keeps the card but makes no sound.
 RUN_AUDIO ?= none
 RUN_SOUND  = -audiodev $(RUN_AUDIO),id=snd0 -device AC97,audiodev=snd0
-QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) \
+# W22-S04: QEMU's virtio tablet for the interactive targets (TABLET=0 leaves
+# only the PS/2 mouse). Smoke boots keep the PS/2 mouse their keys files
+# drive, and make tablet-smoke boots with the tablet.
+TABLET ?= 1
+TABLET_DEV = -device virtio-tablet-pci
+RUN_TABLET = $(if $(filter 1,$(TABLET)),$(TABLET_DEV))
+QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) $(RUN_TABLET) \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -271,7 +277,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -709,6 +715,11 @@ sound-smoke: $(BUILD)/go.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-audiodev wav,id=snd0,path=$(SOUND_WAV) -device AC97,audiodev=snd0" \
 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/sound.txt 120 tests/smoke/keys/sound.keys
 	python3 tests/smoke/checkwav.py $(SOUND_WAV) tone
+
+# W22-S04: go.img with QEMU's virtio tablet: the driver names it and its
+# axes, and a click reaches it as EV_KEY BTN_LEFT. S05 adds evdev and paint.
+tablet-smoke: $(BUILD)/go.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet.txt 60 tests/smoke/keys/tablet.keys
 
 # W21-S05: a geometry no program hard-codes. VIDEO_ODD is asked of stage2 by
 # two images: go-doom's (the console, fbtest, paint, Doom's title) and

@@ -33,6 +33,7 @@ import (
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	_ "burrow/kernel/drivers/rtc"
+	_ "burrow/kernel/drivers/virtioinput"
 	"burrow/kernel/drivers/uart"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"

@@ -102,3 +102,15 @@ func TestBARsAndFind(t *testing.T) {
 		t.Error("found a device that was never enumerated")
 	}
 }
+
+// W22-S04: a 64-bit memory BAR takes its high half from the next one.
+func TestMemBase64(t *testing.T) {
+	d := Device{BAR: [6]uint32{4: 0xFE00000C, 5: 0x1}}
+	if got := d.MemBase64(4); got != 0x1_FE000000 {
+		t.Errorf("64-bit BAR: %#x", got)
+	}
+	d = Device{BAR: [6]uint32{0: 0xFD000008, 1: 0x1}}
+	if got := d.MemBase64(0); got != 0xFD000000 {
+		t.Errorf("a 32-bit BAR took the next one's bits: %#x", got)
+	}
+}

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W22-S04 virtio and the tablet
+
+**Did:** a virtio 1.0 PCI transport in `kernel/virtio` (capabilities, the status handshake, feature negotiation, split virtqueues, notification, the ISR), tested against a device played in Go; `drivers/virtioinput` drives QEMU's virtio tablet on the shared line 11: `QEMU Virtio Tablet, abs x 0-32767 y 0-32767, irq 11`, and a click arrives as EV_KEY BTN_LEFT. `make tablet-smoke`; `TABLET ?= 1` gives the run targets the tablet.
+
+**Surprise:** two small ones. QEMU counts the name's NUL in its size, so the name came out with a trailing NUL; and QEMU hands the pointer's buttons to the tablet as soon as its driver is ready, so the tablet cannot join every smoke boot until S05 moves the keys files' mouse steps to absolute ones.
+
+**Next:** W22-S05: an absolute pointer everywhere.
+
 ## 2026-11-05 — W22-S03 Doom makes noise
 
 **Did:** a sound module for doomgeneric (eight channels of Doom's effects mixed in a thread into `/dev/dsp`, about 0.1 s ahead of the ear); `doom-smoke` records it and hears eight separate sounds, the pistol among them; the timedemo still runs at 127.8 fps. Fixed BUG-0028 on the way.

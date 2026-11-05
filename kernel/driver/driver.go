@@ -38,6 +38,9 @@ type Env struct {
 	// Mouse, if set, gets every mouse packet in screen directions (dy > 0
 	// down, wheel > 0 up; buttons: bit 0 left, 1 right, 2 middle; W14-S02).
 	Mouse func(dx, dy, wheel int, buttons uint8)
+	// Tablet, if set, gets every event of an absolute pointer (an evdev
+	// type, code and value: EV_ABS, EV_KEY, EV_SYN; virtioinput, W22-S04).
+	Tablet func(typ, code uint16, value int32)
 	Dev   *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
