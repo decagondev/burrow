@@ -22,7 +22,8 @@
 | W17 | Networking | M17 | done | [WAVE-17](WAVE-17-networking.md) |
 | W18 | Foundations for bigger programs | M18 | done | [WAVE-18](WAVE-18-foundations.md) |
 | W19 | A multi-user Unix | M19 | done | [WAVE-19](WAVE-19-unix.md) |
-| W20 | Many CPUs, hardened | M20 | planned | [WAVE-20](WAVE-20-smp.md) |
+| W20 | Many CPUs, hardened | M20 | in progress | [WAVE-20](WAVE-20-smp.md) |
+| W21 | A firmware framebuffer | M21 | planned | [WAVE-21](WAVE-21-framebuffer.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 

@@ -34,7 +34,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - **E02.F01 Real-mode services**: [x] A20 (3 methods) · [x] E820 map · [x] manifest read · [x] chunked loader load.
 - **E02.F02 Mode switches**: [x] GDT + protected mode · [x] identity paging 1 GiB · [x] long mode + call C.
 - **E02.F03 Safety**: [x] CPUID long-mode check · [x] CRC-verify loader before executing (BUG-0003).
-- [ ] E02.F04.S01 As a user, I want a VBE graphics mode set in stage2, so that real hardware without Bochs-VBE still gets a framebuffer. [W8, optional]
+- [ ] E02.F04.S01 As a user, I want a VBE graphics mode set in stage2, so that real hardware without Bochs-VBE still gets a framebuffer. [W21]
 
 ## E03 C Loader
 *Exit: the loader loads, verifies and starts the nucleus and stages the Go kernel + initrd.*
@@ -83,7 +83,11 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - E07.F01 initrd (ustar) staged by loader; `tarfs` read-only FS.
 - E07.F02 VFS interfaces (`FS`, `Node`, `File`), mount table, path walk, ramfs (writable `/tmp`).
 - E07.F03 devfs: `/dev/console`, `/dev/null`, `/dev/zero`, `/dev/fb0`, `/dev/input/event0`.
-- E07.F04 Framebuffer: Bochs/QEMU BGA mode set (ports 0x1CE/0x1CF), linear FB via PCI BAR; text console on it.
+- E07.F04 Framebuffer: Bochs/QEMU BGA mode set (ports 0x1CE/0x1CF), linear FB via PCI BAR; text console on it. [W8]
+  - [ ] E07.F04.S01 As a kernel dev, I want the firmware's framebuffer (address, geometry, pitch, pixel format) in boot_info, so that nothing above stage2 needs to know how the mode was set. [W21]
+  - [ ] E07.F04.S02 As a user, I want the console and `/dev/fb0` to work at whatever geometry and pixel format the firmware gave, so that a screen that is not 1024x768 XRGB still shows Burrow. [W21]
+  - [ ] E07.F04.S03 As a user, I want the framebuffer mapped write-combining, so that drawing on real hardware is not one bus transaction per pixel. [W21]
+  - [ ] E07.F04.S04 As a porter, I want a smoke test at an odd resolution with a padded pitch, so that a program assuming `pitch == width*4` or 1024x768 fails in the emulator. [W21]
 - E07.F05 Block layer + Go ATA PIO driver; conformance tests shared with a RAM disk (Liskov).
 - E07.F06 FAT32 read-only (then ext2 later) for a data partition.
 
