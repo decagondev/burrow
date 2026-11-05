@@ -1,0 +1,5 @@
+# make fb-bench (W21-S04; tests/smoke/keys/fb-bench.keys). Append-only.
+fbbench: 1024x768, 32 bpp, line_length 4096
+fbbench: fill:
+fbbench: scroll:
+fbbench: done

@@ -17,6 +17,7 @@ type Prot uint8
 const (
 	ProtWrite Prot = 1
 	ProtExec  Prot = 2
+	ProtWC    Prot = 4 // device memory, write-combining (UPROT_WC, W21-S04)
 )
 
 const (

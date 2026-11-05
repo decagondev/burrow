@@ -28,8 +28,17 @@ func PhysBytes(pa, n uint64) []byte {
 }
 
 // MapMMIO maps device memory [pa, pa+n) (a PCI BAR), uncached, and returns it.
-func MapMMIO(pa, n uint64) ([]byte, error) {
-	va, _, errno := syscall.RawSyscall(nrMapMMIO, uintptr(pa), uintptr(n), 0)
+func MapMMIO(pa, n uint64) ([]byte, error) { return mapMMIO(pa, n, 0) }
+
+// MapMMIOWC maps device memory write-combining (a framebuffer, W21-S04):
+// uncached where the CPU has no PAT; EEXIST if it is mapped already with
+// another cache type.
+func MapMMIOWC(pa, n uint64) ([]byte, error) { return mapMMIO(pa, n, mmioWC) }
+
+const mmioWC = 1 // nu_mmio_map's NU_MMIO_WC
+
+func mapMMIO(pa, n uint64, flags uintptr) ([]byte, error) {
+	va, _, errno := syscall.RawSyscall(nrMapMMIO, uintptr(pa), uintptr(n), flags)
 	if errno != 0 {
 		return nil, errno
 	}

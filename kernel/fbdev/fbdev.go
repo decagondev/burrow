@@ -129,6 +129,10 @@ func (h *handle) Close() error {
 // PhysRange is the memory mmap maps (proc's Mappable).
 func (h *handle) PhysRange() (pa, size uint64) { return h.d.mode.Phys, h.d.mode.Size() }
 
+// WriteCombined: the kernel maps the framebuffer write-combining, so a
+// program's mapping must be too (proc's WriteCombined, W21-S04).
+func (h *handle) WriteCombined() bool { return true }
+
 // Ioctl answers the fbdev requests; in and out copy the caller's memory.
 func (h *handle) Ioctl(req, arg uint64, in, out func(va uint64, b []byte) error) (int64, error) {
 	m := h.d.mode

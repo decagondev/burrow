@@ -32,6 +32,7 @@
 #include "protect.h"
 #include "acpi.h"
 #include "smp.h"
+#include "pat.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
 
@@ -66,6 +67,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     frames_init();
     vmm_init();
     protect_init();
+    pat_init();
     acpi_init();
     pic_disable();
     lapic_init();

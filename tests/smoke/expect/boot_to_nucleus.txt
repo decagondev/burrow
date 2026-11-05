@@ -16,6 +16,7 @@ BURROW:LOADER:OK
 [nucleus] pmm ok
 [nucleus] vmm ok
 [nucleus] protections: smep on, smap on, nx on ok
+[nucleus] pat ok (wc at index 1
 [nucleus] acpi ok (1 CPU, apic ids 0;
 [nucleus] lapic ok
 [nucleus] time ok

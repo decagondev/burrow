@@ -285,10 +285,11 @@ func (m *Mem) Protect(va, n uint64, prot Prot, none bool) error {
 	m.reprotect(va, va+n, prot, none)
 	for p := va; p < va+n; p += PageSize {
 		pg, ok := m.pages[p]
-		if !ok || pg.prot == prot {
+		want := prot | pg.prot&ProtWC // a page's cache type is the device's, not mprotect's
+		if !ok || pg.prot == want {
 			continue
 		}
-		pg.prot = prot // a cow page stays mapped read-only (hwProt)
+		pg.prot = want // a cow page stays mapped read-only (hwProt)
 		if err := m.remapLocked(p, pg); err != nil {
 			return err
 		}

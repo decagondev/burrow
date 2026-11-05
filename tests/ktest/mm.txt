@@ -8,3 +8,4 @@ vm_reserve_hint
 smap_smep_user_page
 nx_kernel_data
 bug0027_fault_in_present
+pat_wc_mapping

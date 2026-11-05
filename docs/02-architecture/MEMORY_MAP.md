@@ -112,6 +112,8 @@ A host experiment on Go 1.22 (see [census](../01-research/GO_RUNTIME_SYSCALL_CEN
 
 Keep the Go kernel at the default `0x400000` and build all user programs as **static-PIE** (musl supports it), loading them at a randomised base inside the user ranges. Document the outcome in ADR-0004.
 
+**Cache types (W21-S04).** The PAT's entry 1 is write-combining (`nucleus/pat.c`); the framebuffer is mapped WC (PWT) by the kernel (`nu_mmio_map` with `NU_MMIO_WC`) and by programs that mmap `/dev/fb0` (`UPROT_WC`); other device memory stays uncached (PCD|PWT), RAM write-back. A physical page never gets two types: `vm_map_mmio_type` refuses a second mapping with another (PIT-64).
+
 ## 3. Page-table ownership
 
 The **nucleus** owns the page-table *mechanism* (walk, map, unmap, TLB flush) and the physmap. The **Go kernel** owns *policy* for user address spaces (which ranges exist, copy-on-write, mmap of files) and asks the nucleus to apply it through `nu_*` calls ([NUCLEUS_ABI.md](NUCLEUS_ABI.md)). The Go kernel reads and writes user memory through the physmap after translating addresses, never by switching CR3.

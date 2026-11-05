@@ -27,6 +27,13 @@ type Mappable interface {
 	PhysRange() (pa, size uint64)
 }
 
+// WriteCombined is a Mappable whose memory the kernel maps write-combining
+// (a framebuffer, W21-S04): a program's mapping gets the same type, never a
+// second one (PIT-64).
+type WriteCombined interface {
+	WriteCombined() bool
+}
+
 // device is what f's interfaces are looked up on: the device behind a
 // devfs file, else the file itself.
 func device(f *file) any {
@@ -77,6 +84,9 @@ func (p *Process) mmapDevice(fd, off, n uint64, flags uint64, pr Prot, fixed boo
 	addr, err := p.pickAddr(addr, n, fixed)
 	if err != 0 {
 		return err
+	}
+	if wc, ok := m.(WriteCombined); ok && wc.WriteCombined() {
+		pr |= ProtWC
 	}
 	if err := p.mem.MapDevice(addr, pa+off, n, pr); err != nil {
 		return -int64(syscall.ENOMEM)

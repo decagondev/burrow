@@ -1,0 +1,8 @@
+# make fb-bench (W21-S04): fbbench on go.img; prints its numbers, checks none.
+wait burrow>
+type run /bin/fbbench
+key ret
+wait fbbench: done
+wait burrow>
+type poweroff
+key ret

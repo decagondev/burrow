@@ -6,6 +6,7 @@
  * failure") and return -ENOSYS: after a Go upgrade, boot and read the log.
  * Numbers and errno values are Linux's, so musl user programs (W9) reuse
  * the table. */
+#include "pat.h"
 #include "acpi.h"
 #include "shim.h"
 #include "boot.h"
@@ -102,14 +103,20 @@ static long nu_mem_info(struct syscall_frame *f) {
 /* Wall time from the CMOS clock (W14-S04): unix nanoseconds now. */
 static long nu_set_realtime(struct syscall_frame *f) { time_set_realtime_ns(SYSARG0(f)); return 0; }
 
-/* Device memory for a Go driver (a PCI BAR): uncached, NX, at physmap + pa. */
+/* Device memory for a Go driver (a PCI BAR, a framebuffer): NX, at physmap
+ * + pa, uncached or (NU_MMIO_WC, W21-S04) write-combining; -EEXIST if it is
+ * mapped already with the other type. */
 #define MMIO_MAX_BYTES (256ull << 20)
 #define PHYS_LIMIT     (1ull << 46)
+#define NU_MMIO_WC     1u
 static long nu_mmio_map(struct syscall_frame *f) {
-    uint64_t pa = SYSARG0(f), len = SYSARG1(f);
+    uint64_t pa = SYSARG0(f), len = SYSARG1(f), flags = SYSARG2(f);
     if (len == 0 || len > MMIO_MAX_BYTES || pa >= PHYS_LIMIT || len > PHYS_LIMIT - pa) return -EINVAL;
+    if (flags & ~(uint64_t)NU_MMIO_WC) return -EINVAL;
     uint64_t lo = pa & ~0xFFFull, hi = (pa + len + 0xFFF) & ~0xFFFull;
-    vm_map_mmio(lo, hi - lo);
+    void *va;
+    if (vm_map_mmio_type(lo, hi - lo, flags & NU_MMIO_WC ? pat_wc_flags() : PTE_PCD | PTE_PWT, &va) != 0)
+        return -EEXIST;
     return (long)(boot_info()->physmap_base + pa);
 }
 

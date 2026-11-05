@@ -15,4 +15,5 @@
 [ktest] smp_shootdown_protect ok
 [ktest] smp_shootdown_unmap ok
 [ktest] smp_user_threads_everywhere ok
+[ktest] smp_pat_everywhere ok
 BURROW:KTEST:OK

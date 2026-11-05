@@ -23,6 +23,7 @@
 #include "sched.h"
 #include "ktest.h"
 #include "tlb.h"
+#include "pat.h"
 #include "cpu.h"
 #include "kprintf.h"
 #include "lib_string.h"
@@ -175,6 +176,7 @@ void ap_main(uint64_t index) {
     c->kstack_top = g_ap_stack_top[index][0];
     c->kstack_bottom = c->kstack_top - AP_STACK_BYTES;
     trap_init_cpu();
+    pat_init_cpu();                           /* the BSP's PAT, before any mapping (PIT-65) */
     lapic_init_cpu();
     fpu_init_cpu();
     syscall_cpu_init();

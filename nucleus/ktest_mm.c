@@ -1,4 +1,6 @@
 /* ktest_mm.c - physical and virtual memory on the real machine. */
+#include "pat.h"
+#include "cpu.h"
 #include "ktest.h"
 #include "frames.h"
 #include "boot.h"
@@ -147,5 +149,28 @@ int kt_bug0027_fault_in_present(void) {
     KT_CHECK(vm_fault_in(k, TEST_VA + 8) == 1);        /* present: the other CPU won */
     KT_CHECK(vm_unmap(k, TEST_VA, PAGE_4K, 1) == PT_OK);
     KT_CHECK(vm_fault_in(k, TEST_VA) == 0);            /* absent and unmarked: a real fault */
+    return 0;
+}
+
+/* W21-S04: PAT entry 1 is write-combining, a WC mapping's leaf selects it
+ * (PWT, no PCD), the same range cannot then be mapped uncached (PIT-64),
+ * and an uncached range keeps PCD|PWT. The addresses are past RAM and past
+ * QEMU's devices: nothing else maps them. */
+#define WC_TEST_PA 0xC0000000ull
+#define UC_TEST_PA 0xC0010000ull
+
+int kt_pat_wc_mapping(void) {
+    KT_CHECK(pat_has_wc());
+    KT_CHECK(((rdmsr(MSR_PAT) >> (8 * PAT_WC_INDEX)) & 0xFF) == PAT_TYPE_WC);
+    void *va;
+    uint64_t pa, flags;
+    KT_CHECK(vm_map_mmio_type(WC_TEST_PA, 2 * PAGE_4K, pat_wc_flags(), &va) == 0);
+    KT_CHECK(vm_translate(vmm_kernel(), (uint64_t)(uintptr_t)va + PAGE_4K, &pa, &flags) == PT_OK);
+    KT_CHECK(pa == WC_TEST_PA + PAGE_4K && (flags & PTE_PWT) && !(flags & PTE_PCD));
+    KT_CHECK(vm_map_mmio_type(WC_TEST_PA, PAGE_4K, pat_wc_flags(), &va) == 0);           /* same type: fine */
+    KT_CHECK(vm_map_mmio_type(WC_TEST_PA, PAGE_4K, PTE_PCD | PTE_PWT, &va) == -1);       /* another: refused */
+    KT_CHECK(vm_map_mmio_type(UC_TEST_PA, PAGE_4K, PTE_PCD | PTE_PWT, &va) == 0);
+    KT_CHECK(vm_translate(vmm_kernel(), (uint64_t)(uintptr_t)va, &pa, &flags) == PT_OK);
+    KT_CHECK((flags & PTE_PCD) && (flags & PTE_PWT));
     return 0;
 }

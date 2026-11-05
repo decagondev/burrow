@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W21-S04 A write-combining framebuffer
+
+**Did:** the PAT's entry 1 is write-combining on every CPU; `nu_mmio_map` maps a framebuffer WC and refuses to map a page with a second cache type; a program's mmap of `/dev/fb0` is WC too, through mprotect and fork. `make fb-bench` prints fill and scroll times as a baseline.
+
+**Surprise:** the bigger half was a bug nobody had seen: since W11 the kernel mapped the framebuffer uncached while every program that mmapped `/dev/fb0` got it write-back, one physical page under two memory types. QEMU cannot show the difference, and real hardware would have. The cache type now travels with the page in Go (`ProtWC`), so fork and mprotect cannot lose it.
+
+**Next:** W21-S05: a hostile geometry, fb-smoke, M21.
+
 ## 2026-11-05 — W21-S03 The Go kernel draws on the firmware's mode
 
 **Did:** gfx draws on bytes with a pixel format (XRGB8888 stays the fast path; BGR, RGB565 and 24 bpp work on the host); the display driver takes the firmware's mode from boot_info on any adapter and keeps DISPI as the fallback; /dev/fb0 reports the real depth and colour fields. Every smoke passes at 1024x768 from VBE, and booted at 1280x1024 with a 5248-byte pitch the console and fbtest are straight.

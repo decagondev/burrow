@@ -4,6 +4,7 @@
  * to one counter under a spinlock without losing an increment. In suite
  * "user": a ring-3 program that reloads GS cannot move the kernel's
  * per-CPU base (the swapgs on every ring-3 entry and exit). */
+#include "pat.h"
 #include "ktest.h"
 #include "ktest_nu.h"
 #include "smp.h"
@@ -94,5 +95,17 @@ int kt_uthread_gs_reload(void) {
     KT_CHECK(rdmsr(MSR_KERNEL_GS_BASE) == 0);   /* the user's base, parked while in ring 0 */
     KT_CHECK(nu(0x1023, tid, 0, 0, 0, 0) == 0);
     KT_CHECK(uproc_free(&p) == 0);
+    return 0;
+}
+
+/* W21-S04: every CPU loaded the same PAT (PIT-65). */
+static uint64_t g_pat_seen[SMP_MAX_CPUS];
+
+static void read_pat(void *arg) { (void)arg; g_pat_seen[this_cpu()->index] = rdmsr(MSR_PAT); }
+
+int kt_smp_pat_everywhere(void) {
+    smp_run_everywhere(read_pat, 0);
+    for (uint32_t i = 1; i < smp_cpu_count(); i++) KT_CHECK(g_pat_seen[i] == g_pat_seen[0]);
+    KT_CHECK(((g_pat_seen[0] >> (8 * PAT_WC_INDEX)) & 0xFF) == PAT_TYPE_WC);
     return 0;
 }

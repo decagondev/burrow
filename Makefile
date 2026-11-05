@@ -71,7 +71,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -578,6 +578,11 @@ net-smoke-run: $(BUILD)/go-dev.img
 mem-bench: $(BUILD)/go.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem-bench.txt 120 tests/smoke/keys/mem-bench.keys
 	python3 tests/smoke/mem-budgets.py $(BUILD)/smoke-mem-bench.log
+# The framebuffer from a program (W21-S04, not in make test): fbbench's fill
+# and scroll times through /dev/fb0. A baseline only: TCG ignores the WC type.
+fb-bench: $(BUILD)/go.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/fb-bench.txt 120 tests/smoke/keys/fb-bench.keys
+	@grep -a 'fbbench:' $(BUILD)/smoke-fb-bench.log
 # Four CPUs against one (W20-S08, not in make test): cpubench (C, pthreads)
 # and gocpubench (Go) on go.img booted on one CPU, then on four;
 # tests/smoke/smp-budgets.py wants each at least 2.5 times faster on four.

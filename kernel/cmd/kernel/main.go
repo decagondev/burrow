@@ -110,6 +110,7 @@ func main() {
 		Scancodes:   keys.Feed,
 		Mouse:       mouse,
 		MapMMIO:     amd64.MapMMIO,
+		MapMMIOWC:   amd64.MapMMIOWC,
 		DMAPage:     dmaPage,
 		SetClock:    amd64.SetRealtime,
 		Framebuffer: firmwareFB,

@@ -1,5 +1,6 @@
 /* uspace.c - see uspace.h. One lock for the handle table; page-table edits
  * themselves are serialised by vmm.c (IRQs off around each walk). */
+#include "pat.h"
 #include "uspace.h"
 #include "vmm.h"
 #include "frames.h"
@@ -60,12 +61,20 @@ static long status(enum pt_status st) {
     }
 }
 
+#define UPROT_ALL (UPROT_WRITE | UPROT_EXEC | UPROT_WC)
+
+/* A user page's entry bits; UPROT_WC gives device memory the same cache
+ * type as the kernel's own mapping of it (PIT-64), uncached without PAT. */
+static uint64_t pte_flags(uint64_t prot) {
+    return PTE_U | (prot & UPROT_WRITE ? PTE_W : 0) | (prot & UPROT_EXEC ? 0 : PTE_NX) |
+           (prot & UPROT_WC ? pat_wc_flags() : 0);
+}
+
 long uspace_map(uint64_t h, uint64_t va, uint64_t pa, uint64_t len, uint64_t prot) {
     struct uspace *u = get(h);
     if (!u) return -EBADF;
-    if (!user_range(va, len) || (pa & 0xFFF) || prot & ~(uint64_t)(UPROT_WRITE | UPROT_EXEC)) return -EINVAL;
-    uint64_t flags = PTE_U | (prot & UPROT_WRITE ? PTE_W : 0) | (prot & UPROT_EXEC ? 0 : PTE_NX);
-    return status(vm_map(&u->as, va, pa, len, flags));
+    if (!user_range(va, len) || (pa & 0xFFF) || prot & ~(uint64_t)UPROT_ALL) return -EINVAL;
+    return status(vm_map(&u->as, va, pa, len, pte_flags(prot)));
 }
 
 long uspace_unmap(uint64_t h, uint64_t va, uint64_t len) {
@@ -75,9 +84,6 @@ long uspace_unmap(uint64_t h, uint64_t va, uint64_t len) {
     return status(vm_unmap(&u->as, va, len, 0));
 }
 
-static uint64_t pte_flags(uint64_t prot) {
-    return PTE_U | (prot & UPROT_WRITE ? PTE_W : 0) | (prot & UPROT_EXEC ? 0 : PTE_NX);
-}
 
 /* Every mapped page of [va, va+len) gets prot, its frame kept, the entry
  * rewritten in place (vm_protect); pages not mapped are skipped. One call
@@ -85,7 +91,7 @@ static uint64_t pte_flags(uint64_t prot) {
 long uspace_protect(uint64_t h, uint64_t va, uint64_t len, uint64_t prot) {
     struct uspace *u = get(h);
     if (!u) return -EBADF;
-    if (!user_range(va, len) || prot & ~(uint64_t)(UPROT_WRITE | UPROT_EXEC)) return -EINVAL;
+    if (!user_range(va, len) || prot & ~(uint64_t)UPROT_ALL) return -EINVAL;
     if (vm_protect(&u->as, va, len, pte_flags(prot)) == PT_OK) return 0;   /* a run with no holes */
     for (uint64_t off = 0; off < len; off += 4096) {                        /* holes: page by page */
         uint64_t pa, flags;
@@ -103,7 +109,7 @@ long uspace_map_batch(uint64_t h, const struct uspace_map_entry *e, uint64_t n) 
     if (!u) return -EBADF;
     if (n > USPACE_BATCH_MAX) return -EINVAL;
     for (uint64_t i = 0; i < n; i++) {
-        if (!user_range(e[i].va, 4096) || (e[i].pa & 0xFFF) || e[i].prot & ~(uint64_t)(UPROT_WRITE | UPROT_EXEC))
+        if (!user_range(e[i].va, 4096) || (e[i].pa & 0xFFF) || e[i].prot & ~(uint64_t)UPROT_ALL)
             return -EINVAL;
         enum pt_status st = vm_map(&u->as, e[i].va, e[i].pa, 4096, pte_flags(e[i].prot));
         if (st != PT_OK) return status(st);

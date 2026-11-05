@@ -9,11 +9,11 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1002 | `nu_bootinfo` | buf, len | bytes copied of boot_info v2 (at most 128); the module table it points to is read through the physmap | W8 (done: `amd64.BootInfo`) |
 | 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 (done: `amd64.PhysmapBase`) |
 | 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; where there is no debug-exit device, code 0x10 (the console's `poweroff`) turns the machine off through ACPI S5 (W20-S04), and the call returns 0 only if neither worked | W6 (done: `amd64.DebugExit`) |
-| 0x1005 | `nu_mmio_map` | pa, len | virtual address of pa (physmap + pa), mapped uncached and NX; `-EINVAL` for len 0, over 256 MiB or past 2^46 | W8 (done: `amd64.MapMMIO`) |
+| 0x1005 | `nu_mmio_map` | pa, len, flags | virtual address of pa (physmap + pa), mapped NX, uncached, or write-combining with flags `NU_MMIO_WC` (1, W21-S04; uncached without PAT); `-EINVAL` for len 0, over 256 MiB, past 2^46 or an unknown flag; `-EEXIST` if a page is already mapped with the other cache type | W8 (done: `amd64.MapMMIO`; `MapMMIOWC` W21-S04) |
 | 0x1006 | `nu_mem_info` | buf | 16; writes `{total, free}` (uint64 bytes) of the RAM the frame allocator manages, for `sysinfo` (free includes the 32 MiB kept for the kernel) | W14 |
 | 0x1007 | `nu_set_realtime` | unix_ns | 0; wall time is unix_ns now: from here on `clock_gettime` answers `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` with it, every other clock stays monotonic since boot. Go calls it once, from the CMOS clock | W14 |
 | 0x1010 | `nu_as_create` | — | address-space handle (1..32); the upper half (nucleus, physmap, kernel stacks) is shared, the lower half empty | W9 |
-| 0x1011 | `nu_as_map` | as, va, pa, len, prot | 0; user pages, prot bits 1 = write, 2 = execute (read is implied); va, pa, len page-aligned, va + len <= 2^47 | W9 |
+| 0x1011 | `nu_as_map` | as, va, pa, len, prot | 0; user pages, prot bits 1 = write, 2 = execute, 4 = write-combining device memory (`UPROT_WC`, W21-S04; also in `nu_as_protect` and `nu_as_map_batch`; uncached without PAT) (read is implied); va, pa, len page-aligned, va + len <= 2^47 | W9 |
 | 0x1012 | `nu_as_unmap` | as, va, len | 0; frames are not freed (they belong to whoever allocated them) | W9 |
 | 0x1013 | `nu_as_translate` | as, va | pa or -EFAULT | W9 |
 | 0x1014 | `nu_page_alloc` | count (1) | physical address of a zeroed frame, or -ENOMEM (also while only `USER_RESERVE_FRAMES`, 32 MiB, are free: they stay for the kernel, W14-S01) | W9 |

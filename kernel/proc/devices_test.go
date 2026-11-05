@@ -130,3 +130,44 @@ func TestNonblockingRead(t *testing.T) {
 		t.Errorf("read of an empty non-blocking pipe = %d, want EAGAIN", e)
 	}
 }
+
+// wcFB is a framebuffer the kernel maps write-combining (W21-S04).
+type wcFB struct{ fakeFB }
+
+func (*wcFB) WriteCombined() bool { return true }
+
+// A program's mapping of write-combined device memory gets ProtWC, keeps
+// it through mprotect, and its fork child shares it with the same type:
+// never a second memory type for those pages (PIT-64). Other device
+// memory stays as it was.
+func TestMmapWriteCombinedDevice(t *testing.T) {
+	r := devRig(t, &wcFB{})
+	p := r.spawn()
+	fd := uint64(r.call(p, 2, r.str(p, scratch, "/dev/fb0"), 2))
+	va := uint64(r.call(p, 9, 0, fbSize, 3, 0x01, fd, 0))
+	if pr, ok := r.nu.Prot(p.Mem().Space(), va); !ok || pr != proc.ProtWrite|proc.ProtWC {
+		t.Fatalf("mapped with %v (%v), want write and WC", pr, ok)
+	}
+	if e := r.call(p, 10, va, proc.PageSize, 1); e != 0 { // mprotect(PROT_READ)
+		t.Fatalf("mprotect = %d", e)
+	}
+	if pr, _ := r.nu.Prot(p.Mem().Space(), va); pr != proc.ProtWC {
+		t.Errorf("after mprotect(PROT_READ): %v, want WC alone", pr)
+	}
+	r.call(p, 57) // fork
+	kid := r.newestThread(p.TID())
+	if pr, _ := r.nu.Prot(r.nu.Snapshot(kid).AS, va+proc.PageSize); pr&proc.ProtWC == 0 {
+		t.Errorf("child maps the device page with %v, want WC", pr)
+	}
+	r.nu.Inject(proc.Request{TID: kid, Nr: 231})
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 231})
+	wait(t, p)
+
+	plain := devRig(t, &fakeFB{})
+	q := plain.spawn()
+	fd = uint64(plain.call(q, 2, plain.str(q, scratch, "/dev/fb0"), 2))
+	va = uint64(plain.call(q, 9, 0, fbSize, 3, 0x01, fd, 0))
+	if pr, _ := plain.nu.Prot(q.Mem().Space(), va); pr&proc.ProtWC != 0 {
+		t.Errorf("plain device memory mapped with %v", pr)
+	}
+}

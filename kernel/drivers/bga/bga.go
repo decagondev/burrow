@@ -178,7 +178,11 @@ func (d *display) Start(env *driver.Env) error {
 	if err != nil {
 		return err
 	}
-	mem, err := env.MapMMIO(m.Phys, uint64(m.Pitch*m.Height))
+	mapFB := env.MapMMIO
+	if env.MapMMIOWC != nil {
+		mapFB = env.MapMMIOWC // every pixel a bus write otherwise (W21-S04)
+	}
+	mem, err := mapFB(m.Phys, uint64(m.Pitch*m.Height))
 	if err != nil {
 		return fmt.Errorf("map %#x: %w", m.Phys, err)
 	}

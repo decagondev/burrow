@@ -49,4 +49,7 @@ uint64_t vm_lower_half_pages(const struct addr_space *as);
 int  vm_fault_in(struct addr_space *as, uint64_t va);
 /* Maps device memory (uncached) at physmap_base + pa; returns its address. */
 void *vm_map_mmio(uint64_t pa, uint64_t len);
+/* The same with a cache type (PTE_PCD|PTE_PWT bits); -1 if a page of the
+ * range is already mapped with another type (W21-S04, PIT-64). */
+int vm_map_mmio_type(uint64_t pa, uint64_t len, uint64_t cache, void **out);
 #endif

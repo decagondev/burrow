@@ -211,10 +211,30 @@ enum pt_status vm_translate(const struct addr_space *as, uint64_t va, uint64_t *
     return pt_translate(&as->pt, va, pa, flags);
 }
 
+/* Device memory at physmap + pa with one cache type (PTE_PCD/PTE_PWT bits:
+ * uncached, or pat_wc_flags()). A page already mapped keeps its mapping if
+ * the type is the same; with another type the call is refused (-1), since
+ * one physical page under two memory types is undefined (PIT-64). Page by
+ * page, so the check sees every page. 0 ok, *out = the virtual address. */
+int vm_map_mmio_type(uint64_t pa, uint64_t len, uint64_t cache, void **out) {
+    uint64_t base = boot_info()->physmap_base, want = cache & (PTE_PCD | PTE_PWT);
+    for (uint64_t off = 0; off < len; off += PAGE_4K) {
+        uint64_t got, flags;
+        if (vm_translate(&g_kernel, base + pa + off, &got, &flags) == PT_OK) {
+            if ((flags & (PTE_PCD | PTE_PWT)) != want) return -1;
+            continue;
+        }
+        enum pt_status st = vm_map(&g_kernel, base + pa + off, pa + off, PAGE_4K, PTE_W | PTE_NX | want);
+        if (st != PT_OK && st != PT_ALREADY_MAPPED)
+            panic("vm_map_mmio %llx: %s", (unsigned long long)(pa + off), pt_status_str(st));
+    }
+    *out = (void *)(uintptr_t)(base + pa);
+    return 0;
+}
+
 void *vm_map_mmio(uint64_t pa, uint64_t len) {
-    uint64_t va = boot_info()->physmap_base + pa;
-    enum pt_status st = vm_map(&g_kernel, va, pa, len, PTE_W | PTE_PCD | PTE_PWT | PTE_NX);
-    if (st != PT_OK && st != PT_ALREADY_MAPPED)
-        panic("vm_map_mmio %llx: %s", (unsigned long long)pa, pt_status_str(st));
-    return (void *)(uintptr_t)va;
+    void *va;
+    if (vm_map_mmio_type(pa, len, PTE_PCD | PTE_PWT, &va) != 0)
+        panic("vm_map_mmio %llx: already mapped with another cache type", (unsigned long long)pa);
+    return va;
 }

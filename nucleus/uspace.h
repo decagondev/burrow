@@ -11,6 +11,7 @@
 #define USER_VA_TOP  (1ull << 47)    /* user addresses are below this */
 #define UPROT_WRITE  1u
 #define UPROT_EXEC   2u
+#define UPROT_WC     4u              /* write-combining device memory (W21-S04, pat.h) */
 /* nu_page_alloc leaves this many frames for the kernel (W14-S01): a process
  * that asks for the last of RAM gets -ENOMEM, not the Go kernel's next page. */
 #define USER_RESERVE_FRAMES ((32ull << 20) / 4096)
