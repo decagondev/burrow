@@ -12,11 +12,13 @@ struct spinlock { volatile uint32_t locked; const char *name; };
 #define SPINLOCK_INIT(n) { 0, n }
 
 void spin_deadlock(const struct spinlock *l) __attribute__((noreturn));   /* spinlock.c */
+void tlb_poll(void);   /* tlb.c: a CPU spinning with IF=0 still answers shootdowns (W20-S07) */
 
 static inline uint64_t spin_lock_irqsave(struct spinlock *l) {
     uint64_t f = irq_save();
     for (uint32_t spins = 0; __atomic_exchange_n(&l->locked, 1, __ATOMIC_ACQUIRE); spins++) {
         if (spins > 100000000u) spin_deadlock(l);
+        tlb_poll();
         __asm__ volatile("pause");
     }
     return f;
@@ -26,6 +28,7 @@ static inline uint64_t spin_lock_irqsave(struct spinlock *l) {
 static inline void spin_lock(struct spinlock *l) {
     for (uint32_t spins = 0; __atomic_exchange_n(&l->locked, 1, __ATOMIC_ACQUIRE); spins++) {
         if (spins > 100000000u) spin_deadlock(l);
+        tlb_poll();
         __asm__ volatile("pause");
     }
 }

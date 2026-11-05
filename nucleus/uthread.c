@@ -174,6 +174,7 @@ long uthread_kill(uint64_t tid) {
     t->killed = 1;
     if (t->req_state == REQ_QUEUED) unlink_req(t);      /* Go must not take it any more */
     thread_wake(t);                                     /* if it waits for an answer */
+    thread_poke(t);                                     /* if it runs on another CPU */
     uint64_t as = t->uspace;
     spin_unlock_irqrestore(&g_lock, fl);
     thread_join(t);                     /* it leaves at its next pass through the kernel */
@@ -181,12 +182,16 @@ long uthread_kill(uint64_t tid) {
     return 0;
 }
 
-/* The thread stops at its next return to ring 3: a timer tick if it is
- * computing, or right after Go answers the request it is waiting on. */
+/* The thread stops at its next return to ring 3: at once if it computes on
+ * another CPU (a wake IPI), at its next tick if on this one, or right after
+ * Go answers the request it is waiting on. */
 long uthread_interrupt(uint64_t tid) {
     uint64_t fl = spin_lock_irqsave(&g_lock);
     struct thread *t = find_user(tid);
-    if (t) t->interrupt = 1;
+    if (t) {
+        t->interrupt = 1;
+        thread_poke(t);                 /* running elsewhere: stop at once, not at its tick */
+    }
     spin_unlock_irqrestore(&g_lock, fl);
     return t ? 0 : -ESRCH;
 }

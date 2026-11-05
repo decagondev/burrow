@@ -91,6 +91,19 @@ Option 3.
   mapped for its slot's next thread. The frame allocator and the page-table
   calls take their own spinlocks; kprintf's guard is a bounded cross-CPU
   spinlock.
+- **TLB shootdown (S07).** Each CPU records the PML4 it runs on
+  (`percpu.cr3`, written right after its mov to CR3). Every change to a
+  present entry goes through `tlb_shootdown(root, va, len)` (`tlb.c`): a
+  local flush, then `VEC_SHOOT` (0xF1) to every other CPU on that root, or to
+  all of them for the shared upper half, and a wait until each has flushed
+  (invlpg per page; a CR3 reload above 32 lower-half pages). Frames an
+  unmap or discard frees wait in a batch until one shootdown covers them.
+  One shootdown at a time; every spinlock loop (and kprintf's, and the
+  mailbox wait) answers a pending one with `tlb_poll`, so a sender never
+  waits for a CPU spinning with interrupts off. With that, Go's threads
+  and user threads run on any CPU, kernel stacks are freed at join again,
+  and `uthread_kill`/`uthread_interrupt` send a wake IPI to a thread running
+  on another CPU (`thread_poke`) so it stops at once. `main` stays on CPU 0.
 
 ## Consequences
 - Every per-CPU read in asm is a `gs:` read; every C one is `this_cpu()`.

@@ -1,10 +1,12 @@
-/* vmm.c - see vmm.h. TLB: entries are flushed with invlpg when the address
- * space is the one in CR3; a later switch to another CR3 flushes anyway.
- * Page-table changes hold g_vm_lock (every address space; W20-S06), taken
- * after an address space's own lock and before the frame allocator's. The
- * flush is this CPU's only: shootdown is W20-S07. */
+/* vmm.c - see vmm.h. TLB: every change to a present entry is shot down on
+ * every CPU that may cache it (tlb.c, W20-S07) before the call returns, and
+ * before a frame it freed can be handed out again. Page-table changes hold
+ * g_vm_lock (every address space; W20-S06), taken after an address space's
+ * own lock and before the frame allocator's. Never frees a frame that a CPU
+ * might still reach through a stale entry. */
 #include "vmm.h"
 #include "spinlock.h"
+#include "tlb.h"
 #include "vm_region.h"
 #include "frames.h"
 #include "boot.h"
@@ -22,13 +24,36 @@ static void *pt_ptr(void *env, uint64_t pa) { (void)env; return phys_to_virt(pa)
 
 struct addr_space *vmm_kernel(void) { return &g_kernel; }
 
-static int is_current(const struct addr_space *as) {
-    return (read_cr3() & PTE_ADDR_MASK) == as->pt.root;
+static void flush(const struct addr_space *as, uint64_t va, uint64_t len) {
+    tlb_shootdown(as->pt.root, va, len);
 }
 
-static void flush(const struct addr_space *as, uint64_t va, uint64_t len) {
-    if (!is_current(as)) return;
-    for (uint64_t off = 0; off < len; off += PAGE_4K) invlpg(va + off);
+/* Frames whose entries are already clear, freed only after one shootdown
+ * covers them all (a 2 MiB leaf is one entry of 512 frames). */
+#define FREE_BATCH 64u
+struct free_batch {
+    const struct addr_space *as;
+    uint64_t lo, hi;                  /* the range the entries came from */
+    uint32_t n;
+    uint64_t pa[FREE_BATCH], pages_bytes[FREE_BATCH];
+};
+
+static void batch_flush(struct free_batch *b) {
+    if (b->hi > b->lo) flush(b->as, b->lo, b->hi - b->lo);
+    for (uint32_t i = 0; i < b->n; i++)
+        for (uint64_t off = 0; off < b->pages_bytes[i]; off += PAGE_4K) frame_free(b->pa[i] + off);
+    b->n = 0;
+    b->lo = b->hi = 0;
+}
+
+static void batch_add(struct free_batch *b, uint64_t va, uint64_t pa, uint64_t page) {
+    if (b->hi == b->lo) b->lo = va;
+    b->hi = va + page;
+    if (pa) {
+        b->pa[b->n] = pa;
+        b->pages_bytes[b->n++] = page;
+    }
+    if (b->n == FREE_BATCH) batch_flush(b);
 }
 
 void vmm_init(void) {
@@ -36,6 +61,7 @@ void vmm_init(void) {
     uint64_t *pml4 = phys_to_virt(g_kernel.pt.root);
     pml4[0] = 0;                              /* loader's identity map: nothing below uses it */
     write_cr3(g_kernel.pt.root);              /* flush every non-global entry */
+    tlb_set_loaded(g_kernel.pt.root);
     write_cr0(read_cr0() | CR0_WP);
     if (!(rdmsr(MSR_EFER) & EFER_NXE)) g_nx_mask = ~PTE_NX;   /* bit 63 would be reserved */
     vm_region_init(&g_kernel);
@@ -84,21 +110,20 @@ enum pt_status vm_map(struct addr_space *as, uint64_t va, uint64_t pa, uint64_t 
     return st;        /* new entries need no flush: nothing was cached for them */
 }
 
-struct unmap_env { const struct addr_space *as; int free_frames; };
+struct unmap_env { struct free_batch b; int free_frames; };
 
-/* Per removed leaf: the entry is already clear; flush it BEFORE the frame can
- * be handed out again, or a stale TLB entry would alias the new owner. */
+/* Per removed leaf: the entry is already clear; its frame waits in the batch
+ * until every CPU has flushed it, or a stale TLB entry would alias the new owner. */
 static void on_unmap(void *env, uint64_t va, uint64_t pa, uint64_t page) {
-    const struct unmap_env *u = env;
-    flush(u->as, va, page);
-    if (u->free_frames)
-        for (uint64_t off = 0; off < page; off += PAGE_4K) frame_free(pa + off);
+    struct unmap_env *u = env;
+    batch_add(&u->b, va, u->free_frames ? pa : 0, page);
 }
 
 enum pt_status vm_unmap(struct addr_space *as, uint64_t va, uint64_t len, int free_frames) {
-    struct unmap_env u = { as, free_frames };
+    struct unmap_env u = { .b = { .as = as }, .free_frames = free_frames };
     uint64_t f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_unmap(&as->pt, va, len, on_unmap, &u);
+    batch_flush(&u.b);
     spin_unlock_irqrestore(&g_vm_lock, f);
     return st;
 }
@@ -133,14 +158,23 @@ uint64_t vm_lower_half_pages(const struct addr_space *as) {
 
 /* Frees a mapped page's frame, leaving a zero-fill-on-demand marker. */
 enum pt_status vm_discard_page(struct addr_space *as, uint64_t va) {
-    uint64_t old, f = spin_lock_irqsave(&g_vm_lock);
-    enum pt_status st = pt_discard(&as->pt, va, &old);
-    if (st == PT_OK) {
-        flush(as, va, PAGE_4K);              /* before the frame can be reused */
-        frame_free(old);
+    return vm_discard_pages(as, va, PAGE_4K) ? PT_OK : PT_NOT_MAPPED;
+}
+
+/* Every mapped page of [va, va+len) discarded, with one shootdown per
+ * FREE_BATCH frames (madvise(DONTNEED) of a large range). */
+uint64_t vm_discard_pages(struct addr_space *as, uint64_t va, uint64_t len) {
+    struct free_batch b = { .as = as };
+    uint64_t done = 0, f = spin_lock_irqsave(&g_vm_lock);
+    for (uint64_t off = 0; off < len; off += PAGE_4K) {
+        uint64_t old;
+        if (pt_discard(&as->pt, va + off, &old) != PT_OK) continue;   /* not mapped: nothing to do */
+        batch_add(&b, va + off, old, PAGE_4K);
+        done++;
     }
+    batch_flush(&b);                     /* before the frames can be reused */
     spin_unlock_irqrestore(&g_vm_lock, f);
-    return st;
+    return done;
 }
 
 enum pt_status vm_mark_lazy(struct addr_space *as, uint64_t va, uint64_t flags) {

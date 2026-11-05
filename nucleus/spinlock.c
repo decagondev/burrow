@@ -17,6 +17,7 @@ uint64_t kprint_enter(void) {
     uint64_t f = irq_save();
     for (uint32_t spins = 0; spins < KPRINT_SPINS; spins++) {
         if (!__atomic_exchange_n(&g_kprint_locked, 1, __ATOMIC_ACQUIRE)) return f;
+        tlb_poll();                     /* contended: other CPUs run, so GS is bound */
         __asm__ volatile("pause");
     }
     return f;                           /* stuck holder: print over it */

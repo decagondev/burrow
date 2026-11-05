@@ -5,3 +5,6 @@ smp_spin_counter
 smp_threads_everywhere
 smp_futex_ping_pong
 smp_migration
+smp_shootdown_protect
+smp_shootdown_unmap
+smp_user_threads_everywhere

@@ -91,6 +91,10 @@ int kt_smp_broken_trampoline(void);   /* must fail: run_all.sh REG-0008 */
 int kt_smp_threads_everywhere(void);
 int kt_smp_futex_ping_pong(void);
 int kt_smp_migration(void);
+/* ktest_tlb.c (W20-S07) */
+int kt_smp_shootdown_protect(void);
+int kt_smp_shootdown_unmap(void);
+int kt_smp_user_threads_everywhere(void);
 /* 1 if the ktest boot module names this test (smp.c breaks the trampoline for one). */
 int ktest_listed(const char *name);
 #endif

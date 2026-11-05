@@ -33,6 +33,9 @@ struct percpu {
     /* scheduler (sched.c, under g_sched_lock) */
     struct thread *idle;      /* this CPU's idle thread; 0 until it schedules     */
     uint32_t slice;           /* ticks the current thread has run                 */
+    /* TLB shootdown (tlb.c, W20-S07) */
+    uint64_t cr3;             /* the PML4 this CPU runs on (after its mov to CR3) */
+    volatile uint32_t shoot_pending;   /* a shootdown for this CPU waits to be done */
 };
 _Static_assert(__builtin_offsetof(struct percpu, kstack_top) == 0, "trap.asm offset");
 _Static_assert(__builtin_offsetof(struct percpu, kstack_bottom) == 8, "trap.asm offset");

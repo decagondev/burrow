@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S07 TLB shootdown, and user threads everywhere
+
+**Did:** every page-table change to a present entry is flushed on every CPU that may cache it before the call returns (`tlb.c`: each CPU publishes its CR3; an IPI to the others on that root, or to all for the upper half; spinlock loops answer shootdowns so nobody deadlocks with interrupts off); freed frames wait in a batch for one shootdown. Then Go's threads and user threads run on any CPU, kernel stacks are freed at join again, and a kill or interrupt reaches a thread computing on another CPU with an IPI. `SMP=4 make go-smoke ports-smoke` pass.
+
+**Surprise:** with the remote flush switched off, the first thing to break wasn't the new shootdown test but the futex ping-pong just before it: a joined thread's kernel stack, unmapped and reused, still cached on the CPU that ran it. Skipping the flush for the test page alone makes `smp_shootdown_protect` fail where it should.
+
+**Next:** W20-S08: Go on N CPUs (`sched_getaffinity`, GOMAXPROCS), budgets, every smoke on four CPUs, M20.
+
 ## 2026-11-05 — W20-S06 Scheduling on every CPU
 
 **Did:** one run queue for every CPU: the scheduler's lock is held across the context switch and dropped by the thread switched to; an idle thread and a 1 kHz timer on every CPU; wake IPIs to idle CPUs; spinlocks for the frame allocator, page tables and kprintf. Kernel threads run anywhere; the Go kernel and user threads stay on CPU 0 until S07 brings TLB shootdown. New ktests ping-pong futexes across four CPUs and move threads between them; `make ktest` runs every suite on one CPU and on four; REG-0008 breaks the trampoline.

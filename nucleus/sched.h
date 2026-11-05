@@ -1,7 +1,7 @@
 /* sched.h - kernel threads and the scheduler: preemptive round robin with a
  * 10 ms timeslice from each CPU's 1 kHz tick, one run queue (g_threads under
- * one spinlock) for every CPU (W20-S06, ADR-0011). Threads created from a
- * trap frame (Go, user) stay on CPU 0 until TLB shootdown (S07).
+ * one spinlock) for every CPU (W20-S06, ADR-0011). Every thread may run on
+ * any CPU (since TLB shootdown, S07) except main and the idle threads.
  *
  * Every thread owns a 16 KiB kernel stack with an unmapped guard page below
  * it. Interrupts taken while it runs land on that stack (trap.asm), so a
@@ -45,7 +45,6 @@ struct thread {
     int      pin_cpu;           /* CPU index it may run on, -1 = any (sched_priv.h) */
     int      is_idle;           /* a CPU's idle thread: never picked by the queue */
     uint32_t cpu;               /* CPU index it last ran on */
-    uint64_t stack_cpus;        /* bit per CPU that touched its kernel stack (thread.c) */
     uint8_t  fx[FPU_AREA_BYTES] __attribute__((aligned(64)));   /* XSAVE (or FXSAVE) area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
@@ -79,6 +78,9 @@ struct spinlock;
  * a waker that takes the lock afterwards always sees us blocked (PIT-23). */
 void thread_block_unlock(uint64_t timeout_ns, struct spinlock *lock);
 void thread_wake(struct thread *t);            /* T_BLOCKED -> T_RUNNABLE */
+/* If t runs on another CPU, an IPI makes it enter the kernel now (its
+ * return to ring 3 then sees killed / interrupt; W20-S07). */
+void thread_poke(struct thread *t);
 uint64_t sched_switch_count(void);
 /* An AP's boot context becomes its idle thread (smp.c), then idles for ever. */
 void sched_init_cpu(uint64_t kstack_bottom, uint64_t kstack_top);

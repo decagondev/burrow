@@ -63,6 +63,9 @@ static const struct ktest g_tests[] = {
     { "smp_threads_everywhere", kt_smp_threads_everywhere },
     { "smp_futex_ping_pong", kt_smp_futex_ping_pong },
     { "smp_migration",      kt_smp_migration },
+    { "smp_shootdown_protect", kt_smp_shootdown_protect },
+    { "smp_shootdown_unmap", kt_smp_shootdown_unmap },
+    { "smp_user_threads_everywhere", kt_smp_user_threads_everywhere },
 };
 
 static const char *g_current;

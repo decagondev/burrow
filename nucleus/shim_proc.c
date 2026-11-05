@@ -8,6 +8,7 @@
 #include "errno.h"
 #include "cpu.h"
 #include "serial.h"
+#include "spinlock.h"
 #include "kprintf.h"
 #include "lib_string.h"
 #include "panic.h"
@@ -27,9 +28,9 @@ long sys_write(struct syscall_frame *f) {
     if (SYSARG0(f) > 2) return poll_write((int)SYSARG0(f), (const void *)SYSARG1(f), SYSARG2(f));
     if (SYSARG0(f) == 0) return -EBADF;
     const char *buf = (const char *)SYSARG1(f);
-    uint64_t n = SYSARG2(f), flags = irq_save();
+    uint64_t n = SYSARG2(f), flags = kprint_enter();   /* not inside another CPU's kprintf line */
     for (uint64_t i = 0; i < n; i++) serial_putc(COM1_PORT, buf[i]);
-    irq_restore(flags);
+    kprint_leave(flags);
     return (long)n;
 }
 long sys_read(struct syscall_frame *f) {

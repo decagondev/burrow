@@ -106,8 +106,7 @@ long vm_discard(struct addr_space *as, uint64_t addr, uint64_t len) {
     if (addr & (PAGE_4K - 1)) return -EINVAL;
     len = round_up(len);
     kmutex_lock(&as->lock);
-    for (uint64_t off = 0; off < len; off += PAGE_4K)
-        vm_discard_page(as, addr + off);   /* unmapped pages: nothing to do */
+    vm_discard_pages(as, addr, len);       /* unmapped pages: nothing to do; one shootdown per batch */
     kmutex_unlock(&as->lock);
     return 0;
 }

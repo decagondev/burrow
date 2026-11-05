@@ -1,10 +1,8 @@
 /* thread.c - creating, joining and finding threads, and each CPU's first
  * thread (sched.h). Slots change state only under g_sched_lock. A slot's
- * kernel stack is unmapped and freed at join only when the joining CPU is
- * the only one that ever touched it (its invlpg is then enough); otherwise
- * it stays mapped for the slot's next thread (W20-S06), since another CPU
- * may hold a stale TLB entry until shootdown exists (S07). Never switches
- * threads itself (sched.c does). ADR-0011. */
+ * kernel stack is unmapped and freed at join; the unmap is shot down on every
+ * CPU (tlb.c, W20-S07) before its frames are reused. Never switches threads
+ * itself (sched.c does). ADR-0011. */
 #include "sched_priv.h"
 #include "trap.h"
 #include "fpu.h"
@@ -53,7 +51,6 @@ static int map_kstack(struct thread *t) {
     }
     t->kstack_bottom = base;
     t->kstack_top = base + KSTACK_BYTES;
-    t->stack_cpus = 0;                  /* fresh: no CPU has cached it */
     return 0;
 }
 
@@ -70,7 +67,7 @@ static void reset_fields(struct thread *t, const char *name, int pin) {
     t->wait_next = 0;
     t->name = name;
     t->pin_cpu = pin;
-    t->cpu = 0;                         /* stack_cpus stays: a kept stack keeps its set */
+    t->cpu = 0;
     fpu_init_area(t->fx);
 }
 
@@ -109,8 +106,6 @@ static struct thread *thread_publish(struct thread *t, uint64_t *sp) {
 struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
     struct thread *t = thread_alloc(name, PIN_ANY);
     if (!t) return 0;
-    uint64_t f = irq_save();            /* one CPU writes the stack: the one recorded */
-    t->stack_cpus |= 1ull << this_cpu()->index;
     /* Initial stack, read by switch_to's pops and ret (see switch.asm):
      * [top-8] 0  [top-16] thread_start  then r15 r14 r13=arg r12=fn rbx rbp */
     uint64_t *sp = (uint64_t *)(uintptr_t)t->kstack_top;
@@ -122,7 +117,6 @@ struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
     *--sp = (uint64_t)(uintptr_t)arg;   /* r13 */
     *--sp = 0;                          /* r14 */
     *--sp = 0;                          /* r15 */
-    irq_restore(f);
     return thread_publish(t, sp);
 }
 
@@ -131,11 +125,11 @@ struct thread *thread_create_from_frame(const char *name, const struct trap_fram
     return thread_create_user(name, frame, fs_base, vmm_kernel()->pt.root, 0, 0);
 }
 
-/* Go and user threads stay on CPU 0 until TLB shootdown (W20-S07). */
+/* Go and user threads run on any CPU since TLB shootdown (W20-S07). */
 struct thread *thread_create_user(const char *name, const struct trap_frame *frame,
                                   uint64_t fs_base, uint64_t cr3, uint64_t uspace,
                                   const uint8_t *fx) {
-    struct thread *t = thread_alloc(name, 0);
+    struct thread *t = thread_alloc(name, PIN_ANY);
     if (!t) return 0;
     if (fx) fpu_set_legacy(t->fx, fx);   /* a fork child keeps its parent's x87/SSE state */
     t->cr3 = cr3;                       /* before thread_publish: it may run at once */
@@ -143,14 +137,11 @@ struct thread *thread_create_user(const char *name, const struct trap_frame *fra
     /* [top - frame] the trap frame  [below] thread_start_frame  then 6 zero
      * registers: switch_to pops, "returns" into thread_start_frame, which
      * drops the scheduler's lock and goes to trap_resume with RSP at the frame. */
-    uint64_t f = irq_save();            /* one CPU writes the stack: the one recorded */
-    t->stack_cpus |= 1ull << this_cpu()->index;
     struct trap_frame *tf = (struct trap_frame *)(uintptr_t)(t->kstack_top - sizeof *tf);
     *tf = *frame;
     uint64_t *sp = (uint64_t *)tf;
     *--sp = (uint64_t)(uintptr_t)thread_start_frame;
     for (int i = 0; i < 6; i++) *--sp = 0;
-    irq_restore(f);
     t->fs_base = fs_base;
     return thread_publish(t, sp);
 }
@@ -194,10 +185,8 @@ void sched_init_cpu(uint64_t kstack_bottom, uint64_t kstack_top) {
     spin_unlock(&g_sched_lock);
 }
 
-/* IF=0, so this CPU cannot change under it: frees the stack if only this
- * CPU ever touched it (the unmap's invlpg covers every cached entry). */
+/* The unmap is shot down on every CPU before the frames go back. */
 static void release_stack(struct thread *t) {
-    if (t->stack_cpus & ~(1ull << this_cpu()->index)) return;   /* kept for the slot's next thread */
     vm_unmap(vmm_kernel(), t->kstack_bottom, KSTACK_BYTES, 1);
     t->kstack_bottom = t->kstack_top = 0;
 }

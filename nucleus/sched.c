@@ -16,6 +16,7 @@
 #include "cpu.h"
 #include "panic.h"
 #include "syscall.h"
+#include "tlb.h"
 
 #define MSR_FS_BASE 0xC0000100u
 
@@ -63,13 +64,15 @@ static void schedule_locked(void) {
     if (prev->state == T_RUNNING) prev->state = T_RUNNABLE;
     next->state = T_RUNNING;
     next->cpu = c->index;
-    next->stack_cpus |= 1ull << c->index;
     c->current = next;
     c->kstack_top = next->kstack_top;
     c->kstack_bottom = next->kstack_bottom;
     tss_set_rsp0(next->kstack_top);
     if (next->fs_base != prev->fs_base) wrmsr(MSR_FS_BASE, next->fs_base);
-    if (next->cr3 != prev->cr3) write_cr3(next->cr3);   /* flushes the TLB's user half */
+    if (next->cr3 != prev->cr3) {
+        write_cr3(next->cr3);           /* flushes the TLB's user half */
+        tlb_set_loaded(next->cr3);      /* after the flush: shootdowns now include this CPU */
+    }
     if ((next->uspace != 0) != c->lstar_user) syscall_set_entry(next->uspace != 0);   /* ADR-0011 */
     fpu_save(prev->fx);
     fpu_restore(next->fx);
@@ -171,6 +174,13 @@ void thread_wake(struct thread *t) {
         t->state = T_RUNNABLE;
         sched_kick(t);
     }
+    spin_unlock_irqrestore(&g_sched_lock, f);
+}
+
+void thread_poke(struct thread *t) {
+    uint64_t f = spin_lock_irqsave(&g_sched_lock);
+    if (t->state == T_RUNNING && t->cpu != this_cpu()->index)
+        lapic_send_ipi((uint8_t)g_cpus[t->cpu].apic_id, VEC_WAKE);
     spin_unlock_irqrestore(&g_sched_lock, f);
 }
 

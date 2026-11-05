@@ -22,6 +22,7 @@
 #include "syscall.h"
 #include "sched.h"
 #include "ktest.h"
+#include "tlb.h"
 #include "cpu.h"
 #include "kprintf.h"
 #include "lib_string.h"
@@ -134,6 +135,7 @@ static void start_all(const struct acpi_info *m, struct ap_boot *b) {
 void smp_init(void) {
     const struct acpi_info *m = acpi_machine();
     trap_set_handler(VEC_WAKE, on_wake);
+    tlb_init();
     uint64_t tables[3] = {0, 0, 0};
     uint64_t tramp_bytes = (uint64_t)(ap_tramp_end - ap_tramp_start);
     if (m && m->ncpus > 1 && tramp_bytes <= PAGE_4K && build_boot_tables(tables) == 0) {
@@ -169,6 +171,7 @@ void ap_main(uint64_t index) {
     write_cr3(g_kernel_cr3);                  /* off the temporary tables at once */
     gdt_init_cpu((uint32_t)index, &g_ap_stack_top[index][1]);
     struct percpu *c = this_cpu();
+    tlb_set_loaded(g_kernel_cr3);
     c->kstack_top = g_ap_stack_top[index][0];
     c->kstack_bottom = c->kstack_top - AP_STACK_BYTES;
     trap_init_cpu();
@@ -192,5 +195,8 @@ void smp_run_everywhere(void (*fn)(void *), void *arg) {
     }
     fn(arg);
     for (uint32_t i = 1; i < g_online; i++)
-        while (__atomic_load_n(&g_cpus[i].done, __ATOMIC_ACQUIRE) == before[i]) cpu_pause();
+        while (__atomic_load_n(&g_cpus[i].done, __ATOMIC_ACQUIRE) == before[i]) {
+            tlb_poll();                       /* the caller may have IF off */
+            cpu_pause();
+        }
 }

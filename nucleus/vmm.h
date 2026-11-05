@@ -1,5 +1,6 @@
 /* vmm.h - virtual memory MECHANISM (MEMORY_MAP.md §3): map, unmap, protect,
- * translate on any address space, through the physmap, with TLB flushes.
+ * translate on any address space, through the physmap, with TLB flushes on
+ * every CPU that may cache the entries (tlb.h, W20-S07).
  * Policy (which ranges exist) belongs to vm_region.c and, later, Go.
  * Uses common/paging.c for the table walks. */
 #ifndef NUCLEUS_VMM_H
@@ -40,6 +41,7 @@ enum pt_status vm_translate(const struct addr_space *as, uint64_t va, uint64_t *
  * (-1: marked, no frame left). forget turns a
  * marker back into "absent", so PROT_NONE and released ranges fault. */
 enum pt_status vm_discard_page(struct addr_space *as, uint64_t va);
+uint64_t vm_discard_pages(struct addr_space *as, uint64_t va, uint64_t len);   /* pages discarded */
 enum pt_status vm_mark_lazy(struct addr_space *as, uint64_t va, uint64_t flags);   /* commit, no frame yet */
 void vm_forget_discarded(struct addr_space *as, uint64_t va);
 /* Present 4 KiB pages in the lower half (diagnostics: what Go has mapped). */
