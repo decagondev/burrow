@@ -26,7 +26,7 @@ func fakeModule(name string, phys, size uint64) []byte {
 }
 
 func TestParse(t *testing.T) {
-	info, err := Parse(fakeInfo(2, 3))
+	info, err := Parse(fakeInfo(Version, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,8 +41,8 @@ func TestParse(t *testing.T) {
 	}{
 		{"short", make([]byte, 16), "bytes"},
 		{"magic", make([]byte, InfoBytes), "magic"},
-		{"version 1", fakeInfo(1, 0), "version"},
-		{"too many modules", fakeInfo(2, 17), "modules"},
+		{"version 2", fakeInfo(2, 0), "version"}, // before W21-S02: a mixed image
+		{"too many modules", fakeInfo(Version, 17), "modules"},
 	} {
 		if _, err := Parse(c.b); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want one mentioning %q", c.name, err, c.want)
@@ -71,4 +71,34 @@ func TestParseModulesAndFind(t *testing.T) {
 	if _, err := ParseModules(tab, 4); err == nil {
 		t.Error("ParseModules read past the table")
 	}
+}
+
+// W21-S02: the framebuffer fields at the offsets boot_info.h asserts (0x30-0x47,
+// 0x60-0x66), in the order stage2 copies them from VBE's ModeInfoBlock.
+func TestParseFramebuffer(t *testing.T) {
+	b := fakeInfo(Version, 1)
+	if fb := mustParse(t, b).Framebuffer; fb != (Framebuffer{}) {
+		t.Fatalf("no source: %+v, want none", fb)
+	}
+	le.PutUint64(b[0x30:], 0xFD000000)
+	le.PutUint32(b[0x38:], 1280)
+	le.PutUint32(b[0x3C:], 1024)
+	le.PutUint32(b[0x40:], 5248)
+	le.PutUint32(b[0x44:], 32)
+	copy(b[0x60:], []byte{8, 16, 8, 8, 8, 0})
+	b[0x66] = FbSourceVBE
+	want := Framebuffer{Source: 1, Phys: 0xFD000000, Width: 1280, Height: 1024, Pitch: 5248, BPP: 32,
+		Red: Field{8, 16}, Green: Field{8, 8}, Blue: Field{8, 0}}
+	if fb := mustParse(t, b).Framebuffer; fb != want {
+		t.Errorf("framebuffer = %+v, want %+v", fb, want)
+	}
+}
+
+func mustParse(t *testing.T, b []byte) Info {
+	t.Helper()
+	info, err := Parse(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info
 }

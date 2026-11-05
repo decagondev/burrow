@@ -14,7 +14,7 @@ const (
 	bootInfoBytes = 128 // sizeof(struct boot_info), include/burrow/boot_info.h
 )
 
-// BootInfo returns a copy of boot_info v2 (parse it with package bootinfo).
+// BootInfo returns a copy of boot_info v3 (parse it with package bootinfo).
 func BootInfo() []byte {
 	buf := make([]byte, bootInfoBytes)
 	n, _, _ := syscall.RawSyscall(nrBootInfo, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)

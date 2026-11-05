@@ -277,7 +277,7 @@ UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
-	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c
+	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
@@ -342,8 +342,11 @@ disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest $(
 # Ported and multi-threaded programs (W12): threads (musl pthreads), more to come.
 # Memory (W14-S01): on a 2 GiB guest, 1.5 GiB touched and checked, then a
 # program killed for running out of memory, and the memory back afterwards.
+# 480 s, not 300 (W21-S02): on four CPUs memtest's 1.5 GiB takes 63-84 s
+# (56 s on one), and the run sat at the old limit; syslat's 500 us budget is
+# the assertion, this is only the hang guard.
 mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
-	MEM=2G QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem.txt 300 tests/smoke/keys/mem.keys
+	MEM=2G QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/mem.txt 480 tests/smoke/keys/mem.keys
 
 # The M14 demo (W14-S08): start-up calls, file mappings, sockets, the mouse,
 # and paint taking the screen (KD_GRAPHICS, K_OFF) and giving it back, also

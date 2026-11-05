@@ -88,6 +88,14 @@ with_kargs() { # with_kargs <words> <img>
     -payload nucleus="$b/nucleus.disk.elf" -payload kernel="$b/kernel.elf" \
     -payload kargs="$WORK/kargs-${1%%=*}.txt" >/dev/null
 }
+# W21-S02: a Go image whose video payload asks for a mode the BIOS lacks must
+# come up on the DISPI fallback, never trust an empty framebuffer descriptor.
+vbe_no_mode() {
+  local b; b="$(dirname "$IMG")"
+  [ -f "$b/kernel.elf" ] || { echo "  (no $b/kernel.elf: make go-smoke first)"; return 1; }
+  "$b/mkimage" -o "$1" -stage1 "$b/stage1.bin" -stage2 "$b/stage2.bin" -payload loader="$b/loader.bin" \
+    -payload nucleus="$b/nucleus.disk.elf" -payload kernel="$b/kernel.elf" -video 1000x700x32 >/dev/null
+}
 # A Go panic prints itself and every goroutine, then exit_group fails the run.
 go_panic()         { with_kargs panic=boot "$1"; }
 # PIT-07: a nil write in Go is a #PF in Go text; the report must say so.
@@ -102,5 +110,6 @@ case_run REG-0005-unhandled-ud "[trap] #UD at"              35  unhandled_ud
 REG_SMP=2 case_run REG-0008-broken-trampoline "smp: cpu with apic id 1 did not start" 35 broken_trampoline
 case_run REG-0006-go-panic     "panic: kargs asked for a panic" 35  go_panic
 case_run REG-0007-go-nil-fault "[trap] fault in the Go kernel"  35  go_nil_fault
+case_run REG-0009-vbe-no-mode "[nucleus] framebuffer: none (dispi fallback)" any vbe_no_mode
 echo "$pass passed, $failn failed"
 [ "$failn" -eq 0 ]

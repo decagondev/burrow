@@ -2,6 +2,7 @@
 # Grows slice by slice: Wave 6 up to BURROW:GO:SELFTEST:OK, Wave 7 drivers and the
 # console (typed by tests/smoke/keys/boot_to_go.keys).
 [stage2] vbe: 1024x768x32 pitch 4096 at
+[nucleus] framebuffer 1024x768x32 pitch 4096 at fd000000 (vbe; red 8@16 green 8@8 blue 8@0)
 BURROW:NUCLEUS:OK
 [nucleus] go kernel mapped
 [nucleus] starting the Go kernel

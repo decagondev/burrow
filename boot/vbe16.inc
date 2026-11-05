@@ -6,7 +6,8 @@
 ; width, height and depth, sets it, and asks for a padded scanline when the
 ; request names one. What it found stays for boot_info (S02): the chosen
 ; ModeInfoBlock at VBE_MODE_ADDR, the mode in vbe_mode, the pitch the card
-; accepted in vbe_pitch. Without a payload it does nothing.
+; accepted in vbe_pitch, and all of it in boot_info's framebuffer fields
+; (vbe_to_bootinfo, W21-S02). Without a payload it does nothing.
 ;
 ; Never prints through the BIOS teletype (putc): once the mode is set there
 ; is no text mode, so its messages go to COM1 only (sputc). Never sets a
@@ -28,6 +29,8 @@ MI_HEIGHT        equ 0x14
 MI_BPP           equ 0x19
 MI_MODEL         equ 0x1B
 MI_BASE          equ 0x28
+MI_FIELDS        equ 0x1F         ; RedMaskSize, RedFieldPosition, Green..., Blue...
+MI_FIELDS_BYTES  equ 6
 MODE_LIST_END    equ 0xFFFF
 
 ; ---------------------------------------------------------------------------
@@ -78,7 +81,8 @@ vbe_setup:
     jne .report                   ; refused: the marker shows the mode's own pitch
     movzx ebx, bx
     mov [vbe_pitch], ebx
-.report:                          ; "[stage2] vbe: WxHxB pitch P at BASE (mode 0xM)"
+.report:
+    call vbe_to_bootinfo                          ; "[stage2] vbe: WxHxB pitch P at BASE (mode 0xM)"
     mov si, msg_vbe
     call sprint
     mov ax, [VBE_MODE_ADDR + MI_WIDTH]
@@ -114,6 +118,27 @@ vbe_setup:
     mov al, 'V'
     jmp fail
 .ret:
+    ret
+
+; vbe_to_bootinfo - the mode just set into boot_info's framebuffer fields
+; (W21-S02); fill_bootinfo zeroed them, so the base's high half is 0.
+; Clobbers: EAX, CX, SI, DI.
+vbe_to_bootinfo:
+    mov eax, [VBE_MODE_ADDR + MI_BASE]
+    mov [BOOTINFO_ADDR + BI_FB_ADDR], eax
+    movzx eax, word [VBE_MODE_ADDR + MI_WIDTH]
+    mov [BOOTINFO_ADDR + BI_FB_WIDTH], eax
+    movzx eax, word [VBE_MODE_ADDR + MI_HEIGHT]
+    mov [BOOTINFO_ADDR + BI_FB_HEIGHT], eax
+    mov eax, [vbe_pitch]
+    mov [BOOTINFO_ADDR + BI_FB_PITCH], eax
+    movzx eax, byte [VBE_MODE_ADDR + MI_BPP]
+    mov [BOOTINFO_ADDR + BI_FB_BPP], eax
+    mov si, VBE_MODE_ADDR + MI_FIELDS
+    mov di, BOOTINFO_ADDR + BI_FB_FIELDS
+    mov cx, MI_FIELDS_BYTES
+    rep movsb                     ; ES = DS = 0
+    mov byte [BOOTINFO_ADDR + BI_FB_SOURCE], FB_SOURCE_VBE
     ret
 
 ; vbe_mode_matches - CX = a mode number: ZF=1 if it is linear, direct colour

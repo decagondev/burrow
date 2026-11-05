@@ -1,4 +1,4 @@
-// Package bootinfo parses the boot_info v2 block and the boot module table
+// Package bootinfo parses the boot_info v3 block and the boot module table
 // the loader leaves for the nucleus (include/burrow/boot_info.h,
 // docs/02-architecture/BOOT_PROTOCOL.md). Pure: it reads byte slices, so
 // the layout is checked on the host; arch/amd64 supplies the bytes.
@@ -15,7 +15,7 @@ import (
 // mirrors (boot/boot_abi.inc, tools/mkimage) and this block together.
 const (
 	Magic   = 0x4F464E49544F4F42 // "BOOTINFO" little-endian
-	Version = 2
+	Version = 3                  // 3: the framebuffer (W21-S02)
 
 	offMagic       = 0x00
 	offVersion     = 0x08
@@ -23,6 +23,14 @@ const (
 	offPhysmap     = 0x48
 	offModulesAddr = 0x50
 	offModuleCount = 0x58
+	offFbAddr      = 0x30 // framebuffer (W21-S02): base, width, height, pitch, bpp
+	offFbWidth     = 0x38
+	offFbHeight    = 0x3C
+	offFbPitch     = 0x40
+	offFbBPP       = 0x44
+	offFbFields    = 0x60 // red size, pos; green size, pos; blue size, pos (VBE's order)
+	offFbSource    = 0x66
+	FbSourceVBE    = 1
 	InfoBytes      = 0x80
 
 	ModuleBytes   = 32 // name[16], phys_start u64, size_bytes u64
@@ -30,12 +38,25 @@ const (
 	MaxModules    = 16
 )
 
-// Info is the part of boot_info v2 the Go kernel uses.
+// Info is the part of boot_info v3 the Go kernel uses.
 type Info struct {
 	BootDrive   uint32
 	PhysmapBase uint64
 	ModulesAddr uint64 // physical address of the module table
 	ModuleCount int
+	Framebuffer Framebuffer // Source 0: none (the kernel sets a DISPI mode itself)
+}
+
+// Field is one colour channel of a pixel: Size bits from bit Pos up.
+type Field struct{ Size, Pos uint8 }
+
+// Framebuffer is the display mode stage2 set through VBE and the nucleus
+// checked (nucleus/fbdesc.c); it clears Source when the check fails.
+type Framebuffer struct {
+	Source                    uint8
+	Phys                      uint64
+	Width, Height, Pitch, BPP int
+	Red, Green, Blue          Field
 }
 
 // Module is one physical range the loader filled: a payload from the disk
@@ -71,7 +92,26 @@ func Parse(b []byte) (Info, error) {
 		PhysmapBase: le.Uint64(b[offPhysmap:]),
 		ModulesAddr: le.Uint64(b[offModulesAddr:]),
 		ModuleCount: n,
+		Framebuffer: parseFramebuffer(b),
 	}, nil
+}
+
+func parseFramebuffer(b []byte) Framebuffer {
+	if b[offFbSource] != FbSourceVBE {
+		return Framebuffer{}
+	}
+	f := b[offFbFields:]
+	return Framebuffer{
+		Source: b[offFbSource],
+		Phys:   le.Uint64(b[offFbAddr:]),
+		Width:  int(le.Uint32(b[offFbWidth:])),
+		Height: int(le.Uint32(b[offFbHeight:])),
+		Pitch:  int(le.Uint32(b[offFbPitch:])),
+		BPP:    int(le.Uint32(b[offFbBPP:])),
+		Red:    Field{f[0], f[1]},
+		Green:  Field{f[2], f[3]},
+		Blue:   Field{f[4], f[5]},
+	}
 }
 
 // ParseModules decodes a module table of n entries.

@@ -2,4 +2,5 @@
 # nothing is set; the image boots on. Append-only.
 [stage2] vbe: no 1000x700x32 mode
 [stage2] protected mode ok
+[nucleus] framebuffer: none (dispi fallback)
 BURROW:NUCLEUS:OK

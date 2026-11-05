@@ -4,12 +4,13 @@
 [loader] nucleus image crc ok
 [loader] nucleus loaded entry=ffffffff80100000
 [loader] page tables ok
-[loader] boot_info v2 ok
+[loader] boot_info v3 ok
 [loader] all checks passed
 BURROW:LOADER:OK
 [loader] jumping to nucleus
 [nucleus] hello from the higher half
-[nucleus] boot_info v2 ok
+[nucleus] boot_info v3 ok
+[nucleus] framebuffer: none (dispi fallback)
 [nucleus] gdt ok
 [nucleus] idt ok
 [nucleus] pmm ok

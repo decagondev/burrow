@@ -38,24 +38,29 @@ Defined in `include/burrow/boot_info.h` with `_Static_assert` offsets.
 | Offset | Field | Filled by | Meaning |
 |---|---|---|---|
 | 0x00 | magic u64 | stage2 | `"BOOTINFO"` little-endian |
-| 0x08 | version u32 | stage2, loader | 1 from stage2; the loader sets 2 just before the nucleus hand-off |
+| 0x08 | version u32 | stage2, loader | 2 from stage2; the loader sets 3 just before the nucleus hand-off (1 and 2 before W21-S02) |
 | 0x0C | size u32 | stage2 | 0x80 |
 | 0x10 | boot_drive u32 | stage2 | BIOS DL, e.g. 0x80 |
 | 0x14 | e820_count u32 | stage2 | entries at e820_addr |
 | 0x18 | e820_addr u64 | stage2 | 0x2000 |
 | 0x20 | manifest_addr u64 | stage2 | 0x0600 |
 | 0x28 | loader_base u64 | stage2 | 0x10000 |
-| 0x30 | fb_addr u64 | W8 | linear framebuffer, 0 = none |
-| 0x38..0x44 | fb_width/height/pitch/bpp | W8 | |
+| 0x30 | fb_addr u64 | stage2 (W21-S02) | the VBE mode's linear framebuffer (physical), 0 = none |
+| 0x38..0x44 | fb_width, fb_height, fb_pitch (bytes per scanline, as the card accepted it), fb_bpp, u32 each | stage2 (W21-S02) | |
 | 0x48 | physmap_base u64 | loader (v2) | virtual address of physical 0 (`0xFFFF800000000000`) |
 | 0x50 | modules_addr u64 | loader (v2) | physical address of `struct boot_module[]` (`0x1100`) |
 | 0x58 | module_count u32 | loader (v2) | valid entries, at most 16 |
 | 0x5C | reserved0 u32 | — | 0 |
-| 0x60 | reserved[4] | — | grow here, bump version |
+| 0x60..0x65 | fb_red_size, fb_red_pos, fb_green_size, fb_green_pos, fb_blue_size, fb_blue_pos, u8 each | stage2 (v3) | the colour fields, in the ModeInfoBlock's order |
+| 0x66 | fb_source u8 | stage2, nucleus | 0 none, 1 VBE; the nucleus clears it when the descriptor fails `nucleus/fbdesc.c`'s check |
+| 0x67 | fb_reserved u8 | — | 0 |
+| 0x68 | reserved[3] | — | grow here, bump version |
 
 `struct boot_module` (32 bytes): `name[16]` (NUL padded), `phys_start u64`, `size_bytes u64`, both 4 KiB multiples. The loader reports: one module per manifest payload that is not a boot stage (e.g. `ktest`; `kernel` = the Go kernel ELF; `kargs` = a text file whose whitespace-separated words the nucleus appends to the Go kernel's `argv` (W7); `initrd` = a ustar archive the Go kernel mounts at `/` (W8)), read into fresh frames and CRC-checked, with `size_bytes` = the exact payload size; then `nucleus` (the loaded segments at 1 MiB) and `loader-frames` (every frame `loader/palloc.c` handed out, which includes the payload modules' frames and the page tables now in CR3). The nucleus must treat both as in use. All addresses inside boot_info stay **physical**; the nucleus reaches them through `physmap_base + addr`.
 
-**Versioning rule:** add fields only into `reserved`; bump `BOOTINFO_VERSION`; the consumer rejects versions it does not know. Stage2 writes version 1 (`BOOTINFO_VERSION_STAGE2`, v2 fields zero); the loader checks for 1, fills the v2 fields and writes 2 (`BOOTINFO_VERSION`). The nucleus accepts only 2.
+**Versioning rule:** add fields only into `reserved`; bump `BOOTINFO_VERSION`; the consumer rejects versions it does not know. Stage2 writes version 2 (`BOOTINFO_VERSION_STAGE2`; the loader's fields zero; the framebuffer filled if it set a VBE mode); the loader checks for 2, fills its fields and writes 3 (`BOOTINFO_VERSION`). The nucleus and `kernel/bootinfo` accept only 3. W21-S02 bumped both (from 1 and 2) when the framebuffer fields began to carry data, so an image mixing old and new stages stops at the loader's check; the markers became `[loader] boot_info v3 ok` and `[nucleus] boot_info v3 ok`.
+
+**The framebuffer.** The nucleus checks the descriptor before anything uses it (`fb_desc_from_bootinfo`, host-tested: a page-aligned base below 2^46, sides of 1..16384 pixels and at most 256 MiB in all, 15/16/24/32 bpp, a pitch of at least a row, three non-empty colour fields inside the pixel and apart) and prints `[nucleus] framebuffer WxHxB pitch P at BASE (vbe; red S@P green S@P blue S@P)`, `[nucleus] framebuffer: none (dispi fallback)`, or `[nucleus] framebuffer: refused, <why> (dispi fallback)`, clearing `fb_source` so the Go kernel never trusts a refused one.
 
 ## 4. Register hand-offs
 

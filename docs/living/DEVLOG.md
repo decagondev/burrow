@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W21-S02 The framebuffer in boot_info
+
+**Did:** stage2 records the VBE mode it set in boot_info (base, size, pitch, depth, and the colour fields in the reserved space); the version numbers moved to 2 and 3, so a mixed image stops at the loader; the nucleus checks the descriptor with a pure, host-tested module (`fbdesc.c`) and prints it, or clears it so Go never trusts a bad one; `kernel/bootinfo` parses it. REG-0009: a missing mode boots on the DISPI fallback.
+
+**Surprise:** the framebuffer fields were already in boot_info from W2, zero and waiting, so the contract only had to grow into its reserved space. The cost was elsewhere: the `boot_info v2 ok` markers carried the version in their text, so the bump is also a marker change, done deliberately and noted in BOOT_PROTOCOL.md.
+
+Also: mem-smoke timed out at 300 s twice, not hung but slow (memtest 81-84 s on four CPUs, 56 on one); its hang guard is 480 s now, and the four-CPU fault path's cost is noted in the wave file.
+
+**Next:** W21-S03: gfx and fbdev believe the descriptor.
+
 ## 2026-11-05 — W21-S01 A VBE mode set in stage2
 
 **Did:** a `video` payload (`mkimage -video WxHxB[,pitch]`) that stage2 reads as its last real-mode step to find and set a linear VBE mode through the BIOS, with a padded scanline through 4F06 when asked; its messages go to COM1 only. The Go images ask for 1024x768x32; `make vbe-smoke` boots an odd 1280x1024 mode with a 5248-byte pitch and a mode that does not exist.

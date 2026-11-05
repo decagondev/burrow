@@ -228,7 +228,7 @@ static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) 
         kprintf("  module %08llx - %08llx  %s\n",
                 (unsigned long long)mods[i].phys_start,
                 (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
-    kprintf("[loader] boot_info v2 ok (physmap=%llx, modules=%u)\n",
+    kprintf("[loader] boot_info v3 ok (physmap=%llx, modules=%u)\n",
             (unsigned long long)bi->physmap_base, bi->module_count);
 }
 

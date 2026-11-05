@@ -35,7 +35,16 @@ BI_E820_ADDR       equ 0x18
 BI_MANIFEST_ADDR   equ 0x20
 BI_LOADER_BASE     equ 0x28
 BI_STRUCT_SIZE     equ 0x80
-BOOTINFO_VERSION   equ 1          ; = BOOTINFO_VERSION_STAGE2; the loader upgrades to 2
+BOOTINFO_VERSION   equ 2          ; = BOOTINFO_VERSION_STAGE2; the loader upgrades to 3
+; framebuffer (W21-S02): vbe_setup fills these after it set a mode
+BI_FB_ADDR         equ 0x30
+BI_FB_WIDTH        equ 0x38
+BI_FB_HEIGHT       equ 0x3C
+BI_FB_PITCH        equ 0x40
+BI_FB_BPP          equ 0x44
+BI_FB_FIELDS       equ 0x60      ; red size/pos, green size/pos, blue size/pos: VBE's order
+BI_FB_SOURCE       equ 0x66
+FB_SOURCE_VBE      equ 1
 ; v2 fields: written by the loader, never by stage2 (stage2 zeroes them)
 BI_PHYSMAP_BASE    equ 0x48
 BI_MODULES_ADDR    equ 0x50

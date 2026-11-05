@@ -4,4 +4,5 @@
 [stage2] entering protected mode
 [stage2] vbe: 1280x1024x32 pitch 5248 at
 [stage2] protected mode ok
+[nucleus] framebuffer 1280x1024x32 pitch 5248 at fd000000 (vbe
 BURROW:NUCLEUS:OK
