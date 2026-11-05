@@ -4,6 +4,7 @@
 #include "time.h"
 #include "apic.h"
 #include "trap.h"
+#include "percpu.h"
 #include "io.h"
 #include "cpu.h"
 #include "kprintf.h"
@@ -23,6 +24,7 @@ static uint64_t g_tsc_hz, g_tsc0, g_ns_mult;   /* ns = (tsc_delta * g_ns_mult) >
 static volatile uint64_t g_ticks;
 static volatile uint64_t g_realtime_base_ns;   /* wall time at monotonic 0 */
 static void (*g_tick_hook)(void);
+static uint32_t g_lapic_per_ms;               /* calibrated once, on the BSP */
 
 /* Count TSC cycles while PIT channel 2 counts down CALIBRATE_MS once. */
 static uint64_t calibrate_tsc(void) {
@@ -38,7 +40,7 @@ static uint64_t calibrate_tsc(void) {
 
 static void on_tick(struct trap_frame *f) {
     (void)f;
-    g_ticks++;
+    if (this_cpu()->index == 0) g_ticks++;   /* one clock: the BSP's */
     lapic_eoi();
     if (g_tick_hook) g_tick_hook();
 }
@@ -62,11 +64,18 @@ void time_init(void) {
 
     uint32_t per_ms = calibrate_lapic();
     if (per_ms == 0) panic("LAPIC timer calibration failed");
+    g_lapic_per_ms = per_ms;
     trap_set_handler(VEC_TIMER, on_tick);
-    lapic_write(LAPIC_LVT_TIMER, LVT_PERIODIC | VEC_TIMER);
-    lapic_write(LAPIC_TIMER_INIT, per_ms * (1000 / TIMER_HZ));
+    time_init_cpu();
     kprintf("[nucleus] time ok (tsc %llu MHz, lapic timer %u counts/ms, %u Hz tick)\n",
             (unsigned long long)(g_tsc_hz / 1000000), per_ms, TIMER_HZ);
+}
+
+/* This CPU's LAPIC timer at TIMER_HZ (the BSP's calibration: one bus clock). */
+void time_init_cpu(void) {
+    lapic_write(LAPIC_TIMER_DIV, TIMER_DIV_16);
+    lapic_write(LAPIC_LVT_TIMER, LVT_PERIODIC | VEC_TIMER);
+    lapic_write(LAPIC_TIMER_INIT, g_lapic_per_ms * (1000 / TIMER_HZ));
 }
 
 uint64_t time_monotonic_ns(void) {

@@ -84,10 +84,13 @@ void lapic_init_cpu(void) {
 }
 
 /* A fixed IPI (or INIT/STARTUP: icr_lo's delivery mode) to one APIC id. */
+/* IF off throughout: an IPI sent from an interrupt in between would change ICR_HI. */
 void lapic_send_ipi(uint8_t apic_id, uint32_t icr_lo) {
+    uint64_t f = irq_save();
     lapic_write(LAPIC_ICR_HI, (uint32_t)apic_id << 24);
     lapic_write(LAPIC_ICR_LO, icr_lo);
     while (lapic_read(LAPIC_ICR_LO) & ICR_PENDING) cpu_pause();
+    irq_restore(f);
 }
 
 void lapic_self_ipi(uint8_t vector) {

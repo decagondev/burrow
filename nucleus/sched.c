@@ -1,77 +1,98 @@
-/* sched.c - see sched.h. All scheduler state is touched with interrupts off. */
-#include "sched.h"
-#include "trap.h"
-#include "spinlock.h"
+/* sched.c - switching, blocking, waking and the tick, on every CPU from one
+ * run queue (W20-S06, ADR-0011). g_sched_lock is taken with IF=0 and held
+ * across switch_to: the thread switched to releases it (its own caller of
+ * schedule_locked, or thread_bootstrap / sched_start_tail when it is new),
+ * so no CPU can pick a thread whose registers another CPU is still saving.
+ * Lock order: an object's lock (futex bucket, irq, uthread FIFO) first,
+ * then g_sched_lock; never another lock while holding it. Thread creation
+ * and lookup live in thread.c. */
+#include "sched_priv.h"
 #include "fpu.h"
 #include "percpu.h"
 #include "gdt.h"
 #include "time.h"
-#include "vmm.h"
-#include "frames.h"
+#include "apic.h"
+#include "smp.h"
 #include "cpu.h"
-#include "lib_string.h"
-#include "kprintf.h"
-#include "lib_string.h"
 #include "panic.h"
 #include "syscall.h"
 
-#define MSR_FS_BASE   0xC0000100u
-/* Kernel stacks: slot i at KSTACK_REGION + i * KSTACK_SLOT; the first page of
- * each slot stays unmapped (guard). Upper half: shared by every address space. */
-#define KSTACK_REGION 0xFFFFFFFFC0000000ull
-#define KSTACK_SLOT   (KSTACK_BYTES + PAGE_4K)
+#define MSR_FS_BASE 0xC0000100u
 
 extern void switch_to(struct thread *prev, struct thread *next);   /* switch.asm */
-extern void thread_start(void);
-extern void trap_resume(void);                                      /* trap.asm */
-extern char boot_stack[], boot_stack_top[];                         /* entry.asm */
 
-static struct thread g_threads[THREADS_MAX];
-static struct thread *g_idle;
-static uint32_t g_next_id;
-static uint32_t g_slice;
+struct thread g_threads[THREADS_MAX];
+struct spinlock g_sched_lock = SPINLOCK_INIT("sched");
+uint32_t g_next_id;
 static uint64_t g_switches;
+static uint32_t g_cursor;           /* where a search from an idle CPU starts */
 
 struct thread *thread_current(void) { return (struct thread *)(uintptr_t)read_gs_qword(16); }   /* one load: percpu.current */
 uint32_t thread_id(const struct thread *t) { return t->id; }
-uint64_t sched_switch_count(void) { return g_switches; }
+uint64_t sched_switch_count(void) { return __atomic_load_n(&g_switches, __ATOMIC_RELAXED); }
 
-/* Next runnable thread after `from` in slot order; the idle thread only if
- * nothing else can run. */
-static struct thread *pick_next(struct thread *from) {
-    uint32_t start = (uint32_t)(from - g_threads);
-    for (uint32_t k = 1; k <= THREADS_MAX; k++) {
-        struct thread *t = &g_threads[(start + k) % THREADS_MAX];
-        if (t != g_idle && t->state == T_RUNNABLE) return t;
-    }
-    return from->state == T_RUNNING ? from : g_idle;
+static int can_run_on(const struct thread *t, uint32_t cpu) {
+    return !t->is_idle && (t->pin_cpu == PIN_ANY || (uint32_t)t->pin_cpu == cpu);
 }
 
-/* Interrupts OFF. Picks the next thread and switches to it (PIT-22 order). */
-static void schedule(void) {
-    struct thread *prev = this_cpu()->current, *next = pick_next(prev);
-    g_slice = 0;
+/* Next runnable thread for CPU c after `from` in slot order; from again if it
+ * may go on, else c's idle thread. */
+static struct thread *pick_next(struct percpu *c, struct thread *from) {
+    uint32_t start = from->is_idle ? g_cursor : (uint32_t)(from - g_threads);
+    for (uint32_t k = 1; k <= THREADS_MAX; k++) {
+        uint32_t i = (start + k) % THREADS_MAX;
+        struct thread *t = &g_threads[i];
+        if (t->state == T_RUNNABLE && can_run_on(t, c->index)) {
+            g_cursor = i;
+            return t;
+        }
+    }
+    return from->state == T_RUNNING ? from : c->idle;
+}
+
+/* IF=0, g_sched_lock held; returns (in prev, maybe on another CPU) with it
+ * held again. PIT-22's list, all of it per CPU. */
+static void schedule_locked(void) {
+    struct percpu *c = this_cpu();
+    struct thread *prev = c->current, *next = pick_next(c, prev);
+    c->slice = 0;
     if (next == prev) {                 /* also: woken again before it could switch out */
         prev->state = T_RUNNING;
         return;
     }
     if (prev->state == T_RUNNING) prev->state = T_RUNNABLE;
     next->state = T_RUNNING;
-    this_cpu()->current = next;
-    this_cpu()->kstack_top = next->kstack_top;
-    this_cpu()->kstack_bottom = next->kstack_bottom;
+    next->cpu = c->index;
+    next->stack_cpus |= 1ull << c->index;
+    c->current = next;
+    c->kstack_top = next->kstack_top;
+    c->kstack_bottom = next->kstack_bottom;
     tss_set_rsp0(next->kstack_top);
     if (next->fs_base != prev->fs_base) wrmsr(MSR_FS_BASE, next->fs_base);
     if (next->cr3 != prev->cr3) write_cr3(next->cr3);   /* flushes the TLB's user half */
-    if ((next->uspace != 0) != this_cpu()->lstar_user) syscall_set_entry(next->uspace != 0);   /* ADR-0011 */
+    if ((next->uspace != 0) != c->lstar_user) syscall_set_entry(next->uspace != 0);   /* ADR-0011 */
     fpu_save(prev->fx);
     fpu_restore(next->fx);
     g_switches++;
-    switch_to(prev, next);              /* returns when prev is picked again */
+    switch_to(prev, next);              /* returns when prev is picked again, on any CPU */
 }
 
-/* Timer tick (IRQ context, interrupts off): wake sleepers, preempt. */
-static void on_tick(void) {
+/* A new thread's first instructions run here with the lock still held. */
+void sched_start_tail(void) { spin_unlock(&g_sched_lock); }
+
+/* Lock held: an IPI to one idle CPU that may run t (not this one: its own
+ * idle loop or tick finds t). */
+void sched_kick(const struct thread *t) {
+    uint32_t self = this_cpu()->index, n = smp_cpu_count();
+    for (uint32_t i = 0; i < n; i++) {
+        struct percpu *c = &g_cpus[i];
+        if (i == self || !c->idle || c->current != c->idle || !can_run_on(t, i)) continue;
+        lapic_send_ipi((uint8_t)c->apic_id, VEC_WAKE);
+        return;
+    }
+}
+
+static void wake_sleepers(void) {
     uint64_t now = time_monotonic_ns();
     for (uint32_t i = 0; i < THREADS_MAX; i++) {
         struct thread *t = &g_threads[i];
@@ -79,148 +100,43 @@ static void on_tick(void) {
             if (t->state == T_BLOCKED) t->timed_out = 1;
             t->wake_ns = 0;
             t->state = T_RUNNABLE;
+            sched_kick(t);
         }
     }
-    if (++g_slice >= TIMESLICE_TICKS || this_cpu()->current == g_idle) schedule();
 }
 
-void thread_bootstrap(void (*fn)(void *), void *arg);   /* from switch.asm */
-void thread_bootstrap(void (*fn)(void *), void *arg) {
-    cpu_sti();                          /* first run: we arrived from schedule() with IF=0 */
-    fn(arg);
-    thread_exit();
+/* Every CPU's timer tick (IRQ context, IF=0). CPU 0 wakes the sleepers. */
+void sched_on_tick(void) {
+    struct percpu *c = this_cpu();
+    if (!c->idle) return;               /* this CPU does not schedule yet */
+    spin_lock(&g_sched_lock);
+    if (c->index == 0) wake_sleepers();
+    if (++c->slice >= TIMESLICE_TICKS || c->current == c->idle) schedule_locked();
+    spin_unlock(&g_sched_lock);
 }
 
-static void idle_loop(void *arg) {
-    (void)arg;
-    for (;;) __asm__ volatile("sti; hlt");
-}
-
-static struct thread *alloc_slot(void) {
-    for (uint32_t i = 0; i < THREADS_MAX; i++)
-        if (g_threads[i].state == T_FREE) return &g_threads[i];
-    return 0;
-}
-
-/* Maps a fresh, zeroed kernel stack into the slot's VA range. 0 ok. */
-static int map_kstack(struct thread *t) {
-    uint64_t base = KSTACK_REGION + (uint64_t)(t - g_threads) * KSTACK_SLOT + PAGE_4K;   /* guard below */
-    for (uint64_t off = 0; off < KSTACK_BYTES; off += PAGE_4K) {
-        uint64_t pa = frame_alloc_zeroed();
-        if (!pa || vm_map(vmm_kernel(), base + off, pa, PAGE_4K, PTE_W | PTE_NX) != PT_OK) {
-            if (pa) frame_free(pa);
-            if (off) vm_unmap(vmm_kernel(), base, off, 1);
-            return -1;
-        }
+/* Every CPU's idle thread: run the mailbox (smp.c), any runnable thread,
+ * else hlt. The check and sti;hlt are one step: a kick that lands after
+ * the check is taken right after sti and ends the hlt. */
+void sched_idle(void) {
+    for (;;) {
+        cpu_cli();
+        smp_mailbox_run();
+        spin_lock(&g_sched_lock);
+        uint64_t before = g_switches;
+        schedule_locked();
+        int ran = g_switches != before;
+        spin_unlock(&g_sched_lock);
+        if (ran) cpu_sti();             /* there may be more: look again */
+        else cpu_sti_hlt();
     }
-    t->kstack_bottom = base;
-    t->kstack_top = base + KSTACK_BYTES;
-    return 0;
-}
-
-/* A slot with a fresh kernel stack, claimed but not runnable yet. */
-static struct thread *thread_alloc(const char *name) {
-    uint64_t f = irq_save();
-    struct thread *t = alloc_slot();
-    if (t) {                            /* claim the slot; not runnable yet, and   */
-        t->wake_ns = 0;                 /* no stale timeout may let on_tick wake it */
-        t->state = T_BLOCKED;
-    }
-    irq_restore(f);
-    if (!t || map_kstack(t) != 0) {
-        if (t) t->state = T_FREE;
-        return 0;
-    }
-    t->fs_base = 0;
-    t->cr3 = vmm_kernel()->pt.root;
-    t->uspace = 0;
-    t->killed = 0;
-    t->req_state = 0;
-    t->req_next = 0;
-    t->uframe = 0;
-    t->interrupt = 0;
-    t->timed_out = 0;
-    t->wait_next = 0;
-    t->name = name;
-    fpu_init_area(t->fx);
-    return t;
-}
-
-/* sp: the stack switch_to will pop from (6 registers, then a return address). */
-static struct thread *thread_publish(struct thread *t, uint64_t *sp) {
-    t->rsp = (uint64_t)(uintptr_t)sp;
-    uint64_t f = irq_save();
-    t->id = g_next_id++;
-    t->state = T_RUNNABLE;
-    irq_restore(f);
-    return t;
-}
-
-struct thread *thread_create(const char *name, void (*fn)(void *), void *arg) {
-    struct thread *t = thread_alloc(name);
-    if (!t) return 0;
-    /* Initial stack, read by switch_to's pops and ret (see switch.asm):
-     * [top-8] 0  [top-16] thread_start  then r15 r14 r13=arg r12=fn rbx rbp */
-    uint64_t *sp = (uint64_t *)(uintptr_t)t->kstack_top;
-    *--sp = 0;
-    *--sp = (uint64_t)(uintptr_t)thread_start;
-    *--sp = 0;                          /* rbp */
-    *--sp = 0;                          /* rbx */
-    *--sp = (uint64_t)(uintptr_t)fn;    /* r12 */
-    *--sp = (uint64_t)(uintptr_t)arg;   /* r13 */
-    *--sp = 0;                          /* r14 */
-    *--sp = 0;                          /* r15 */
-    return thread_publish(t, sp);
-}
-
-struct thread *thread_create_from_frame(const char *name, const struct trap_frame *frame,
-                                        uint64_t fs_base) {
-    return thread_create_user(name, frame, fs_base, vmm_kernel()->pt.root, 0, 0);
-}
-
-struct thread *thread_create_user(const char *name, const struct trap_frame *frame,
-                                  uint64_t fs_base, uint64_t cr3, uint64_t uspace,
-                                  const uint8_t *fx) {
-    struct thread *t = thread_alloc(name);
-    if (!t) return 0;
-    if (fx) fpu_set_legacy(t->fx, fx);   /* a fork child keeps its parent's x87/SSE state */
-    t->cr3 = cr3;                       /* before thread_publish: it may run at once */
-    t->uspace = uspace;
-    /* [top - frame] the trap frame  [below] trap_resume  then 6 zero registers:
-     * switch_to pops, "returns" into trap_resume with RSP at the frame. */
-    struct trap_frame *tf = (struct trap_frame *)(uintptr_t)(t->kstack_top - sizeof *tf);
-    *tf = *frame;
-    uint64_t *sp = (uint64_t *)tf;
-    *--sp = (uint64_t)(uintptr_t)trap_resume;
-    for (int i = 0; i < 6; i++) *--sp = 0;
-    t->fs_base = fs_base;
-    return thread_publish(t, sp);
-}
-
-void sched_init(void) {
-    struct thread *main = &g_threads[0];
-    main->state = T_RUNNING;
-    main->id = g_next_id++;
-    main->name = "main";
-    main->cr3 = vmm_kernel()->pt.root;
-    main->kstack_bottom = (uint64_t)(uintptr_t)boot_stack;
-    main->kstack_top = (uint64_t)(uintptr_t)boot_stack_top;
-    this_cpu()->current = main;
-    this_cpu()->kstack_top = main->kstack_top;
-    this_cpu()->kstack_bottom = main->kstack_bottom;
-    tss_set_rsp0(main->kstack_top);
-
-    g_idle = thread_create("idle", idle_loop, 0);
-    if (!g_idle) panic("cannot create the idle thread");
-    g_idle->state = T_BLOCKED;          /* only ever chosen by pick_next's fallback */
-    time_set_tick_hook(on_tick);
-    cpu_sti();
-    kprintf("[nucleus] sched ok (threads: main, idle; %u ms slice; irqs on)\n", TIMESLICE_TICKS);
 }
 
 void thread_yield(void) {
     uint64_t f = irq_save();
-    schedule();
+    spin_lock(&g_sched_lock);
+    schedule_locked();
+    spin_unlock(&g_sched_lock);
     irq_restore(f);
 }
 
@@ -232,55 +148,47 @@ static void mark_blocked(uint64_t timeout_ns) {
 }
 
 void thread_block(uint64_t timeout_ns) {
+    spin_lock(&g_sched_lock);
     mark_blocked(timeout_ns);
-    schedule();
+    schedule_locked();
+    spin_unlock(&g_sched_lock);
 }
 
+/* Blocked under g_sched_lock before `lock` drops: a waker on any CPU takes
+ * `lock`, then g_sched_lock, and finds us blocked (PIT-23). */
 void thread_block_unlock(uint64_t timeout_ns, struct spinlock *lock) {
+    spin_lock(&g_sched_lock);
     mark_blocked(timeout_ns);
     spin_unlock(lock);
-    schedule();
+    schedule_locked();
+    spin_unlock(&g_sched_lock);
 }
 
 void thread_wake(struct thread *t) {
-    if (t->state != T_BLOCKED) return;
-    t->wake_ns = 0;
-    t->state = T_RUNNABLE;
+    uint64_t f = spin_lock_irqsave(&g_sched_lock);
+    if (t->state == T_BLOCKED) {
+        t->wake_ns = 0;
+        t->state = T_RUNNABLE;
+        sched_kick(t);
+    }
+    spin_unlock_irqrestore(&g_sched_lock, f);
 }
 
 void thread_sleep_ns(uint64_t ns) {
     uint64_t f = irq_save();
+    spin_lock(&g_sched_lock);
     struct thread *t = this_cpu()->current;
     t->wake_ns = time_monotonic_ns() + (ns ? ns : 1);
     t->state = T_SLEEPING;
-    schedule();
+    schedule_locked();
+    spin_unlock(&g_sched_lock);
     irq_restore(f);
 }
 
 void thread_exit(void) {
     cpu_cli();
-    this_cpu()->current->state = T_DEAD;
-    schedule();
+    spin_lock(&g_sched_lock);
+    this_cpu()->current->state = T_DEAD;   /* thread_join frees the slot under the lock */
+    schedule_locked();
     panic("dead thread was scheduled");
-}
-
-void thread_join(struct thread *t) {
-    while (t->state != T_DEAD) thread_yield();
-    vm_unmap(vmm_kernel(), t->kstack_bottom, KSTACK_BYTES, 1);
-    uint64_t f = irq_save();
-    t->state = T_FREE;
-    irq_restore(f);
-}
-
-struct thread *thread_find(uint32_t id) {
-    for (uint32_t i = 0; i < THREADS_MAX; i++)
-        if (g_threads[i].state != T_FREE && g_threads[i].id == id) return &g_threads[i];
-    return 0;
-}
-
-void thread_set_fs_base(struct thread *t, uint64_t fs) {
-    uint64_t f = irq_save();
-    t->fs_base = fs;
-    if (t == this_cpu()->current) wrmsr(MSR_FS_BASE, fs);
-    irq_restore(f);
 }

@@ -1,6 +1,8 @@
-/* frames.c - see frames.h. Interrupts are off around each list operation, so
- * an IRQ handler may allocate too (one CPU; W5-S11 adds the spinlock). */
+/* frames.c - see frames.h. Each list operation holds g_frames_lock with
+ * interrupts off, so an IRQ handler or another CPU may allocate too (W20-S06).
+ * Never calls out while holding it. */
 #include "frames.h"
+#include "spinlock.h"
 #include "pmm.h"
 #include "boot.h"
 #include "cpu.h"
@@ -13,6 +15,7 @@
 #define TRACKED_FRAMES (1u << 20)    /* 4 GiB of RAM; frames above are not checked */
 
 static struct pmm g_pmm;
+static struct spinlock g_frames_lock = SPINLOCK_INIT("frames");
 static struct pmm_range g_reserved[BOOT_MODULES_MAX + 1];
 static uint32_t g_nreserved;
 /* 1 = the frame is on the free list. Catches a double free or a frame handed
@@ -51,10 +54,10 @@ void frames_init(void) {
 }
 
 uint64_t frame_alloc(void) {
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_frames_lock);
     uint64_t pa = pmm_alloc(&g_pmm);
     if (pa) track(pa, 1, "handed out but not free");
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_frames_lock, f);
     return pa;
 }
 
@@ -67,10 +70,10 @@ uint64_t frame_alloc_zeroed(void) {
 void frame_free(uint64_t pa) {
     if (pa & (PMM_FRAME - 1)) panic("frame_free: unaligned %llx", (unsigned long long)pa);
     if (frame_is_reserved(pa)) panic("frame_free: %llx is reserved", (unsigned long long)pa);
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_frames_lock);
     track(pa, 0, "double free of");
     pmm_free(&g_pmm, pa);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_frames_lock, f);
 }
 
 uint64_t frames_free_count(void)  { return g_pmm.free_frames; }

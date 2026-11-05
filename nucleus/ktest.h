@@ -86,4 +86,11 @@ int kt_uthread_gs_reload(void);
 int kt_smp_cpus_online(void);
 int kt_smp_percpu(void);
 int kt_smp_spin_counter(void);
+int kt_smp_broken_trampoline(void);   /* must fail: run_all.sh REG-0008 */
+/* ktest_smp_sched.c (W20-S06) */
+int kt_smp_threads_everywhere(void);
+int kt_smp_futex_ping_pong(void);
+int kt_smp_migration(void);
+/* 1 if the ktest boot module names this test (smp.c breaks the trampoline for one). */
+int ktest_listed(const char *name);
 #endif

@@ -13,7 +13,7 @@ pass=0; failn=0
 
 boot() { # boot <img> <log> -> sets STATUS
   set +e
-  timeout 20 "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m 128M \
+  timeout 20 "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m 128M ${REG_SMP:+-smp $REG_SMP} \
     -drive "file=$1,format=raw,if=ide,index=0,media=disk" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
     -serial "file:$2" -display none -no-reboot
@@ -76,6 +76,9 @@ with_ktest() { # with_ktest <test-name> <img>
 }
 # A ud2 with no fixup must print the trap report and fail, not hang or reboot.
 unhandled_ud()     { with_ktest trap_unhandled_ud "$1"; }
+# W20-S06: a trampoline that halts (smp.c writes "jmp $" over it for this test)
+# must not leave a machine quietly on one CPU: the AP is reported and the test fails.
+broken_trampoline() { with_ktest smp_broken_trampoline "$1"; }
 # Rebuild the image with the Go kernel and a "kargs" payload (kernel/cmd/kernel/kargs.go).
 with_kargs() { # with_kargs <words> <img>
   local b; b="$(dirname "$IMG")"
@@ -96,6 +99,7 @@ case_run REG-0002-manifest     "[stage2] FAIL F"            35  corrupt_manifest
 case_run REG-0003-stage2-magic "[stage1] FAIL M"            35  corrupt_stage2
 case_run REG-0004-nucleus-crc  "PANIC: nucleus CRC"         35  corrupt_nucleus
 case_run REG-0005-unhandled-ud "[trap] #UD at"              35  unhandled_ud
+REG_SMP=2 case_run REG-0008-broken-trampoline "smp: cpu with apic id 1 did not start" 35 broken_trampoline
 case_run REG-0006-go-panic     "panic: kargs asked for a panic" 35  go_panic
 case_run REG-0007-go-nil-fault "[trap] fault in the Go kernel"  35  go_nil_fault
 echo "$pass passed, $failn failed"

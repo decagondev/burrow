@@ -1,12 +1,15 @@
-/* sched.h - kernel threads and the scheduler (one CPU, preemptive round
- * robin, 10 ms timeslice from the 1 kHz tick).
+/* sched.h - kernel threads and the scheduler: preemptive round robin with a
+ * 10 ms timeslice from each CPU's 1 kHz tick, one run queue (g_threads under
+ * one spinlock) for every CPU (W20-S06, ADR-0011). Threads created from a
+ * trap frame (Go, user) stay on CPU 0 until TLB shootdown (S07).
  *
  * Every thread owns a 16 KiB kernel stack with an unmapped guard page below
  * it. Interrupts taken while it runs land on that stack (trap.asm), so a
  * thread can be switched out from inside an IRQ handler and resumed later.
  * PIT-22 checklist, done on every switch before switch.asm runs:
  * percpu kstack bounds, TSS.RSP0, FS_BASE, CR3 (a user thread's own page
- * tables; every other thread runs on the kernel's). */
+ * tables; every other thread runs on the kernel's), LSTAR, the FPU area.
+ * A thread migrates between switches; all of that is reloaded each time. */
 #ifndef NUCLEUS_SCHED_H
 #define NUCLEUS_SCHED_H
 #include "fpu.h"
@@ -39,6 +42,10 @@ struct thread {
     struct thread *req_next;    /* request queue link */
     struct trap_frame *uframe;  /* its user registers while it waits for Go (W10) */
     int      interrupt;         /* nu_uthread_interrupt: stop at the next kernel exit */
+    int      pin_cpu;           /* CPU index it may run on, -1 = any (sched_priv.h) */
+    int      is_idle;           /* a CPU's idle thread: never picked by the queue */
+    uint32_t cpu;               /* CPU index it last ran on */
+    uint64_t stack_cpus;        /* bit per CPU that touched its kernel stack (thread.c) */
     uint8_t  fx[FPU_AREA_BYTES] __attribute__((aligned(64)));   /* XSAVE (or FXSAVE) area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
@@ -73,4 +80,7 @@ struct spinlock;
 void thread_block_unlock(uint64_t timeout_ns, struct spinlock *lock);
 void thread_wake(struct thread *t);            /* T_BLOCKED -> T_RUNNABLE */
 uint64_t sched_switch_count(void);
+/* An AP's boot context becomes its idle thread (smp.c), then idles for ever. */
+void sched_init_cpu(uint64_t kstack_bottom, uint64_t kstack_top);
+void sched_idle(void) __attribute__((noreturn));
 #endif

@@ -10,14 +10,15 @@
 #define VEC_TIMER     0x30
 
 void     time_init(void);              /* after lapic_init; leaves IF unchanged */
+void     time_init_cpu(void);          /* an AP's timer (W20-S06); time_init does the BSP's */
 uint64_t time_monotonic_ns(void);      /* since time_init */
 /* Wall time (W14-S04): Go reads the CMOS clock and sets it once; until then
  * it is time since boot, as before. */
 void     time_set_realtime_ns(uint64_t unix_ns);
 uint64_t time_realtime_ns(void);
-uint64_t time_ticks(void);             /* LAPIC timer interrupts so far */
+uint64_t time_ticks(void);             /* the BSP's LAPIC timer interrupts so far */
 uint64_t time_tsc_hz(void);
 void     time_busy_wait_ns(uint64_t ns);
-/* Called on every timer tick, in IRQ context, after EOI (sched.c hooks in). */
+/* Called on every timer tick of every CPU, in IRQ context, after EOI (sched.c hooks in). */
 void     time_set_tick_hook(void (*hook)(void));
 #endif

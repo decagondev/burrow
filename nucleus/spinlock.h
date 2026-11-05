@@ -22,6 +22,19 @@ static inline uint64_t spin_lock_irqsave(struct spinlock *l) {
     return f;
 }
 
+/* Acquire with interrupts already off (the scheduler's lock, nested locks). */
+static inline void spin_lock(struct spinlock *l) {
+    for (uint32_t spins = 0; __atomic_exchange_n(&l->locked, 1, __ATOMIC_ACQUIRE); spins++) {
+        if (spins > 100000000u) spin_deadlock(l);
+        __asm__ volatile("pause");
+    }
+}
+
+/* kprintf's guard (W20-S06): one line at a time across CPUs. The spin is
+ * bounded, so a panic while a line is half out still prints. */
+uint64_t kprint_enter(void);
+void kprint_leave(uint64_t flags);
+
 /* Release without restoring IF (for handing the CPU over while still atomic). */
 static inline void spin_unlock(struct spinlock *l) {
     __atomic_store_n(&l->locked, 0, __ATOMIC_RELEASE);

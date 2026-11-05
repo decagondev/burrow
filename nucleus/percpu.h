@@ -30,6 +30,9 @@ struct percpu {
     void (*volatile fn)(void *);
     void *volatile arg;
     volatile uint64_t done;
+    /* scheduler (sched.c, under g_sched_lock) */
+    struct thread *idle;      /* this CPU's idle thread; 0 until it schedules     */
+    uint32_t slice;           /* ticks the current thread has run                 */
 };
 _Static_assert(__builtin_offsetof(struct percpu, kstack_top) == 0, "trap.asm offset");
 _Static_assert(__builtin_offsetof(struct percpu, kstack_bottom) == 8, "trap.asm offset");

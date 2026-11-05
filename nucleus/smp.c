@@ -5,9 +5,9 @@
  * maps each AP an idle stack and three IST stacks, and starts the APs one
  * at a time with the SDM's INIT-SIPI-SIPI sequence and delays. An AP
  * switches to the kernel CR3, loads its own GDT/TSS (binding GS), the IDT,
- * its local APIC, FPU and SYSCALL MSRs, checks in, and idles. Never lets
- * an AP pick a thread (S06); never prints from an AP (kprintf has no
- * cross-CPU lock yet). Intel SDM vol. 3, §8.4.4; ADR-0011. */
+ * its local APIC, FPU and SYSCALL MSRs, becomes its own idle thread, starts
+ * its timer, checks in, and schedules (W20-S06). Never prints from an AP
+ * (the BSP reports for it). Intel SDM vol. 3, §8.4.4; ADR-0011. */
 #include "smp.h"
 #include "percpu.h"
 #include "acpi.h"
@@ -20,6 +20,8 @@
 #include "boot.h"
 #include "fpu.h"
 #include "syscall.h"
+#include "sched.h"
+#include "ktest.h"
 #include "cpu.h"
 #include "kprintf.h"
 #include "lib_string.h"
@@ -35,6 +37,7 @@
 #define FOUR_GIB         0x100000000ull
 #define EFER_LMA         (1ull << 10)     /* read-only: never written */
 #define CR4_PCIDE        (1ull << 17)     /* needs long mode already: never set by the trampoline */
+#define OP_JMP_SELF      0xFEEBu          /* "jmp $": REG-0008 writes it over the trampoline (a hlt resumes on the next SIPI) */
 /* AP stacks: per CPU an idle stack and three IST stacks, each above a guard page. */
 #define AP_STACK_REGION  0xFFFFFFFFC0200000ull
 #define AP_STACK_BYTES   16384ull
@@ -135,6 +138,7 @@ void smp_init(void) {
     uint64_t tramp_bytes = (uint64_t)(ap_tramp_end - ap_tramp_start);
     if (m && m->ncpus > 1 && tramp_bytes <= PAGE_4K && build_boot_tables(tables) == 0) {
         memcpy(phys_to_virt(TRAMPOLINE_PA), ap_tramp_start, tramp_bytes);
+        if (ktest_listed("smp_broken_trampoline")) *(uint16_t *)phys_to_virt(TRAMPOLINE_PA) = OP_JMP_SELF;
         struct ap_boot *b = phys_to_virt(TRAMPOLINE_PA + (uint64_t)(ap_tramp_data - ap_tramp_start));
         b->cr3 = tables[0];
         b->cr4 = read_cr4() & ~CR4_PCIDE;
@@ -150,22 +154,15 @@ void smp_init(void) {
     kprintf("[nucleus] smp: %u CPU%s online\n", g_online, g_online == 1 ? "" : "s");
 }
 
-/* An AP's idle loop: run what the mailbox holds, else sleep until an IPI.
- * The check and the sti;hlt are one step: an IPI that lands after the
- * check is taken right after sti and ends the hlt. */
-static void __attribute__((noreturn)) ap_idle(struct percpu *c) {
-    for (;;) {
-        cpu_cli();
-        void (*fn)(void *) = __atomic_load_n(&c->fn, __ATOMIC_ACQUIRE);
-        if (!fn) {
-            cpu_sti_hlt();
-            continue;
-        }
-        c->fn = 0;
-        cpu_sti();
-        fn(c->arg);
-        __atomic_fetch_add(&c->done, 1, __ATOMIC_RELEASE);
-    }
+void smp_mailbox_run(void) {
+    struct percpu *c = this_cpu();
+    void (*fn)(void *) = __atomic_load_n(&c->fn, __ATOMIC_ACQUIRE);
+    if (!fn) return;
+    c->fn = 0;
+    cpu_sti();
+    fn(c->arg);
+    cpu_cli();
+    __atomic_fetch_add(&c->done, 1, __ATOMIC_RELEASE);
 }
 
 void ap_main(uint64_t index) {
@@ -178,8 +175,10 @@ void ap_main(uint64_t index) {
     lapic_init_cpu();
     fpu_init_cpu();
     syscall_cpu_init();
+    sched_init_cpu(c->kstack_bottom, c->kstack_top);
+    time_init_cpu();
     __atomic_store_n(&c->online, 1, __ATOMIC_RELEASE);
-    ap_idle(c);
+    sched_idle();
 }
 
 void smp_run_everywhere(void (*fn)(void *), void *arg) {

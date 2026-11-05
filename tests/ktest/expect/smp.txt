@@ -8,4 +8,8 @@
 [ktest] smp_cpus_online ok
 [ktest] smp_percpu ok
 [ktest] smp_spin_counter ok
+[ktest] smp_threads_everywhere ok
+[ktest] smp futex: 4 pairs x 20000 round trips in
+[ktest] smp_futex_ping_pong ok
+[ktest] smp_migration ok
 BURROW:KTEST:OK

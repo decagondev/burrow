@@ -2,3 +2,6 @@
 smp_cpus_online
 smp_percpu
 smp_spin_counter
+smp_threads_everywhere
+smp_futex_ping_pong
+smp_migration

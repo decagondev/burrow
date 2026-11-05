@@ -7,11 +7,15 @@
 ;   Interrupts must be OFF (sched.c guarantees it).
 ;
 ; thread_start: where a new thread's first switch_to "returns" to. Its
-;   stack was built by sched.c: r12 = fn, r13 = arg.
+;   stack was built by thread.c: r12 = fn, r13 = arg.
+;
+; thread_start_frame: the same for a thread made from a trap frame: drops
+;   the scheduler's lock (held across switch_to, W20-S06) and resumes the
+;   frame RSP points at. Clobbers what sched_start_tail may (caller-saved).
 bits 64
 section .text
-global switch_to, thread_start
-extern thread_bootstrap
+global switch_to, thread_start, thread_start_frame
+extern thread_bootstrap, sched_start_tail, trap_resume
 
 switch_to:
     push rbp
@@ -36,3 +40,7 @@ thread_start:
     and rsp, -16                ; SysV: aligned before the call
     call thread_bootstrap       ; never returns (calls thread_exit)
     ud2
+
+thread_start_frame:
+    call sched_start_tail       ; IF stays 0; trap_resume's IRETQ restores it
+    jmp trap_resume

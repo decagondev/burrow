@@ -1,6 +1,10 @@
 /* vmm.c - see vmm.h. TLB: entries are flushed with invlpg when the address
- * space is the one in CR3; a later switch to another CR3 flushes anyway. */
+ * space is the one in CR3; a later switch to another CR3 flushes anyway.
+ * Page-table changes hold g_vm_lock (every address space; W20-S06), taken
+ * after an address space's own lock and before the frame allocator's. The
+ * flush is this CPU's only: shootdown is W20-S07. */
 #include "vmm.h"
+#include "spinlock.h"
 #include "vm_region.h"
 #include "frames.h"
 #include "boot.h"
@@ -71,10 +75,12 @@ void vm_as_free_tables(struct addr_space *as) {
     as->pt.root = 0;
 }
 
+static struct spinlock g_vm_lock = SPINLOCK_INIT("vm");
+
 enum pt_status vm_map(struct addr_space *as, uint64_t va, uint64_t pa, uint64_t len, uint64_t flags) {
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_map(&as->pt, va, pa, len, flags & g_nx_mask);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return st;        /* new entries need no flush: nothing was cached for them */
 }
 
@@ -91,17 +97,17 @@ static void on_unmap(void *env, uint64_t va, uint64_t pa, uint64_t page) {
 
 enum pt_status vm_unmap(struct addr_space *as, uint64_t va, uint64_t len, int free_frames) {
     struct unmap_env u = { as, free_frames };
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_unmap(&as->pt, va, len, on_unmap, &u);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return st;
 }
 
 enum pt_status vm_protect(struct addr_space *as, uint64_t va, uint64_t len, uint64_t flags) {
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_protect(&as->pt, va, len, flags & g_nx_mask);
     flush(as, va, len);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return st;
 }
 
@@ -127,32 +133,32 @@ uint64_t vm_lower_half_pages(const struct addr_space *as) {
 
 /* Frees a mapped page's frame, leaving a zero-fill-on-demand marker. */
 enum pt_status vm_discard_page(struct addr_space *as, uint64_t va) {
-    uint64_t old, f = irq_save();
+    uint64_t old, f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_discard(&as->pt, va, &old);
     if (st == PT_OK) {
         flush(as, va, PAGE_4K);              /* before the frame can be reused */
         frame_free(old);
     }
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return st;
 }
 
 enum pt_status vm_mark_lazy(struct addr_space *as, uint64_t va, uint64_t flags) {
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_vm_lock);
     enum pt_status st = pt_mark_lazy(&as->pt, va, flags & g_nx_mask);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return st;         /* nothing was present: nothing to flush */
 }
 
 void vm_forget_discarded(struct addr_space *as, uint64_t va) {
-    uint64_t f = irq_save();
+    uint64_t f = spin_lock_irqsave(&g_vm_lock);
     pt_forget_discarded(&as->pt, va);
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
 }
 
 int vm_fault_in(struct addr_space *as, uint64_t va) {
     va &= ~(PAGE_4K - 1);
-    uint64_t flags, f = irq_save();
+    uint64_t flags, f = spin_lock_irqsave(&g_vm_lock);
     int done = 0;
     if (pt_discarded(&as->pt, va, &flags)) {
         uint64_t pa = frame_alloc_zeroed();
@@ -160,7 +166,7 @@ int vm_fault_in(struct addr_space *as, uint64_t va) {
         if (pa && pt_map(&as->pt, va, pa, PAGE_4K, flags & g_nx_mask) == PT_OK) done = 1;
         else if (pa) frame_free(pa);
     }
-    irq_restore(f);
+    spin_unlock_irqrestore(&g_vm_lock, f);
     return done;
 }
 

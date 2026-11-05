@@ -36,6 +36,13 @@ static void whoami(void *arg) {
     __atomic_fetch_or(&g_seen_mask, 1ull << c->index, __ATOMIC_RELAXED);
 }
 
+/* REG-0008: smp.c put a "jmp $" where the trampoline starts, so no AP checked
+ * in; this must fail loudly, not boot on fewer CPUs in silence. */
+int kt_smp_broken_trampoline(void) {
+    KT_CHECK(smp_cpu_count() == acpi_machine()->ncpus);
+    return 0;
+}
+
 int kt_smp_percpu(void) {
     g_seen_mask = 0;
     g_bad_cpu = 0;

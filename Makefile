@@ -642,8 +642,10 @@ run-busybox: $(BUILD)/go-busybox.img $(BUILD)/data.img
 run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
+# W20-S06: every suite on one CPU and on four (smp only on four).
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
-	@for s in $(KTEST_SUITES); do QEMU="$(QEMU)" QEMU_EXTRA="$$(test $$s = smp && echo -smp 4)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done
+	@for s in $(KTEST_SUITES); do for n in 1 4; do test $$s = smp -a $$n = 1 && continue; \
+		QEMU="$(QEMU)" QEMU_EXTRA="-smp $$n" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done; done
 
 regress: $(BUILD)/disk.img $(BUILD)/go.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img

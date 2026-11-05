@@ -28,6 +28,7 @@
 #include "irq.h"
 #include "go_load.h"
 #include "ktest.h"
+#include "spinlock.h"
 #include "protect.h"
 #include "acpi.h"
 #include "smp.h"
@@ -55,7 +56,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
     kprintf_set_sink(serial_sink(&g_com1));
-    kprintf_set_guard(irq_save, irq_restore);   /* one line at a time across threads */
+    kprintf_set_guard(kprint_enter, kprint_leave);   /* one line at a time across threads and CPUs */
     kprintf("[nucleus] hello from the higher half (main=%p, boot_info=%p)\n",
             (void *)nucleus_main, (void *)bi);
 

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S06 Scheduling on every CPU
+
+**Did:** one run queue for every CPU: the scheduler's lock is held across the context switch and dropped by the thread switched to; an idle thread and a 1 kHz timer on every CPU; wake IPIs to idle CPUs; spinlocks for the frame allocator, page tables and kprintf. Kernel threads run anywhere; the Go kernel and user threads stay on CPU 0 until S07 brings TLB shootdown. New ktests ping-pong futexes across four CPUs and move threads between them; `make ktest` runs every suite on one CPU and on four; REG-0008 breaks the trampoline.
+
+**Surprise:** a `hlt` written over the trampoline did not stop the AP: QEMU resumes a halted CPU at the second STARTUP IPI, and it walked on into the rest of the real code. `jmp $` does stop it. And a kernel stack can't simply be unmapped at join any more: a CPU that ran the thread may still cache the translation, so a stack is freed only when the joining CPU is the only one that touched it.
+
+**Next:** W20-S07: TLB shootdown, then user threads on every CPU.
+
 ## 2026-11-05 — W20-S05 Application processors
 
 **Did:** per-CPU state behind GS, with `swapgs` on every ring-3 entry and exit and two SYSCALL entries that the scheduler switches between; a GDT, TSS and stacks for each CPU; a trampoline that takes an AP from real mode straight to long mode; INIT-SIPI-SIPI; APs that idle and run a function from their mailbox. Four CPUs come up on QEMU, and a ktest has all of them add to one spinlocked counter.

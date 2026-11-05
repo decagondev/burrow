@@ -3,6 +3,7 @@
 #include "lib_string.h"
 #include "panic.h"
 #include "io.h"
+#include "boot.h"
 
 struct ktest { const char *name; int (*fn)(void); };
 
@@ -58,6 +59,10 @@ static const struct ktest g_tests[] = {
     { "smp_cpus_online",    kt_smp_cpus_online },
     { "smp_percpu",         kt_smp_percpu },
     { "smp_spin_counter",   kt_smp_spin_counter },
+    { "smp_broken_trampoline", kt_smp_broken_trampoline },
+    { "smp_threads_everywhere", kt_smp_threads_everywhere },
+    { "smp_futex_ping_pong", kt_smp_futex_ping_pong },
+    { "smp_migration",      kt_smp_migration },
 };
 
 static const char *g_current;
@@ -73,6 +78,18 @@ static const struct ktest *find(const char *name, uint64_t len) {
 }
 
 static int is_space(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+int ktest_listed(const char *name) {
+    const struct boot_module *m = boot_module_find("ktest");
+    if (!m) return 0;
+    const char *text = phys_to_virt(m->phys_start);
+    uint64_t n = strlen(name);
+    for (uint64_t i = 0; i + n <= m->size_bytes; i++)
+        if ((i == 0 || is_space(text[i - 1])) && memcmp(text + i, name, n) == 0
+            && (i + n == m->size_bytes || is_space(text[i + n])))
+            return 1;
+    return 0;
+}
 
 void ktest_run(const char *text, uint64_t len) {
     unsigned passed = 0;

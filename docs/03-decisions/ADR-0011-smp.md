@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-05
-- **Wave:** W20 (S05; S06 builds the scheduling on it)
+- **Wave:** W20 (S05; S06 builds the scheduling on it, recorded below)
 
 ## Context
 Until W20 the nucleus had one CPU and one `struct percpu g_percpu`, read by
@@ -72,6 +72,25 @@ Option 3.
   then run the function in their mailbox. They run no threads yet: the run
   queue stays one, used by the BSP, until S06 makes it shared under a lock.
   No AP timer yet either (S06).
+- **Scheduling on every CPU (S06).** One run queue: `g_threads` under
+  `g_sched_lock`, taken with IF=0 and held across `switch_to`; the thread
+  switched to releases it (its own `schedule_locked` caller, or
+  `thread_bootstrap` / `thread_start_frame` when it is new), so no CPU can
+  pick a thread whose registers another is still saving, and a waker on
+  another CPU finds a sleeper either still running or fully switched out.
+  Lock order: an object's lock (futex bucket, IRQ lines, uthread FIFO), then
+  `g_sched_lock`. Each CPU has an idle thread (an AP's boot context becomes
+  its own) and a LAPIC timer from the BSP's calibration; every tick may
+  preempt, CPU 0's also wakes sleepers and counts `time_ticks`. Making a
+  thread runnable sends the wake IPI to one idle CPU that may run it. A
+  thread carries `pin_cpu`: nucleus kernel threads run anywhere; main, and
+  every thread made from a trap frame (the Go kernel's Ms, user threads),
+  stay on CPU 0 until TLB shootdown (S07), since a page-table change is
+  flushed on the changing CPU only. A kernel stack is freed at join only if
+  the joining CPU is the only one that ever touched it; otherwise it stays
+  mapped for its slot's next thread. The frame allocator and the page-table
+  calls take their own spinlocks; kprintf's guard is a bounded cross-CPU
+  spinlock.
 
 ## Consequences
 - Every per-CPU read in asm is a `gs:` read; every C one is `this_cpu()`.
@@ -83,6 +102,8 @@ Option 3.
   thread; it is the only writer after `syscall_cpu_init`.
 - S06 must lock what "interrupts off" protected before: PIT-60 lists the
   nucleus's globals that a second CPU running threads would race on.
+- Since S06 a ktest thread may run on any CPU; a test that needs one CPU's
+  view runs in main (pinned to CPU 0) or in a thread from a frame.
 - Tests: `boot_to_nucleus` says `smp: 1 CPU online`; `make acpi-smoke` and the
   ktest suite `smp` run on `-smp 4`, where every CPU adds to a spinlocked
   counter through its mailbox.
