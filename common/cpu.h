@@ -24,6 +24,9 @@ static inline uint64_t read_cr3(void) { uint64_t v; __asm__ volatile("mov %%cr3,
 static inline uint64_t read_cr4(void) { uint64_t v; __asm__ volatile("mov %%cr4, %0" : "=r"(v)); return v; }
 static inline void write_cr0(uint64_t v) { __asm__ volatile("mov %0, %%cr0" :: "r"(v) : "memory"); }
 static inline void write_cr3(uint64_t v) { __asm__ volatile("mov %0, %%cr3" :: "r"(v) : "memory"); }
+/* SMAP (W20-S02): stac lets ring 0 touch user pages until clac. */
+static inline void stac(void) { __asm__ volatile("stac" ::: "memory"); }
+static inline void clac(void) { __asm__ volatile("clac" ::: "memory"); }
 static inline void write_cr4(uint64_t v) { __asm__ volatile("mov %0, %%cr4" :: "r"(v) : "memory"); }
 static inline void invlpg(uint64_t va) { __asm__ volatile("invlpg (%0)" :: "r"(va) : "memory"); }
 static inline uint16_t read_cs(void) { uint16_t v; __asm__ volatile("mov %%cs, %0" : "=r"(v)); return v; }

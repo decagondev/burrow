@@ -34,7 +34,7 @@ if [ -n "$KEYS" ]; then
 fi
 
 set +e
-timeout "$TIMEOUT" "$QEMU" -machine pc -cpu qemu64 -m "${MEM:-128M}" \
+timeout "$TIMEOUT" "$QEMU" -machine pc -cpu "${QEMU_CPU:-qemu64,+smep,+smap}" -m "${MEM:-128M}" \
   -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot

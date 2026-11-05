@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S02 SMEP, SMAP and NX
+
+**Did:** SMEP and SMAP on (CPUID, CR4), a CPU that has them in every QEMU run, ktests that prove a ring-0 read or run of a user page faults, and an NX audit.
+
+**Surprise:** that it was this quiet: with SMAP on, the full `make test` passed at once. W9's choice to reach user memory only through the physmap, never through the user's addresses, meant there was nothing to bracket with `stac`.
+
+**Next:** W20-S03: XSAVE, then a CPU with AVX.
+
 ## 2026-11-05 — W20-S01 A hang watchdog
 
 **Did:** a dump of every process, thread and kernel goroutine, on Alt+SysRq, which the smoke harness now presses whenever a boot hangs; `waitstress`, children ending in six ways while their parent waits, in `make test`. BUG-0023 did not show in 17 boots; the first dump found a leak instead (BUG-0026): handlers of threads that ended while blocked never returned.

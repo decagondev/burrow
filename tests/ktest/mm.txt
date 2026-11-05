@@ -5,3 +5,5 @@ vmm_protect_readonly
 vmm_kernel_wx
 vm_reserve_commit
 vm_reserve_hint
+smap_smep_user_page
+nx_kernel_data

@@ -60,7 +60,9 @@ NUCLEUS_OBJ := $(patsubst nucleus/%.c,$(BUILD)/nucleus/%.o,$(wildcard nucleus/*.
 
 # The nucleus-only images run in 128 MiB; the Go images get more (W14-S01).
 GO_MEM ?= 512M
-QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
+# W20-S02: a CPU with SMEP and SMAP, which the nucleus switches on
+QEMU_CPU    ?= qemu64,+smep,+smap
+QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 

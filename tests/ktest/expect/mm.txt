@@ -8,4 +8,6 @@
 [ktest] vmm_kernel_wx ok
 [ktest] vm_reserve_commit ok
 [ktest] vm_reserve_hint ok
+[ktest] smap_smep_user_page ok
+[ktest] nx_kernel_data ok
 BURROW:KTEST:OK

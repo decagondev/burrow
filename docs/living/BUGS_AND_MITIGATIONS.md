@@ -339,6 +339,6 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
 | PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |
 | PIT-64 | W20 | XSAVE area size and alignment (CPUID-sized, 64-byte aligned, copied whole by clone) | S03 |
-| PIT-65 | W20 | SMAP finds the nucleus touching user memory | S02: each access bracketed or fixed; a ktest proves an unbracketed one faults |
+| PIT-65 | W20 | SMAP finds the nucleus touching user memory | done in W20-S02: none found; the kernels reach user memory only through the physmap, and the full `make test` passes with SMAP on; `ktest_protect.c` proves an unbracketed access faults |
 | PIT-66 | W20 | Multi-threaded TCG changes timing everywhere | every keys file waits for text, not time; budgets measured again on four CPUs (S08) |
 | PIT-67 | W20 | Go's runtime on many Ps: more Ms in the nucleus, SIGURG preemption aimed at threads on other CPUs, parallel GC | S06-S08: an IPI stops a thread at its next return; the census is rerun |

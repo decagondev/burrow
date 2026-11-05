@@ -14,6 +14,7 @@ BURROW:LOADER:OK
 [nucleus] idt ok
 [nucleus] pmm ok
 [nucleus] vmm ok
+[nucleus] protections: smep on, smap on, nx on ok
 [nucleus] lapic ok
 [nucleus] time ok
 [nucleus] sse ok

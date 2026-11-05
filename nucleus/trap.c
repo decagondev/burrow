@@ -66,7 +66,17 @@ void trap_set_handler(uint8_t vector, irq_handler h) {
     g_handlers[vector] = h;
 }
 
+extern volatile uint64_t probe_exec_target;   /* probe.asm */
+extern char probe_exec_resume[];
+
 static int try_fixup(struct trap_frame *f, uint64_t cr2) {
+    if (probe_exec_target && f->rip == probe_exec_target) {   /* probe_exec's call faulted on fetch */
+        trap_last.vector = f->vector; trap_last.error = f->error;
+        trap_last.cr2 = cr2;          trap_last.rip = f->rip;
+        trap_last.count++;
+        f->rip = (uint64_t)(uintptr_t)probe_exec_resume;
+        return 1;
+    }
     for (const struct fixup *x = __fixup_start; x < __fixup_end; x++) {
         if (x->fault_rip != f->rip) continue;
         trap_last.vector = f->vector; trap_last.error = f->error;

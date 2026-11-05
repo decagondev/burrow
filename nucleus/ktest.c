@@ -15,6 +15,8 @@ static const struct ktest g_tests[] = {
     { "vmm_map_write_unmap", kt_vmm_map_write_unmap },
     { "vmm_protect_readonly", kt_vmm_protect_readonly },
     { "vmm_kernel_wx",      kt_vmm_kernel_wx },
+    { "smap_smep_user_page", kt_smap_smep_user_page },
+    { "nx_kernel_data",     kt_nx_kernel_data },
     { "vm_reserve_commit",  kt_vm_reserve_commit },
     { "vm_reserve_hint",    kt_vm_reserve_hint },
     { "lapic_self_ipi",     kt_lapic_self_ipi },

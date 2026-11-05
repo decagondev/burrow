@@ -40,4 +40,5 @@ const char *trap_name(uint64_t vector);
 int probe_read64(uint64_t addr, uint64_t *out);   /* 0 ok, -1 faulted */
 int probe_write64(uint64_t addr, uint64_t value); /* 0 ok, -1 faulted */
 int probe_ud2(void);                              /* always -1 (it always faults) */
+int probe_exec(uint64_t addr);                    /* 0 ran (a ret), -1 fetching it faulted (W20-S02) */
 #endif
