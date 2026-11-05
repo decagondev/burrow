@@ -100,6 +100,10 @@ const (
 	fSetfd        = 2
 	fGetfl        = 3
 	fSetfl        = 4
+	fGetlk        = 5 // record locks (W19-S06): see below
+	fSetlk        = 6
+	fSetlkw       = 7
+	fUnlck        = 2 // struct flock's l_type: F_UNLCK
 	fDupfdCloexec = 1030
 	fdCloexec     = 1
 	oStatusFlags  = oAppend | 0x800 /* O_NONBLOCK */
@@ -140,6 +144,12 @@ func sysFcntlFn(p *Process, a [6]uint64) (int64, bool) {
 			w.mu.Unlock()
 		}
 		return ok(0)
+	case fSetlk, fSetlkw:
+		return ok(0) // record locks are not kept: every lock is granted (busybox's passwd asks for one)
+	case fGetlk: // and none is ever held: l_type = F_UNLCK
+		var t [2]byte
+		t[0] = fUnlck
+		return ok(errno(p.mem.CopyOut(a[2], t[:])))
 	}
 	return ok(-int64(syscall.EINVAL))
 }

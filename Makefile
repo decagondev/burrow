@@ -64,7 +64,7 @@ QEMU_COMMON := -machine pc -cpu qemu64 -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -256,7 +256,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -503,6 +503,45 @@ $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
+
+# A multi-user Unix (W19-S06): go-unix.img's kargs say "login", so the
+# kernel runs /bin/login before the console; the root disk (scripts/mkroot.py:
+# busybox, /etc with root and burrow, label BURROWROOT) takes the initrd's
+# place at /. make unix-smoke types the M19 demo over two boots on a fresh
+# copy, then checks the disk; make run-unix boots $(ROOT_IMG) (repository
+# root, git-ignored, made once: delete it to start again).
+ROOT_IMG ?= burrow-root.img
+ROOT_SRC := $(BUILD)/busybox scripts/mkroot.py $(wildcard initrd/etc/*)
+$(BUILD)/go-unix.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
+	echo login > $(BUILD)/kargs-unix.txt
+	$(MKIMAGE_BOOT) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
+		-payload kargs=$(BUILD)/kargs-unix.txt >/dev/null
+$(BUILD)/root-test.img: $(ROOT_SRC)
+	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $@
+$(ROOT_IMG):
+	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $(abspath $@)
+UNIX_DRIVE = -drive file=$(BUILD)/unix-test.img,format=raw,if=ide,index=1,media=disk
+unix-smoke:
+	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory unix-smoke-run; \
+	else echo "UNIX SMOKE SKIP (make busybox builds what the root disk needs)"; fi
+unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img
+	cp $(BUILD)/root-test.img $(BUILD)/unix-test.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(UNIX_DRIVE) $(FIXED_RTC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-unix.img tests/smoke/expect/unix-1.txt 120 tests/smoke/keys/unix-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(UNIX_DRIVE)" \
+		tests/smoke/smoke.sh $(BUILD)/go-unix.img tests/smoke/expect/unix-2.txt 90 tests/smoke/keys/unix-2.keys
+	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/unix-test.img >/dev/null \
+		&& echo "UNIX DISK PASS (e2fsck after two boots of logins, su, adduser, passwd)" \
+		|| { echo "UNIX DISK FAIL: e2fsck rejects build/unix-test.img"; exit 1; }
+	@PATH="$$PATH:/usr/sbin:/sbin" debugfs -R "cat /etc/passwd" $(BUILD)/unix-test.img 2>/dev/null | grep -q '^alice:x:1001:1001:' \
+		&& echo "UNIX ACCOUNTS PASS (alice, added on Burrow, is in /etc/passwd)" \
+		|| { echo "UNIX ACCOUNTS FAIL: no alice in /etc/passwd"; exit 1; }
+	@! grep -aqE 'alicepw|Password: (burrow|root)' $(BUILD)/smoke-unix-1.log $(BUILD)/smoke-unix-2.log \
+		&& echo "UNIX ECHO PASS (no password reached the screen)" \
+		|| { echo "UNIX ECHO FAIL: a password was echoed"; exit 1; }
+run-unix: $(BUILD)/go-unix.img $(ROOT_IMG)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+		-drive file=$(ROOT_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
 
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots

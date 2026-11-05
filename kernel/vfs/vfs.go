@@ -265,3 +265,18 @@ func wrap(op, name string, err error) error {
 }
 
 func (m MountInfo) String() string { return fmt.Sprintf("%-8s on %s", m.Kind, m.Point) }
+
+// Remount puts fsys at point in place of what is mounted there (W19-S06:
+// an ext2 root disk takes the initrd's place at "."); the mounts inside it
+// (/tmp, /dev) stay.
+func (v *VFS) Remount(point string, fsys fs.FS, kind string) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for i, m := range v.mounts {
+		if m.point == point {
+			v.mounts[i] = mount{point, fsys, kind}
+			return nil
+		}
+	}
+	return &fs.PathError{Op: "remount", Path: point, Err: fs.ErrNotExist}
+}

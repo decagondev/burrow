@@ -1,0 +1,21 @@
+# The M19 demo, second boot (W19-S06): alice, added on the first boot,
+# logs in with the password root gave her; burrow's home is closed to her;
+# burrow's link is still there for burrow.
+wait login: 
+type alice
+key ret
+wait Password:
+type alicepw
+key ret
+wait $ 
+type id; pwd
+key ret
+wait /home/alice
+type ls /home/burrow
+key ret
+wait Permission denied
+type exit
+key ret
+wait burrow> 
+type poweroff
+key ret

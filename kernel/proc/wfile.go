@@ -128,11 +128,26 @@ func (w *wfile) ReadAt(b []byte, off int64) (int, error) {
 
 func (w *wfile) Close() error { return nil }
 
+// Stat is the file system's description of the file (its owner, mode and
+// inode: BUG-0025, busybox's passwd copies them from it), with the size of
+// what has been written; a file removed while open is described as before.
 func (w *wfile) Stat() (fs.FileInfo, error) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-	return wfileInfo{name: baseName(w.name), size: int64(len(w.data))}, nil
+	size := int64(len(w.data))
+	w.mu.Unlock()
+	if info, err := fs.Stat(w.fsys, w.name); err == nil && info.Mode().IsRegular() {
+		return sizedInfo{info, size}, nil
+	}
+	return wfileInfo{name: baseName(w.name), size: size}, nil
 }
+
+// sizedInfo is a file's info with the size of an open file's buffer.
+type sizedInfo struct {
+	fs.FileInfo
+	size int64
+}
+
+func (i sizedInfo) Size() int64 { return i.size }
 
 type wfileInfo struct {
 	name string

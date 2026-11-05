@@ -7,6 +7,17 @@ import (
 	"os"
 )
 
+// loginAtBoot says whether the kargs ask for /bin/login before the console
+// (W19-S06: go-unix.img, the multi-user demo).
+func loginAtBoot() bool {
+	for _, a := range os.Args[1:] {
+		if a == "login" {
+			return true
+		}
+	}
+	return false
+}
+
 // testFaults acts on words from the "kargs" boot module (argv after the
 // program name). Regression tests use them to check that a Go panic and a
 // nil dereference both fail the run loudly (W7-S06, PIT-07):

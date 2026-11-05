@@ -51,6 +51,11 @@ func listDisks(out io.Writer) {
 // /home instead of /mnt. make run-dev attaches such a disk.
 const homeLabel = "BURROWHOME"
 
+// rootLabel marks an ext2 volume that becomes the root file system (W19-S06,
+// make run-unix): its /bin, /etc and /home take the initrd's place; /tmp and
+// /dev stay mounted over it.
+const rootLabel = "BURROWROOT"
+
 // dataDisks are the labels of the program disks: where each mounts and the
 // file of variables that joins the environment of every program the
 // console runs (the Qt disk, W15-S02; the X disk, W16-S02).
@@ -128,6 +133,13 @@ func (k *kernel) mountDisk(base *klog.Logger, name string, d block.Device) {
 	point := "mnt"
 	disk, isData := dataDisks[v.label]
 	switch {
+	case v.label == rootLabel && v.kind == "ext2": // W19-S06: the root disk, in the initrd's place
+		if err := k.fs.Remount(".", v.fsys, v.kind); err != nil {
+			log.Errorf("%s: mount /: %v", name, err)
+			return
+		}
+		log.Infof("%s: %s volume %q mounted at / in place of the initrd (%s)", name, v.shown, v.label, v.mode)
+		return
 	case v.label == homeLabel:
 		point = "home"
 	case isData:

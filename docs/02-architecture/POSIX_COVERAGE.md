@@ -71,7 +71,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 131 | `sigaltstack` | done | W12 | per thread; `SA_ONSTACK` handlers run on it; not inherited by new threads |
 | 63 | `uname` | done | W10 | `Burrow burrow 0.10 x86_64`; since W17 the node and domain names are the system's (`kernel/proc/hostname.go`) |
 | 170, 171 | `sethostname` `setdomainname` | done | W17 | up to 64 bytes (`-EINVAL` beyond), for the whole system (no UTS namespaces); `uname` reports them |
-| 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`; `O_NONBLOCK` gives `-EAGAIN` instead of blocking, W11); no locks |
+| 72 | `fcntl` | partial | W10 | `F_DUPFD(_CLOEXEC) F_GETFD F_SETFD F_GETFL F_SETFL` (`O_APPEND`; `O_NONBLOCK` gives `-EAGAIN` instead of blocking, W11); record locks (`F_SETLK`, `F_SETLKW`, `F_GETLK`, W19-S06) are granted and not kept: `F_GETLK` always says `F_UNLCK` |
 | 79 | `getcwd` | done | W10 |  |
 | 80, 81 | `chdir` `fchdir` | done | W10 |  |
 | 83, 84 | `mkdir` `rmdir` | done | W10 | writable mounts only; `-ENOTEMPTY` |

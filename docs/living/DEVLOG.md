@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-04 — W19 done: a multi-user Unix (M19)
+
+**Did:** the wave in six slices. ext2 read (S01) and written (S02), checked by e2fsprogs at every step; users and groups with Linux's rules (S03); owners and permissions (S04); one path walker with symbolic and hard links (S05); busybox's login tools, an ext2 root disk and the demo (S06). Burrow boots to `login:`, keeps people out of each other's files, and remembers it across reboots.
+
+**Surprise:** how often the host's Linux corrected my tests rather than my kernel: four times across credtest, permtest and linktest. Writing the test program first and running it on Linux was the best habit of the wave. The bugs it did find in the kernel (BUG-0024, BUG-0025) were both old shortcuts that nobody had read until owners existed.
+
+**Learned:** an independent checker beats a second implementation; and a feature that adds a field to everything (an owner) makes every old place that invented that field a bug.
+
+**Next:** E12 (hardening, SMP), or the rest of E18 (sound, an absolute pointer); BUG-0023 and PIT-59 remain open.
+
+## 2026-11-04 — W19-S06 Logging in, an ext2 root, M19
+
+**Did:** busybox's login tools, the root disk (`scripts/mkroot.py`: mke2fs, then debugfs for owners and modes), `login` at boot, the kernel mounting a `BURROWROOT` disk at `/`, and `make unix-smoke`: burrow logs in and is refused `/etc/passwd`, `su` to root adds alice, and alice logs in after a reboot.
+
+**Surprise:** the demo worked nearly at once, and the one real bug it found was a lie: an open file's `fstat` making up mode 0644, which turned `/etc/shadow` world-readable after `passwd` (BUG-0025). busybox's `allnoconfig` leaves its uid ranges at 0, which gave alice uid 1.
+
+**Next:** W19's end; then E12.
+
 ## 2026-11-04 — W19-S05 Symbolic and hard links
 
 **Did:** one path walker for the whole VFS, links in memfs, ext2 and tarfs, and the link calls. Every path a program gives is now walked a component at a time, so `..` after a link means what it means on Linux and search permission is checked where a link leads, not only where the text says.

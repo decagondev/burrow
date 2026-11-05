@@ -140,6 +140,10 @@ func main() {
 	con := console.New(out, input)
 	k.con = con
 	addCommands(con, k)
+	if loginAtBoot() { // W19-S06: someone logs in first; after they log out, the console
+		log.With("console").Infof("login: /bin/login on the console")
+		runProgram(k, []string{"/bin/login"}, out)
+	}
 	log.With("console").Infof("ready: type on the keyboard or the serial line (help lists commands)")
 	con.Run()
 }

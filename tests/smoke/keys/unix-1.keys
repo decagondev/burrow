@@ -1,0 +1,48 @@
+# The M19 demo, first boot (W19-S06): burrow logs in, is a user, cannot
+# write /etc/passwd, makes a link in their home; su to root with root's
+# password; root adds alice and gives her a password; both log out.
+wait login: 
+type burrow
+key ret
+wait Password:
+type burrow
+key ret
+wait $ 
+type id
+key ret
+wait uid=1000
+type echo intruder >> /etc/passwd
+key ret
+wait Permission denied
+type ln -s /etc/hostname name-link; readlink name-link; cat name-link
+key ret
+wait burrow
+type su
+key ret
+wait Password:
+type root
+key ret
+wait # 
+type id
+key ret
+wait uid=0
+type adduser -D alice
+key ret
+wait # 
+type passwd alice
+key ret
+wait New password:
+type alicepw
+key ret
+wait Retype
+type alicepw
+key ret
+wait changed
+type exit
+key ret
+wait $ 
+type exit
+key ret
+wait burrow> 
+type poweroff
+key ret

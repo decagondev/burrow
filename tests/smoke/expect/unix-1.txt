@@ -1,0 +1,22 @@
+# Ordered markers for the M19 demo's first boot (W19-S06, tests/smoke/keys/unix-1.keys). Append-only.
+[ext2] INFO: hdb: ext2 volume "BURROWROOT" mounted at / in place of the initrd (read-write)
+[console] INFO: login: /bin/login on the console
+burrow login: burrow
+$ id
+uid=1000(burrow) gid=1000(burrow) groups=1000(burrow)
+$ echo intruder >> /etc/passwd
+-sh: can't create /etc/passwd: Permission denied
+$ ln -s /etc/hostname name-link; readlink name-link; cat name-link
+/etc/hostname
+burrow
+$ su
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# adduser -D alice
+# passwd alice
+Changing password for alice
+passwd: password for alice changed by root
+# exit
+$ exit
+[console] INFO: ready: type on the keyboard or the serial line (help lists commands)
+burrow> poweroff

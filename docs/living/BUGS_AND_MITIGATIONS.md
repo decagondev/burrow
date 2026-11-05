@@ -42,6 +42,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0025: fstat of a file open for writing said 0644 and root
+- Found: 2026-11-04, W19-S06, the first run of the M19 demo: after `passwd alice`, `/etc/shadow` was mode 0644 (it had been 0600), readable by everyone.
+- Severity: major (a password file left readable; any program that copies a file's mode or owner from `fstat` copied the wrong ones).
+- Symptom: `debugfs -R "stat /etc/shadow"` after the demo: `Mode: 0644`.
+- Root cause: a file opened for writing is a `wfile` (its contents buffered, written back whole), and `wfile.Stat` made up its answer: mode 0644, no owner, the time now. busybox's `update_passwd` opens the old file read-write, `fstat`s it and gives the new file (`/etc/shadow+`, then renamed over the old) that mode and owner. Harmless before W19-S04, when nothing had owners.
+- Fix: `wfile.Stat` asks the file system for the file and keeps only the size of what was written (`kernel/proc/wfile.go`).
+- Mitigation: the demo checks the accounts files after two boots; the regression test reads owner and mode through `fstat`.
+- Regression: `TestBUG0025FstatOfAFileOpenForWriting` (`kernel/proc`).
+- Lesson: every made-up answer is a bug waiting for the feature that reads it: S04 gave files owners, and the one place that invented them stayed.
+
 ### BUG-0024: Every program on the initrd was packed without an execute bit
 - Found: 2026-11-04, W19-S04, the first full `make test` with execute permission checked: boot_to_go's shell said `sh: ls: Permission denied` for every program (the console's `run`, which uses `Spawn` and checks nothing, still worked).
 - Severity: latent since W10 (nothing checked modes until S04), then a blocker.
@@ -312,4 +322,4 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-56 | W19 | Every program has run as root, so a missing permission check never showed | S04: each check gets a test that fails without it; `permtest` and `unix-smoke` run as a user |
 | PIT-57 | W19 | The path walker changes every path: `..` stops being textual | S05: the full `make test` before anything else; host tests for loops, links across mounts, `..` after a link |
 | PIT-58 | W19 | Set-user-id programs are an attack surface (`LD_LIBRARY_PATH`, a set-uid file rewritten by its user) | S03/S04: `AT_SECURE` for set-id programs; a non-root write drops the set-uid bit, as Linux |
-| PIT-59 | W19 | A program run from a disk reads its pages at first touch (W18-S02): it must not change under it | S06: keep the inode until the last mapping; writes to a running program are `ETXTBSY` |
+| PIT-59 | W19 | A program run from a disk reads its pages at first touch (W18-S02): it must not change under it | not done in W19 (an open risk, UNIX.md says so): `ETXTBSY` and keeping a deleted program's inode until its last mapping goes are for later |

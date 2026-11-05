@@ -153,3 +153,23 @@ func TestExecuteAndSetuidInTmp(t *testing.T) {
 		t.Errorf("chown should drop the set-uid bit: mode %o owner %d", m, uid)
 	}
 }
+
+// TestBUG0025FstatOfAFileOpenForWriting: fstat on a file open for writing
+// reports the file's owner and mode (busybox's passwd copies the old
+// /etc/shadow's mode onto the new one from it), and the bytes written.
+func TestBUG0025FstatOfAFileOpenForWriting(t *testing.T) {
+	r, root := permRig(t)
+	r.create(root, "/tmp/shadow", 0o600)
+	r.call(root, nrChmod, r.str(root, scratch, "/tmp/shadow"), 0o600)
+	r.call(root, nrChown, r.str(root, scratch, "/tmp/shadow"), 0, 42)
+	fd := r.call(root, nrOpen, r.str(root, scratch, "/tmp/shadow"), 2, 0) // O_RDWR
+	r.put(root, scratch+0x1000, []byte("root:x"))
+	r.call(root, 1, uint64(fd), scratch+0x1000, 6)
+	if e := r.call(root, 5, uint64(fd), scratch+256); e != 0 { // fstat
+		t.Fatalf("fstat = %d", e)
+	}
+	st := read(root, scratch+256, 144)
+	if mode, gid, size := le.Uint32(st[24:])&0o7777, le.Uint32(st[32:]), le.Uint64(st[48:]); mode != 0o600 || gid != 42 || size != 6 {
+		t.Errorf("fstat of a file open for writing: mode %o gid %d size %d (want 600, 42, 6)", mode, gid, size)
+	}
+}

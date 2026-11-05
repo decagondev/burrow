@@ -24,6 +24,7 @@ An educational x86-64 operating system: **assembly boot → C loader → C nucle
 | M16: an X11 desktop (TinyX, dwm, st, dmenu, Doom in a window) | **done: `make run-desktop`, then `startx`** ([DESKTOP.md](docs/06-guides/DESKTOP.md)) |
 | M17: networking (e1000, gVisor's TCP/IP, `AF_INET` sockets, wget, servers inside Burrow) | **done: `make run-net`** ([NETWORKING.md](docs/06-guides/NETWORKING.md)) |
 | M18: foundations for bigger programs (copy-on-write fork, lazy exec, shared memory and MIT-SHM, dynamic linking) | **done: `make mem-bench`** |
+| M19: a multi-user Unix (ext2, users and groups, permissions, links, login) | **done: `make run-unix`** ([UNIX.md](docs/06-guides/UNIX.md)) |
 
 ## Quick start
 

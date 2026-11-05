@@ -7,3 +7,4 @@ tools/site/package-lock.json
 *.wad
 __pycache__/
 burrow-home.img
+burrow-root.img

@@ -1,0 +1,10 @@
+# Ordered markers for the M19 demo's second boot (W19-S06, tests/smoke/keys/unix-2.keys). Append-only.
+[ext2] INFO: hdb: ext2 volume "BURROWROOT" mounted at / in place of the initrd (read-write)
+burrow login: alice
+$ id; pwd
+uid=1001(alice) gid=1001(alice) groups=1001(alice)
+/home/alice
+$ ls /home/burrow
+ls: can't open '/home/burrow': Permission denied
+$ exit
+burrow> poweroff
