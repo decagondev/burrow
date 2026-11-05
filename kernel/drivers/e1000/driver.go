@@ -41,7 +41,11 @@ func (d *e1000Driver) Start(env *driver.Env) error {
 	if err != nil {
 		return err
 	}
-	driver.Serve(env.IRQ(int(d.dev.IRQLine)), nic.Interrupt)
+	if env.Lines != nil {
+		env.Lines.Serve(int(d.dev.IRQLine), "e1000", nic.Interrupt) // a PCI line may be shared (W22-S01)
+	} else {
+		driver.Serve(env.IRQ(int(d.dev.IRQLine)), func() { nic.Interrupt() })
+	}
 	netdev.Register("eth0", nic)
 	link := "down"
 	if nic.LinkUp() {

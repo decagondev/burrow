@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W22-S01 Shared interrupt lines
+
+**Did:** `driver.Lines`: one goroutine per interrupt line calls every driver registered on it, each checks its own device and says whether the interrupt was its own; unclaimed interrupts are counted and logged once. The e1000 moved onto it; the boot log lists the lines (`irq 11: e1000`).
+
+**Surprise:** none in the code; the reason for the slice was the nucleus's one-waiter rule (`irq_wait` answers EBUSY to a second thread), which would have made the second PCI device on QEMU's line 11 fail to start. Fixing it in Go kept the nucleus unchanged.
+
+**Next:** W22-S02: AC'97 and `/dev/dsp`.
+
 ## 2026-11-05 — W21 done: a firmware framebuffer (M21)
 
 **Did:** the wave in five slices. stage2 sets a VBE mode from a `video` payload, padded scanline and all (S01); the mode goes up in boot_info, checked by the nucleus (S02); the Go kernel draws on it in any pixel layout, DISPI only as the fallback (S03); the framebuffer is write-combining in the kernel and in programs (S04); and `make fb-smoke` runs the console, fbtest, paint, Doom and X at 1280x1024 with a 5248-byte pitch (S05).

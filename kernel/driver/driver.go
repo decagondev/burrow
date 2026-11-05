@@ -26,8 +26,12 @@ type Env struct {
 	Ports16 hal.PortIO16
 	Ports32 hal.PortIO32
 	IRQ     func(line int) hal.IRQLine
-	Log     *klog.Logger // StartAll gives each driver its own "[name]" child
-	Input   chan<- byte  // console input: keyboards and serial lines write here
+	// Lines, if set, serves interrupt lines several devices share (PCI,
+	// W22-S01); a PCI driver registers its handler there rather than
+	// waiting on the line itself.
+	Lines *Lines
+	Log   *klog.Logger // StartAll gives each driver its own "[name]" child
+	Input chan<- byte  // console input: keyboards and serial lines write here
 	// Scancodes, if set, sees every raw keyboard byte first (/dev/input/event0,
 	// W11); grabbed means a program holds the keyboard, so nothing goes to Input.
 	Scancodes func(sc byte) (grabbed bool)

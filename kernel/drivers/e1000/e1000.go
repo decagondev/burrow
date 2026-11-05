@@ -111,8 +111,14 @@ func (n *NIC) startRings() {
 
 // Interrupt drains the card after its line fired. On a shared line the
 // cause register says whether it was this card at all.
-func (n *NIC) Interrupt() {
+// Interrupt serves the card and reports whether it raised the interrupt:
+// reading ICR clears it, and a cause of 0 means another device on a shared
+// line did (W22-S01).
+func (n *NIC) Interrupt() (mine bool) {
 	cause := n.regs.Read(regICR)
+	if cause == 0 {
+		return false
+	}
 	if cause&(intRXT0|intRXO|intRXDMT0) != 0 {
 		n.drainRX()
 	}
@@ -121,6 +127,7 @@ func (n *NIC) Interrupt() {
 		n.tx.reclaim()
 		n.txMu.Unlock()
 	}
+	return true
 }
 
 func (n *NIC) drainRX() {

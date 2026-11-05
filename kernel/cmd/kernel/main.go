@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"burrow/kernel/arch/amd64"
@@ -99,11 +100,13 @@ func main() {
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
 	scancodes, mouse := registerInput(dev, k.boot)
 	keys := &vtKeys{vt: vt.New(), evdev: scancodes} // the console's modes (W14-S08)
+	lines := driver.NewLines(func(line int) hal.IRQLine { return amd64.NewIRQ(line) }, log.With("driver"))
 	driver.StartAll(&driver.Env{
 		Ports:       amd64.Ports{},
 		Ports16:     amd64.Ports{},
 		Ports32:     amd64.Ports{},
 		IRQ:         func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
+		Lines:       lines,
 		Log:         log,
 		Input:       input,
 		Dev:         dev,
@@ -115,6 +118,11 @@ func main() {
 		SetClock:    amd64.SetRealtime,
 		Framebuffer: firmwareFB,
 	})
+	for _, l := range strings.Split(strings.TrimSpace(lines.String()), "\n") {
+		if l != "" {
+			log.With("driver").Infof("%s", l) // who serves each shared line (W22-S01)
+		}
+	}
 	k.startNetwork(log)
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))

@@ -32,6 +32,7 @@ BURROW:GO:SELFTEST:OK
 [rtc] INFO: wall clock 20
 [serial] INFO: receive interrupts on irq 4
 [driver] INFO: started: [ata bga e1000 pci ps2 rtc serial]
+[driver] INFO: irq 11: e1000
 [e1000] INFO: 10.0.2.2 is at 52:55:0a:00:02:02
 [net] INFO: eth0 10.0.2.15/24, gateway 10.0.2.2
 [net] INFO: 10.0.2.2 answers ping in

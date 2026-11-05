@@ -19,7 +19,7 @@ func start(t *testing.T) (*fakeCard, *NIC) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done := driver.Serve(c.irq, nic.Interrupt)
+	done := driver.Serve(c.irq, func() { nic.Interrupt() })
 	t.Cleanup(func() { c.irq.Close(); <-done })
 	return c, nic
 }
@@ -146,5 +146,26 @@ func TestReceiveWithoutReceiverDrops(t *testing.T) {
 			t.Fatalf("stats %+v", nic.Stats())
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// W22-S01: on a shared line the card claims an interrupt only when its own
+// cause register says so; a cause of 0 is another device's interrupt.
+func TestInterruptClaimsOnlyItsOwn(t *testing.T) {
+	c := newFakeCard()
+	nic, err := New(c, c.mem.page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.reg[regICR] = 0 // whatever start-up raised (link status) is not this test's
+	if nic.Interrupt() {
+		t.Error("claimed an interrupt with ICR 0")
+	}
+	c.reg[regICR] = intTXDW
+	if !nic.Interrupt() {
+		t.Error("did not claim its own TX interrupt")
+	}
+	if c.reg[regICR] != 0 {
+		t.Error("ICR not cleared by the read")
 	}
 }
