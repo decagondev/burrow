@@ -60,8 +60,9 @@ NUCLEUS_OBJ := $(patsubst nucleus/%.c,$(BUILD)/nucleus/%.o,$(wildcard nucleus/*.
 
 # The nucleus-only images run in 128 MiB; the Go images get more (W14-S01).
 GO_MEM ?= 512M
-# W20-S02: a CPU with SMEP and SMAP, which the nucleus switches on
-QEMU_CPU    ?= qemu64,+smep,+smap
+# W20-S02, S03: a CPU with SMEP and SMAP (the nucleus switches them on), XSAVE and
+# AVX; qemu64 with +xsave hangs QEMU 10.0 TCG at the CR4.OSXSAVE write
+QEMU_CPU    ?= Broadwell-noTSX-IBRS
 QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot

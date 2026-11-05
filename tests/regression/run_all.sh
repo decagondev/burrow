@@ -13,7 +13,7 @@ pass=0; failn=0
 
 boot() { # boot <img> <log> -> sets STATUS
   set +e
-  timeout 20 "$QEMU" -machine pc -cpu "${QEMU_CPU:-qemu64,+smep,+smap}" -m 128M \
+  timeout 20 "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m 128M \
     -drive "file=$1,format=raw,if=ide,index=0,media=disk" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
     -serial "file:$2" -display none -no-reboot

@@ -4,6 +4,7 @@
  * value Go writes is checked
  * here: the frame goes back to ring 3 through IRETQ, and the FXSAVE image
  * through FXRSTOR, both of which #GP in ring 0 on bad input. */
+#include "fpu.h"
 #include "uthread.h"
 #include "uspace.h"
 #include "vmm.h"
@@ -60,12 +61,14 @@ long uthread_regs(uint64_t tid, struct uregs *buf, int write) {
     else if (write && !valid(buf)) rc = -EINVAL;
     else if (write) {
         to_frame(t->uframe, buf);
-        clean_fx(t->fx, buf->fx);
+        uint8_t legacy[FPU_LEGACY_BYTES];
+        clean_fx(legacy, buf->fx);
+        fpu_set_legacy(t->fx, legacy);   /* XRSTOR loads it (W20-S03) */
         thread_set_fs_base(t, buf->fs_base);
     } else {
         from_frame(buf, t->uframe);
         buf->fs_base = t->fs_base;
-        memcpy(buf->fx, t->fx, sizeof buf->fx);   /* saved when it was switched out */
+        memcpy(buf->fx, t->fx, sizeof buf->fx);   /* the legacy part, saved when it was switched out */
     }
     uthread_unlock(fl);
     return rc;

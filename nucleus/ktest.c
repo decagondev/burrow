@@ -30,6 +30,7 @@ static const struct ktest g_tests[] = {
     { "sched_sleep_and_fs_base", kt_sched_sleep_and_fs_base },
     { "sched_stack_guard",  kt_sched_stack_guard },
     { "sse_state_per_thread", kt_sse_state_per_thread },
+    { "avx_state_per_thread", kt_avx_state_per_thread },
     { "spinlock_counter",   kt_spinlock_counter },
     { "futex_ping_pong",    kt_futex_ping_pong },
     { "futex_timeout_and_eagain", kt_futex_timeout_and_eagain },

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W20-S03 XSAVE and AVX
+
+**Did:** XSAVE in place of FXSAVE when the CPU has it, with AVX's state kept per thread, and a CPU that offers AVX: QEMU's Broadwell model.
+
+**Surprise:** `qemu64` with `+xsave` hangs QEMU's TCG on the very instruction that enables XSAVE, with no fault to see; the monitor's `info registers` and `addr2line` found it in a minute. Named CPU models work. And the plan's XSAVEOPT would have been a quiet bug: it may skip the legacy registers that Go reads back for signal frames.
+
+**Next:** W20-S04: ACPI, the machine's tables and a real poweroff.
+
 ## 2026-11-05 — W20-S02 SMEP, SMAP and NX
 
 **Did:** SMEP and SMAP on (CPUID, CR4), a CPU that has them in every QEMU run, ktests that prove a ring-0 read or run of a user page faults, and an NX audit.

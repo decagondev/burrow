@@ -9,6 +9,7 @@
  * tables; every other thread runs on the kernel's). */
 #ifndef NUCLEUS_SCHED_H
 #define NUCLEUS_SCHED_H
+#include "fpu.h"
 #include <stdint.h>
 
 #define THREADS_MAX      64u
@@ -38,7 +39,7 @@ struct thread {
     struct thread *req_next;    /* request queue link */
     struct trap_frame *uframe;  /* its user registers while it waits for Go (W10) */
     int      interrupt;         /* nu_uthread_interrupt: stop at the next kernel exit */
-    uint8_t  fx[512] __attribute__((aligned(16)));   /* FXSAVE area (fpu.h) */
+    uint8_t  fx[FPU_AREA_BYTES] __attribute__((aligned(64)));   /* XSAVE (or FXSAVE) area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");
 

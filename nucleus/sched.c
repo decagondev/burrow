@@ -181,7 +181,7 @@ struct thread *thread_create_user(const char *name, const struct trap_frame *fra
                                   const uint8_t *fx) {
     struct thread *t = thread_alloc(name);
     if (!t) return 0;
-    if (fx) memcpy(t->fx, fx, sizeof t->fx);   /* a fork child keeps its parent's FPU state */
+    if (fx) fpu_set_legacy(t->fx, fx);   /* a fork child keeps its parent's x87/SSE state */
     t->cr3 = cr3;                       /* before thread_publish: it may run at once */
     t->uspace = uspace;
     /* [top - frame] the trap frame  [below] trap_resume  then 6 zero registers:

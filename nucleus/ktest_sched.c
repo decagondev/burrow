@@ -1,5 +1,6 @@
 /* ktest_sched.c - threads: cooperative alternation, preemption, sleeping,
  * per-thread FS_BASE, guard pages. */
+#include "fpu.h"
 #include "ktest.h"
 #include "sched.h"
 #include "time.h"
@@ -123,6 +124,37 @@ static void xmm_holder(void *arg) {
         if (ktest_get_xmm0() != want) return;
     }
     g_xmm_ok[want == 0x1111222233334444ull ? 0 : 1] = 1;
+}
+
+extern void ktest_set_ymm0_hi(uint64_t v);
+extern uint64_t ktest_get_ymm0_hi(void);
+static volatile int g_ymm_ok[2];
+
+static void ymm_holder(void *arg) {
+    uint64_t want = (uint64_t)(uintptr_t)arg;
+    ktest_set_ymm0_hi(want);
+    for (int i = 0; i < 50; i++) {
+        thread_yield();                       /* the other thread loads its own ymm0 */
+        if (i % 10 == 0) thread_sleep_ns(1000000);
+        if (ktest_get_ymm0_hi() != want) return;
+    }
+    g_ymm_ok[want == 0x1212343456567878ull ? 0 : 1] = 1;
+}
+
+/* W20-S03: with XSAVE, two threads keep different upper halves of ymm0
+ * (FXSAVE would lose them: they are AVX state). */
+int kt_avx_state_per_thread(void) {
+    KT_CHECK(g_fpu_xsave && fpu_has_avx());
+    g_ymm_ok[0] = g_ymm_ok[1] = 0;
+    ktest_set_ymm0_hi(0xbeef);
+    struct thread *a = thread_create("ymm-a", ymm_holder, (void *)0x1212343456567878ull);
+    struct thread *b = thread_create("ymm-b", ymm_holder, (void *)0x9a9abcbcdedef0f0ull);
+    KT_CHECK(a && b);
+    thread_join(a);
+    thread_join(b);
+    KT_CHECK(g_ymm_ok[0] && g_ymm_ok[1]);
+    KT_CHECK(ktest_get_ymm0_hi() == 0xbeef);  /* main's value survived too */
+    return 0;
 }
 
 /* Two threads with different xmm0 values keep them across switches. */

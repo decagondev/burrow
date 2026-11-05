@@ -7,3 +7,4 @@ spinlock_counter
 futex_ping_pong
 futex_timeout_and_eagain
 sse_state_per_thread
+avx_state_per_thread
