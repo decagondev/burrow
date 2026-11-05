@@ -1,7 +1,12 @@
-// Package bga drives the Bochs/QEMU display adapter ("BGA", PCI 1234:1111,
-// QEMU's -vga std) through its "dispi" registers (E07.F04): pick a mode,
-// enable the linear framebuffer, map PCI BAR0 and hand a gfx.Framebuffer to
-// the kernel. Reference: the OSDev wiki "Bochs VBE Extensions".
+// Package bga is the display (E07.F04). Since W21-S03 it first takes the
+// mode the firmware set (stage2's VBE mode, in boot_info and checked by the
+// nucleus, handed over as driver.Env.Framebuffer) on whatever adapter it
+// is; only without one does it program the Bochs/QEMU adapter ("BGA", PCI
+// 1234:1111, QEMU's -vga std) itself through its "dispi" registers. Either
+// way it maps the framebuffer once and hands a gfx.Framebuffer to the
+// kernel. It never assumes a size, a pitch or a pixel layout it was not
+// given. Reference: the OSDev wiki "Bochs VBE Extensions";
+// docs/04-plan/waves/WAVE-21-framebuffer.md.
 package bga
 
 import (
@@ -9,6 +14,7 @@ import (
 	"fmt"
 	"sync"
 
+	"burrow/kernel/bootinfo"
 	"burrow/kernel/driver"
 	"burrow/kernel/drivers/pci"
 	"burrow/kernel/gfx"
@@ -19,7 +25,8 @@ const (
 	Vendor = 0x1234
 	Device = 0x1111
 
-	Width, Height, BPP = 1024, 768, 32
+	// The mode DISPI sets when the firmware set none (W8; the fallback since W21).
+	DispiWidth, DispiHeight, DispiBPP = 1024, 768, 32
 
 	portIndex uint16 = 0x01CE
 	portData  uint16 = 0x01CF
@@ -55,19 +62,41 @@ func SetMode(io hal.PortIO16, w, h int) (int, error) {
 	write(io, regEnable, 0) // registers only take effect while disabled
 	write(io, regXRes, uint16(w))
 	write(io, regYRes, uint16(h))
-	write(io, regBPP, BPP)
+	write(io, regBPP, DispiBPP)
 	write(io, regEnable, enEnabled|enLinearFrame)
 	if got := read(io, regXRes); int(got) != w {
 		return 0, fmt.Errorf("bga: asked for width %d, card has %d", w, got)
 	}
-	return int(read(io, regVirtWidth)) * BPP / 8, nil
+	return int(read(io, regVirtWidth)) * DispiBPP / 8, nil
+}
+
+// Mode is a framebuffer to map: where, how big, and its pixel layout.
+type Mode struct {
+	Phys                 uint64
+	Width, Height, Pitch int
+	BPP                  int
+	Format               gfx.Format
+	Source               string // "vbe" or "dispi"
+}
+
+// FirmwareMode turns the firmware's descriptor into a Mode; ok is false
+// when there is none or its layout is one gfx cannot draw.
+func FirmwareMode(fb bootinfo.Framebuffer) (Mode, bool, error) {
+	if fb.Source != bootinfo.FbSourceVBE {
+		return Mode{}, false, nil
+	}
+	f, err := gfx.FormatFor(fb.BPP, gfx.Field(fb.Red), gfx.Field(fb.Green), gfx.Field(fb.Blue))
+	if err != nil {
+		return Mode{}, false, err
+	}
+	return Mode{Phys: fb.Phys, Width: fb.Width, Height: fb.Height, Pitch: fb.Pitch, BPP: fb.BPP,
+		Format: f, Source: "vbe"}, true, nil
 }
 
 var (
 	mu      sync.Mutex
 	screen  *gfx.Framebuffer
-	fbPhys  uint64 // where the framebuffer is (for /dev/fb0's mmap)
-	fbPitch int
+	current Mode
 )
 
 // Phys is the framebuffer's physical address and pitch in bytes (0 before
@@ -75,11 +104,18 @@ var (
 func Phys() (base uint64, pitchBytes int) {
 	mu.Lock()
 	defer mu.Unlock()
-	return fbPhys, fbPitch
+	return current.Phys, current.Pitch
+}
+
+// Current is the mode the display runs in (zero before the driver started).
+func Current() Mode {
+	mu.Lock()
+	defer mu.Unlock()
+	return current
 }
 
 // Screen is the framebuffer once the driver started (nil before, or with
-// no BGA).
+// no display).
 func Screen() *gfx.Framebuffer {
 	mu.Lock()
 	defer mu.Unlock()
@@ -88,39 +124,71 @@ func Screen() *gfx.Framebuffer {
 
 func init() { driver.Register(&display{}) }
 
-type display struct{ dev pci.Device }
+type display struct {
+	dev  pci.Device
+	bga  bool // the Bochs adapter is there (DISPI works)
+	firm bool // the firmware set a mode
+}
 
 func (*display) Name() string { return "bga" }
 
 func (d *display) Probe(env *driver.Env) bool {
-	if env.Ports16 == nil || env.Ports32 == nil || env.MapMMIO == nil {
+	if env.MapMMIO == nil {
 		return false
 	}
-	dev, ok := pci.Find(pci.Scan(env.Ports32), Vendor, Device)
-	d.dev = dev
-	return ok && read(env.Ports16, regID) >= idMin
+	d.firm = env.Framebuffer.Source == bootinfo.FbSourceVBE
+	if env.Ports16 != nil && env.Ports32 != nil {
+		dev, ok := pci.Find(pci.Scan(env.Ports32), Vendor, Device)
+		d.dev, d.bga = dev, ok && read(env.Ports16, regID) >= idMin
+	}
+	return d.firm || d.bga
+}
+
+// choose is the firmware's mode when it gave a usable one, else DISPI's.
+func (d *display) choose(env *driver.Env) (Mode, error) {
+	m, ok, err := FirmwareMode(env.Framebuffer)
+	if err != nil {
+		env.Log.Warnf("firmware framebuffer refused: %v; setting a mode through dispi", err)
+	}
+	if ok {
+		if d.bga {
+			if bar := d.dev.MemBase(0); bar != 0 && bar != m.Phys {
+				env.Log.Warnf("firmware framebuffer at %#x, BAR0 at %#x: using the firmware's", m.Phys, bar)
+			}
+		}
+		return m, nil
+	}
+	if !d.bga {
+		return Mode{}, errors.New("no firmware framebuffer and no Bochs adapter")
+	}
+	base := d.dev.MemBase(0)
+	if base == 0 {
+		return Mode{}, errors.New("BAR0 is not a memory BAR")
+	}
+	pitch, err := SetMode(env.Ports16, DispiWidth, DispiHeight)
+	if err != nil {
+		return Mode{}, err
+	}
+	return Mode{Phys: base, Width: DispiWidth, Height: DispiHeight, Pitch: pitch, BPP: DispiBPP,
+		Format: gfx.XRGB8888, Source: "dispi"}, nil
 }
 
 func (d *display) Start(env *driver.Env) error {
-	base := d.dev.MemBase(0)
-	if base == 0 {
-		return errors.New("BAR0 is not a memory BAR")
-	}
-	pitch, err := SetMode(env.Ports16, Width, Height)
+	m, err := d.choose(env)
 	if err != nil {
 		return err
 	}
-	mem, err := env.MapMMIO(base, uint64(pitch*Height))
+	mem, err := env.MapMMIO(m.Phys, uint64(m.Pitch*m.Height))
 	if err != nil {
-		return fmt.Errorf("map %#x: %w", base, err)
+		return fmt.Errorf("map %#x: %w", m.Phys, err)
 	}
-	fb, err := gfx.New(gfx.Words(mem), Width, Height, pitch)
+	fb, err := gfx.New(mem, m.Width, m.Height, m.Pitch, m.Format)
 	if err != nil {
 		return err
 	}
 	mu.Lock()
-	screen, fbPhys, fbPitch = fb, base, pitch
+	screen, current = fb, m
 	mu.Unlock()
-	env.Log.Infof("%dx%dx%d linear framebuffer at %#x (pitch %d)", Width, Height, BPP, base, pitch)
+	env.Log.Infof("%dx%dx%d linear framebuffer at %#x (pitch %d, %s)", m.Width, m.Height, m.BPP, m.Phys, m.Pitch, m.Source)
 	return nil
 }

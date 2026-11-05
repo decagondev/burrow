@@ -213,8 +213,9 @@ func (c *Console) moveRows(from, to, count int) {
 		if to > from { // moving down: copy from the bottom so nothing is overwritten first
 			y = lines - 1 - i
 		}
-		dst, src := (a.Min.Y+to*ch+y)*fb.Stride, (a.Min.Y+from*ch+y)*fb.Stride
-		copy(fb.Pix[dst+a.Min.X:dst+a.Max.X], fb.Pix[src+a.Min.X:src+a.Max.X])
+		dst, src := (a.Min.Y+to*ch+y)*fb.Pitch, (a.Min.Y+from*ch+y)*fb.Pitch
+		x0, x1 := a.Min.X*fb.Format.Bytes, a.Max.X*fb.Format.Bytes
+		copy(fb.Mem[dst+x0:dst+x1], fb.Mem[src+x0:src+x1])
 	}
 }
 

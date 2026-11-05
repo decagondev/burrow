@@ -216,8 +216,10 @@ func (s *System) handle(r Request) {
 	s.mu.Lock()
 	t, late := s.byTID[r.TID], s.gone[r.TID]
 	s.mu.Unlock()
-	if t == nil && late { // asked just before its process ended (exit_group): drop it
-		s.nu.Kill(r.TID)
+	if t == nil && late {
+		// Asked just before its process (or the thread itself) ended: drop it.
+		// Whoever marked it gone (exit, execve, its own exit) kills it; a second
+		// Kill here raced that one in the nucleus and hung it (BUG-0023).
 		return
 	}
 	if t == nil {

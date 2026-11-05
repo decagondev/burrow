@@ -51,3 +51,19 @@ func TestBUG0026AKilledProcessLeavesNoHandlers(t *testing.T) {
 		}
 	}
 }
+
+// BUG-0023: a request that arrives from a thread after its process ended
+// must not kill that thread a second time: the exit already did, and two
+// kills at once hung the nucleus's join (and the parent's wait4 with it).
+func TestBUG0023LateRequestDoesNotKillAgain(t *testing.T) {
+	r, _ := vfsRig(t)
+	p := r.spawn()
+	_, other := r.spawnThread(p, scratch+0x800, 0, 0, 0)
+	r.nu.Inject(proc.Request{TID: p.TID(), Nr: 231, Args: [6]uint64{3}}) // exit_group
+	p.Wait()
+	r.nu.Inject(proc.Request{TID: other, Nr: 39}) // getpid, from a thread already gone
+	time.Sleep(50 * time.Millisecond)
+	if n := r.nu.KillCalls(other); n != 1 {
+		t.Errorf("thread %d killed %d times, want once", other, n)
+	}
+}

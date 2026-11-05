@@ -167,17 +167,27 @@ long uthread_reply(uint64_t tid, long result) {
     return rc;
 }
 
+/* Kills a user thread and returns once it is gone. Two kills of one thread
+ * at once (BUG-0023): the first joins it and drops its address space's
+ * thread count; the second only waits for the join to finish, so neither
+ * happens twice and neither caller returns while the thread still runs. */
 long uthread_kill(uint64_t tid) {
     uint64_t fl = spin_lock_irqsave(&g_lock);
     struct thread *t = find_user(tid);
     if (!t) { spin_unlock_irqrestore(&g_lock, fl); return -ESRCH; }
+    uint32_t id = thread_id(t);
+    if (t->killed) {                                    /* another kill owns the join */
+        spin_unlock_irqrestore(&g_lock, fl);
+        thread_join_id(t, id);                          /* returns when that join freed it */
+        return 0;
+    }
     t->killed = 1;
     if (t->req_state == REQ_QUEUED) unlink_req(t);      /* Go must not take it any more */
     thread_wake(t);                                     /* if it waits for an answer */
     thread_poke(t);                                     /* if it runs on another CPU */
     uint64_t as = t->uspace;
     spin_unlock_irqrestore(&g_lock, fl);
-    thread_join(t);                     /* it leaves at its next pass through the kernel */
+    thread_join_id(t, id);              /* it leaves at its next pass through the kernel */
     uspace_thread_ref(as, -1);
     return 0;
 }

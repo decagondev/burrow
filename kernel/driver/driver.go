@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"burrow/kernel/bootinfo"
 	"burrow/kernel/fs/devfs"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
@@ -42,6 +43,9 @@ type Env struct {
 	DMAPage func() (pa uint64, mem []byte, err error)
 	// SetClock, if set, sets the wall clock (the RTC driver calls it once).
 	SetClock func(time.Time)
+	// Framebuffer is the display mode the firmware set (stage2's VBE mode,
+	// checked by the nucleus; W21-S03); Source 0 when there is none.
+	Framebuffer bootinfo.Framebuffer
 }
 
 // Driver is one device driver.

@@ -32,6 +32,7 @@ static const struct ktest g_tests[] = {
     { "sched_stack_guard",  kt_sched_stack_guard },
     { "sse_state_per_thread", kt_sse_state_per_thread },
     { "avx_state_per_thread", kt_avx_state_per_thread },
+    { "bug0023_join_twice", kt_bug0023_join_twice },
     { "spinlock_counter",   kt_spinlock_counter },
     { "futex_ping_pong",    kt_futex_ping_pong },
     { "futex_timeout_and_eagain", kt_futex_timeout_and_eagain },

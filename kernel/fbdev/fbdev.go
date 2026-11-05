@@ -1,6 +1,7 @@
 // Package fbdev is /dev/fb0 (W11-S01, E10.F01): the subset of Linux's
-// framebuffer device that Doom-style programs use, over a linear 32 bpp
-// framebuffer at a known physical address. It answers FBIOGET_VSCREENINFO,
+// framebuffer device that Doom-style programs use, over a linear
+// framebuffer at a known physical address, in the depth and colour layout
+// the firmware set (W21-S03; XRGB8888 when the Mode does not say). It answers FBIOGET_VSCREENINFO,
 // FBIOGET_FSCREENINFO, FBIOPUT_VSCREENINFO (the current mode only),
 // FBIOPAN_DISPLAY (offset 0), and since W14-S08 FBIOGETCMAP/FBIOPUTCMAP (a
 // truecolour mode has no palette: reads give a linear ramp, writes are
@@ -47,6 +48,21 @@ type Mode struct {
 	Phys          uint64 // physical address of pixel (0, 0)
 	Width, Height int
 	PitchBytes    int // bytes from one row to the next (PIT-27)
+	// The pixel layout (W21-S03); BitsPerPixel 0 means XRGB8888.
+	BitsPerPixel     int
+	Red, Green, Blue Channel
+}
+
+// Channel is a colour field, as struct fb_bitfield has it: Length bits
+// from bit Offset up.
+type Channel struct{ Offset, Length uint8 }
+
+// layout is m's depth and colour fields, XRGB8888 unless m says otherwise.
+func (m Mode) layout() (bpp uint32, r, g, b Channel) {
+	if m.BitsPerPixel == 0 {
+		return bitsPerPixel, Channel{16, 8}, Channel{8, 8}, Channel{0, 8}
+	}
+	return uint32(m.BitsPerPixel), m.Red, m.Green, m.Blue
 }
 
 // Size is how many bytes of memory the mode covers (smem_len).
@@ -127,8 +143,9 @@ func (h *handle) Ioctl(req, arg uint64, in, out func(va uint64, b []byte) error)
 			return 0, err
 		}
 		le := binary.LittleEndian
+		bpp, _, _, _ := m.layout()
 		same := le.Uint32(b[0:]) == uint32(m.Width) && le.Uint32(b[4:]) == uint32(m.Height) &&
-			le.Uint32(b[24:]) == bitsPerPixel && le.Uint32(b[16:]) == 0 && le.Uint32(b[20:]) == 0
+			le.Uint32(b[24:]) == bpp && le.Uint32(b[16:]) == 0 && le.Uint32(b[20:]) == 0
 		if req == FBIOPAN_DISPLAY {
 			same = le.Uint32(b[16:]) == 0 && le.Uint32(b[20:]) == 0
 		}
@@ -183,23 +200,34 @@ func cmap(req, arg uint64, in, out func(va uint64, b []byte) error) error {
 	return nil
 }
 
-// Var is struct fb_var_screeninfo for m: XRGB8888, no virtual screen.
+// Var is struct fb_var_screeninfo for m: its depth and colour fields, no
+// virtual screen, no transparency.
 func Var(m Mode) []byte {
 	b := make([]byte, VarSize)
 	le := binary.LittleEndian
+	bpp, r, g, bl := m.layout()
 	for i, v := range []uint32{
 		uint32(m.Width), uint32(m.Height), uint32(m.Width), uint32(m.Height), // xres yres xres_virtual yres_virtual
-		0, 0, bitsPerPixel, 0, // xoffset yoffset bits_per_pixel grayscale
-		16, 8, 0, // red: offset length msb_right
-		8, 8, 0, // green
-		0, 8, 0, // blue
-		24, 0, 0, // transp: none
+		0, 0, bpp, 0, // xoffset yoffset bits_per_pixel grayscale
+		uint32(r.Offset), uint32(r.Length), 0, // red: offset length msb_right
+		uint32(g.Offset), uint32(g.Length), 0, // green
+		uint32(bl.Offset), uint32(bl.Length), 0, // blue
+		transpOffset(bpp), 0, 0, // transp: none
 	} {
 		le.PutUint32(b[4*i:], v)
 	}
 	le.PutUint32(b[88:], ^uint32(0)) // height in mm: unknown
 	le.PutUint32(b[92:], ^uint32(0)) // width in mm: unknown
 	return b
+}
+
+// transpOffset is where a 32-bit pixel's spare byte is (length 0: unused),
+// as before W21; other depths have none.
+func transpOffset(bpp uint32) uint32 {
+	if bpp == 32 {
+		return 24
+	}
+	return 0
 }
 
 // Fix is struct fb_fix_screeninfo for m.

@@ -31,17 +31,20 @@ flowchart LR
 
 ## Open
 
+None (BUG-0023 closed in W21-S03).
+
+## Closed
+
 ### BUG-0023: The console once waited for ever after gohello exited
+- Closed: 2026-11-05, W21-S03.
 - Found: 2026-11-04, W19-S03, in the full `make test`: `SMOKE FAIL [ports]: timed out after 60s`; the log ends at `gohello: ok` (gohello's last line) with no `burrow>` prompt after it and no kernel message.
 - Severity: minor so far (one hang in 18 runs of `make ports-smoke`: the 16 runs since, alone, all passed). Seen again in W19-S04, in a C program: `credtest --exec` stopped after `credtest: kill ok`, in the next case (`peercred`: the parent in `accept`, its child about to `connect`); eight runs since passed. Two programs, one shape: a process waiting for its child, which suggests process exit or the wait for it, not Go's runtime.
 - Symptom: a Go user program prints its last line and exits; the console's `run` never returns.
-- Root cause: unknown. Suspected: the exit of a multi-threaded Go program (exit_group while the runtime's threads are in `futex`, `nanosleep` or `tgkill`'s SIGURG preemption) racing with the wait for it. Checked and ruled out: S03's new `p.mu` lookups (`Cred`, `mayKill`) nest no locks, and `send`, which `tgkill` already called, took `p.mu` before them.
-- Fix: none yet. Next time: keep the log of a failing run (`for i in $(seq 20); do make ports-smoke | grep -a SMOKE; grep -q FAIL ... && cp build/smoke-ports.log build/smoke-ports-fail-$i.log; done`), and the kernel's thread list at the hang.
-- Regression: none possible until it reproduces.
+- Root cause (found in W21-S03, by the W20-S01 dump of a `waitstress` hang in a four-CPU `make test`: the parent 70 s in `wait4`, its child "exiting" with no threads, and one goroutine in `exit`'s `Nucleus.Kill(821)`): two kills of one thread at once. `System.handle` killed a thread whose request came in after its process had started to end (`t == nil && late`), but whoever marked the thread gone (`exit`, `execve`'s `endOthers`, the thread's own `exit`) always kills it too. In the nucleus both `uthread_kill`s found the thread and both called `thread_join`; the first reaped it and freed the slot, and the second waited for a T_DEAD that a free slot never shows, holding `exit` (and so the parent's `wait4`, or the console's `run`) for ever. With one P the two handlers rarely ran at the same moment, which is why it was once in tens of runs; four Ps (W20-S08) made it reproducible.
+- Fix: `System.handle` drops a late request without killing (`kernel/proc/system.go`). In the nucleus a second concurrent `uthread_kill` only waits for the first one's join and does not drop the address space's thread count again; `thread_join_id` joins the thread id the caller found, lets one joiner reap it (T_DEAD -> T_REAPING -> T_FREE) and returns when the slot is free or someone else's (`nucleus/thread.c`, `uthread.c`).
+- Regression: `TestBUG0023LateRequestDoesNotKillAgain` (`kernel/proc`: a request from a thread after exit_group must not kill it a second time; fails without the fix) and ktest `bug0023_join_twice` (sched suite, one and four CPUs: a second join of a reaped thread returns, two threads joining one target both return and free its stack once).
 - W20-S01's hunt: a hang watchdog now makes every timed-out smoke end with a dump of every process, thread and kernel goroutine (`tests/smoke/sendkeys.py` sends Alt+SysRq; `proc.System.Dump`); `user/waitstress` (children exiting at once, with threads running, from a thread, killed while asleep, leaving orphans, exec'ing) ran about 5,000 rounds and `gohello` 255 times over 17 boots, three at a time on a loaded host, without a hang. It found BUG-0026 instead (handlers leaked by threads that end while blocked), which is not this one's cause: the nucleus never reuses thread ids, so a stale reply only fails. Still open; the next sighting comes with its dump.
-- Lesson: (open)
-
-## Closed
+- Lesson: a cleanup with two owners runs twice; and "rare" was a one-CPU timing that a second CPU turned into a test failure. The dump set up in W20-S01 caught it on its first sighting.
 
 ### BUG-0027: Two CPUs faulting on one page: the second was called a bad pointer
 - Found: 2026-11-05, W20-S08, the first go-smoke with the Go kernel on four Ps: `[trap] fault in the Go kernel (#PF, address 00007d0046e2e008)` in `runtime.(*spanSet).push`, a write to a page the runtime had just committed.

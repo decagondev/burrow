@@ -19,7 +19,8 @@
 #define KSTACK_BYTES     16384u
 #define TIMESLICE_TICKS  10u
 
-enum thread_state { T_FREE = 0, T_RUNNABLE, T_RUNNING, T_BLOCKED, T_SLEEPING, T_DEAD };
+enum thread_state { T_FREE = 0, T_RUNNABLE, T_RUNNING, T_BLOCKED, T_SLEEPING, T_DEAD,
+                    T_REAPING };   /* one joiner frees its stack (BUG-0023) */
 
 struct thread {
     uint64_t rsp;               /* +0: saved by switch.asm; keep first */
@@ -69,6 +70,9 @@ void thread_yield(void);
 void thread_sleep_ns(uint64_t ns);
 void thread_exit(void) __attribute__((noreturn));
 void thread_join(struct thread *t);            /* waits for T_DEAD, then frees its stack */
+/* The same for thread id, which slot t held when the caller found it; a
+ * slot already freed or reused means another joiner was first (BUG-0023). */
+void thread_join_id(struct thread *t, uint32_t id);
 void thread_set_fs_base(struct thread *t, uint64_t fs);
 
 /* For blocking primitives (futex.c). Call with interrupts OFF. */

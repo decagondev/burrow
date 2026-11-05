@@ -191,22 +191,36 @@ static void release_stack(struct thread *t) {
     t->kstack_bottom = t->kstack_top = 0;
 }
 
-void thread_join(struct thread *t) {
+/* Joins thread id in slot t: waits for it to end, frees its stack, frees
+ * the slot. Only one joiner reaps (T_DEAD -> T_REAPING, under the lock);
+ * any other, and one that comes after the slot was freed or reused, just
+ * waits for the id to leave the slot (BUG-0023: two kills of one thread at
+ * once used to wait for ever on a slot the other had already freed). */
+void thread_join_id(struct thread *t, uint32_t id) {
     for (;;) {
         uint64_t f = irq_save();
         spin_lock(&g_sched_lock);
-        int dead = t->state == T_DEAD;  /* under the lock: its CPU has left its stack */
+        int gone = t->state == T_FREE || t->id != id;
+        int mine = !gone && t->state == T_DEAD;   /* under the lock: its CPU has left its stack */
+        if (mine) t->state = T_REAPING;
         spin_unlock(&g_sched_lock);
-        if (dead) {
+        if (mine) {
             release_stack(t);
             spin_lock(&g_sched_lock);
             t->state = T_FREE;
             spin_unlock(&g_sched_lock);
         }
         irq_restore(f);
-        if (dead) return;
+        if (gone || mine) return;
         thread_yield();
     }
+}
+
+void thread_join(struct thread *t) {
+    uint64_t f = spin_lock_irqsave(&g_sched_lock);
+    uint32_t id = t->id;
+    spin_unlock_irqrestore(&g_sched_lock, f);
+    thread_join_id(t, id);
 }
 
 struct thread *thread_find(uint32_t id) {

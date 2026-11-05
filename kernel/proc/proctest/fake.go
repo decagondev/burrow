@@ -22,7 +22,8 @@ type Fake struct {
 	threads    map[uint64]*Thread
 	nextTID    uint64
 	reqs       chan proc.Request
-	batchCalls int // Protect and MapBatch calls (W18-S06)
+	batchCalls int            // Protect and MapBatch calls (W18-S06)
+	killCalls  map[uint64]int // Kill calls per thread, ESRCH ones too (BUG-0023)
 }
 
 type mapping struct {
@@ -59,6 +60,7 @@ func New() *Fake {
 	return &Fake{
 		frames: map[uint64][]byte{}, nextPA: 0x100000, spaces: map[uint64]map[uint64]mapping{},
 		threads: map[uint64]*Thread{}, nextTID: 100, reqs: make(chan proc.Request, 64),
+		killCalls: map[uint64]int{},
 	}
 }
 
@@ -320,12 +322,20 @@ func (f *Fake) Thread(tid uint64) *Thread {
 func (f *Fake) Kill(tid uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.killCalls[tid]++
 	t, ok := f.threads[tid]
 	if !ok || t.Killed {
 		return syscall.ESRCH
 	}
 	t.Killed = true
 	return nil
+}
+
+// KillCalls is how many times Kill was asked for tid (BUG-0023: once).
+func (f *Fake) KillCalls(tid uint64) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.killCalls[tid]
 }
 
 // Live counts threads that are not killed.

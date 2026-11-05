@@ -111,3 +111,27 @@ func TestHoldFollowsOpens(t *testing.T) {
 		t.Errorf("events %v, held %v", events, d.Held())
 	}
 }
+
+// W21-S03: a mode the firmware set in another layout reports its own depth
+// and colour fields (RGB565 at 1000x700, a padded line).
+func TestScreenInfoFollowsTheMode(t *testing.T) {
+	m565 := Mode{Phys: 0xE0000000, Width: 1000, Height: 700, PitchBytes: 2016, BitsPerPixel: 16,
+		Red: Channel{11, 5}, Green: Channel{5, 6}, Blue: Channel{0, 5}}
+	h, m := open(t, New(m565, nil)), &mem{}
+	le := binary.LittleEndian
+	if _, err := h.Ioctl(FBIOGET_VSCREENINFO, 0x1000, m.in, m.out); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name     string
+		off, val uint32
+	}{{"xres", 0, 1000}, {"bits_per_pixel", 24, 16}, {"red.offset", 32, 11}, {"red.length", 36, 5},
+		{"green.offset", 44, 5}, {"green.length", 48, 6}, {"blue.offset", 56, 0}, {"blue.length", 60, 5}} {
+		if got := le.Uint32(m.b[c.off:]); got != c.val {
+			t.Errorf("%s = %d, want %d", c.name, got, c.val)
+		}
+	}
+	if _, err := h.Ioctl(FBIOGET_FSCREENINFO, 0x1000, m.in, m.out); err != nil || le.Uint32(m.b[48:]) != 2016 {
+		t.Errorf("line_length = %d (%v), want 2016", le.Uint32(m.b[48:]), err)
+	}
+}

@@ -3,6 +3,11 @@ package bga
 import (
 	"strings"
 	"testing"
+
+	"burrow/kernel/bootinfo"
+	"burrow/kernel/driver"
+	"burrow/kernel/gfx"
+	"burrow/kernel/klog"
 )
 
 // dispi is the card's register file behind the index/data port pair.
@@ -53,5 +58,50 @@ func TestSetMode(t *testing.T) {
 func TestSetModeRejectsNoCard(t *testing.T) {
 	if _, err := SetMode(&dispi{}, 1024, 768); err == nil {
 		t.Error("SetMode accepted dispi id 0")
+	}
+}
+
+// W21-S03: with a firmware framebuffer the display maps it as given, on any
+// adapter: no Bochs device, no DISPI writes, its pitch and its layout.
+func TestStartTakesTheFirmwareMode(t *testing.T) {
+	fw := bootinfo.Framebuffer{Source: bootinfo.FbSourceVBE, Phys: 0xE0000000, Width: 1280, Height: 1024,
+		Pitch: 5248, BPP: 32, Red: bootinfo.Field{Size: 8, Pos: 0}, Green: bootinfo.Field{Size: 8, Pos: 8},
+		Blue: bootinfo.Field{Size: 8, Pos: 16}}
+	var mapped [2]uint64
+	var log strings.Builder
+	env := &driver.Env{Framebuffer: fw, Log: klog.New(&log, klog.Info),
+		MapMMIO: func(pa, n uint64) ([]byte, error) { mapped = [2]uint64{pa, n}; return make([]byte, n), nil }}
+	d := &display{}
+	if !d.Probe(env) || d.bga {
+		t.Fatal("Probe: want the firmware's display and no Bochs adapter")
+	}
+	if err := d.Start(env); err != nil {
+		t.Fatal(err)
+	}
+	if mapped != [2]uint64{0xE0000000, 5248 * 1024} {
+		t.Errorf("mapped %#x+%d", mapped[0], mapped[1])
+	}
+	m := Current()
+	if m.Width != 1280 || m.Pitch != 5248 || m.Source != "vbe" || m.Format.Red.Pos != 0 || m.Format.Blue.Pos != 16 {
+		t.Errorf("mode %+v", m)
+	}
+	fb := Screen()
+	fb.Set(0, 1, gfx.RGB(0xFF, 0, 0)) // BGR: red is the lowest byte of row 1
+	if fb.Mem[5248] != 0xFF || fb.Mem[5250] != 0 {
+		t.Errorf("row 1 starts % x", fb.Mem[5248:5252])
+	}
+	if !strings.Contains(log.String(), "1280x1024x32 linear framebuffer at 0xe0000000 (pitch 5248, vbe)") {
+		t.Errorf("log %q", log.String())
+	}
+}
+
+// A layout gfx cannot draw is refused and DISPI sets its own mode instead.
+func TestFirmwareModeRefusesABadLayout(t *testing.T) {
+	bad := bootinfo.Framebuffer{Source: bootinfo.FbSourceVBE, BPP: 8, Red: bootinfo.Field{Size: 3, Pos: 5}}
+	if _, ok, err := FirmwareMode(bad); ok || err == nil {
+		t.Errorf("8 bpp: ok %v, err %v", ok, err)
+	}
+	if _, ok, err := FirmwareMode(bootinfo.Framebuffer{}); ok || err != nil {
+		t.Errorf("none: ok %v, err %v", ok, err)
 	}
 }

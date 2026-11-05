@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-05 — W21-S03 The Go kernel draws on the firmware's mode
+
+**Did:** gfx draws on bytes with a pixel format (XRGB8888 stays the fast path; BGR, RGB565 and 24 bpp work on the host); the display driver takes the firmware's mode from boot_info on any adapter and keeps DISPI as the fallback; /dev/fb0 reports the real depth and colour fields. Every smoke passes at 1024x768 from VBE, and booted at 1280x1024 with a 5248-byte pitch the console and fbtest are straight.
+
+**Surprise:** how little was left to fix on Burrow itself: the console grid, fbtest, paint and Doom already stepped by the pitch, a habit from PIT-27 in W8. The work was in gfx's assumption of four-byte XRGB pixels, which only host tests can exercise because QEMU never offers anything else.
+
+Also: BUG-0023, open since W19, reproduced in this slice's four-CPU `make test`, and the hang dump from W20-S01 showed it at once: `exit` stuck in a nucleus kill of a thread that a late request had already killed and reaped. Two owners of one cleanup; one of them now only waits.
+
+**Next:** W21-S04: a write-combining framebuffer.
+
 ## 2026-11-05 — W21-S02 The framebuffer in boot_info
 
 **Did:** stage2 records the VBE mode it set in boot_info (base, size, pitch, depth, and the colour fields in the reserved space); the version numbers moved to 2 and 3, so a mixed image stops at the loader; the nucleus checks the descriptor with a pure, host-tested module (`fbdesc.c`) and prints it, or clears it so Go never trusts a bad one; `kernel/bootinfo` parses it. REG-0009: a missing mode boots on the DISPI fallback.

@@ -170,3 +170,32 @@ int kt_sse_state_per_thread(void) {
     KT_CHECK(ktest_get_xmm0() == 0xdead);     /* main's value survived too */
     return 0;
 }
+
+/* BUG-0023: two joins of one thread. The second join of a reaped thread
+ * returns (it used to wait for ever on the freed slot), and two threads
+ * joining one target at once both return with its stack freed once (a
+ * second free would panic in frames.c's double-free check). */
+static struct thread *volatile g_target;
+static volatile int g_joined;
+
+static void napper(void *arg) { (void)arg; thread_sleep_ns(20000000); }
+static void joiner(void *arg) {
+    (void)arg;
+    thread_join(g_target);
+    __atomic_fetch_add(&g_joined, 1, __ATOMIC_SEQ_CST);
+}
+
+int kt_bug0023_join_twice(void) {
+    struct thread *t = thread_create("once", napper, 0);
+    KT_CHECK(t);
+    thread_join(t);
+    thread_join(t);                           /* already reaped: returns at once */
+    g_joined = 0;
+    g_target = thread_create("target", napper, 0);
+    struct thread *a = thread_create("join-a", joiner, 0), *b = thread_create("join-b", joiner, 0);
+    KT_CHECK(g_target && a && b);
+    thread_join(a);
+    thread_join(b);
+    KT_CHECK(g_joined == 2);
+    return 0;
+}

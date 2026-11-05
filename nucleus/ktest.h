@@ -47,6 +47,7 @@ int kt_sched_sleep_and_fs_base(void);
 int kt_sched_stack_guard(void);
 int kt_sse_state_per_thread(void);
 int kt_avx_state_per_thread(void);   /* W20-S03 */
+int kt_bug0023_join_twice(void);
 
 /* ktest_sync.c */
 int kt_spinlock_counter(void);

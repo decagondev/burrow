@@ -13,13 +13,12 @@ const padColor = 0xDEADBEEF
 func screen(t *testing.T, w, h int) *Framebuffer {
 	t.Helper()
 	stride := w + 8
-	pix := make([]uint32, stride*h)
-	for i := range pix {
-		pix[i] = padColor
-	}
-	fb, err := New(pix, w, h, stride*4)
+	fb, err := New(make([]byte, 4*stride*h), w, h, stride*4, XRGB8888)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for i := range fb.Pix {
+		fb.Pix[i] = padColor
 	}
 	return fb
 }
@@ -42,7 +41,7 @@ func TestNewRejectsBadModes(t *testing.T) {
 		{1000, 10, 10, 42}, // pitch not whole pixels
 		{1000, 0, 10, 40},
 	} {
-		if _, err := New(make([]uint32, c.n), c.w, c.h, c.pitch); err == nil {
+		if _, err := New(make([]byte, 4*c.n), c.w, c.h, c.pitch, XRGB8888); err == nil {
 			t.Errorf("New(%+v) accepted", c)
 		}
 	}

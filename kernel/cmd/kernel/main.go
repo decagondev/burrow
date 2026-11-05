@@ -72,7 +72,7 @@ func main() {
 	} else {
 		log.With("random").Infof("seeded from the TSC (no RDRAND)")
 	}
-	mods, err := bootModules(log.With("boot"))
+	mods, firmwareFB, err := bootModules(log.With("boot"))
 	if err != nil {
 		log.Errorf("boot data: %v", err)
 		amd64.DebugExit(0x11)
@@ -100,18 +100,19 @@ func main() {
 	scancodes, mouse := registerInput(dev, k.boot)
 	keys := &vtKeys{vt: vt.New(), evdev: scancodes} // the console's modes (W14-S08)
 	driver.StartAll(&driver.Env{
-		Ports:     amd64.Ports{},
-		Ports16:   amd64.Ports{},
-		Ports32:   amd64.Ports{},
-		IRQ:       func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
-		Log:       log,
-		Input:     input,
-		Dev:       dev,
-		Scancodes: keys.Feed,
-		Mouse:     mouse,
-		MapMMIO:   amd64.MapMMIO,
-		DMAPage:   dmaPage,
-		SetClock:  amd64.SetRealtime,
+		Ports:       amd64.Ports{},
+		Ports16:     amd64.Ports{},
+		Ports32:     amd64.Ports{},
+		IRQ:         func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
+		Log:         log,
+		Input:       input,
+		Dev:         dev,
+		Scancodes:   keys.Feed,
+		Mouse:       mouse,
+		MapMMIO:     amd64.MapMMIO,
+		DMAPage:     dmaPage,
+		SetClock:    amd64.SetRealtime,
+		Framebuffer: firmwareFB,
 	})
 	k.startNetwork(log)
 	checkBootDisk(log.With("block"))

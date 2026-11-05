@@ -108,9 +108,11 @@ func (s *screenOut) set(change func()) {
 
 // registerFB0 makes the framebuffer /dev/fb0.
 func registerFB0(dev *devfs.FS, s *screenOut) error {
-	fb := bga.Screen()
-	base, pitch := bga.Phys()
-	mode := fbdev.Mode{Phys: base, Width: fb.Width, Height: fb.Height, PitchBytes: pitch}
+	m := bga.Current()
+	f := m.Format
+	mode := fbdev.Mode{Phys: m.Phys, Width: m.Width, Height: m.Height, PitchBytes: m.Pitch, BitsPerPixel: m.BPP,
+		Red: fbdev.Channel{Offset: f.Red.Pos, Length: f.Red.Size}, Green: fbdev.Channel{Offset: f.Green.Pos, Length: f.Green.Size},
+		Blue: fbdev.Channel{Offset: f.Blue.Pos, Length: f.Blue.Size}}
 	return dev.Register("fb0", fbdev.New(mode, s.hold), 0o660)
 }
 
