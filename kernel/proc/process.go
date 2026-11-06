@@ -3,6 +3,7 @@ package proc
 import (
 	"path"
 	"sync"
+	"time"
 
 	"burrow/kernel/tty"
 )
@@ -30,10 +31,12 @@ type Process struct {
 	brkStart, brk uint64
 	mmapNext      uint64
 	cwd           string
-	umask         uint32    // umask(2); applied from W19-S04
-	cred          Cred      // who it is (W19-S03, cred.go); the zero value is root
-	timers        [3]itimer // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
-	ctty          *tty.TTY  // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
+	umask         uint32        // umask(2); applied from W19-S04
+	cred          Cred          // who it is (W19-S03, cred.go); the zero value is root
+	timers        [3]itimer     // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
+	ctty          *tty.TTY      // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
+	argv, envp    []string      // as execve gave them, for /proc/<pid>/cmdline and environ (W23-S01)
+	start         time.Duration // since boot (/proc/<pid>/stat's starttime)
 
 	children   map[int]*Process // live and zombie (s.mu)
 	childEvent chan struct{}    // a child exited (capacity 1)
@@ -180,6 +183,7 @@ func (t *Thread) forkOnto(stack uint64) int64 {
 	p.mu.Lock()
 	c.brkStart, c.brk, c.mmapNext, c.cwd, c.umask = p.brkStart, p.brk, p.mmapNext, p.cwd, p.umask
 	c.ctty = p.ctty
+	c.argv, c.envp = p.argv, p.envp // never changed in place: execve replaces them
 	c.cred = p.cred.clone()
 	c.actions = p.actions // pending signals are not inherited
 	mask, fs, altSP, altSize := t.sigMask, t.fs, t.altSP, t.altSize

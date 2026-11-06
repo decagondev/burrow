@@ -11,6 +11,9 @@ func cpuid(leaf, sub uint32) (a, b, c, d uint32)
 func rdrand() (v uint64, ok bool)
 func rdtsc() uint64
 
+// CPUID runs the instruction for a leaf and subleaf (/proc/cpuinfo, W23-S01).
+func CPUID(leaf, sub uint32) (a, b, c, d uint32) { return cpuid(leaf, sub) }
+
 const (
 	cpuidRDRAND  = 1 << 30 // CPUID.1:ECX
 	rdrandTries  = 10      // Intel's advice before giving up on a word

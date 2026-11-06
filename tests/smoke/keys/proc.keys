@@ -1,0 +1,35 @@
+# /proc (W23-S01): busybox's process tools on go-busybox.img: ps lists init
+# and the shell, free and uptime read sysinfo and /proc, pidof finds a
+# spinning program and pkill ends it. Expect file: tests/smoke/expect/proc.txt.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait #
+type ps
+key ret
+wait COMMAND
+type free
+key ret
+wait Mem:
+type uptime
+key ret
+wait load average:
+type cat /proc/self/comm /proc/version
+key ret
+wait Burrow version
+type /bin/spin > /dev/null &
+key ret
+sleep 1
+type pidof spin > /dev/null && echo found spin'ning'
+key ret
+wait found spinning
+type pkill spin; sleep 1; pidof spin || echo spin'ning' gone
+key ret
+wait spinning gone
+type ps | grep -c 'busybox sh'
+key ret
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

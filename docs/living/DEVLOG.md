@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S01 /proc: the file system and the process table
+
+**Did:** `kernel/procfs`, an `io/fs.FS` over a `Source` that `proc.System` implements, mounted at `/proc`: each pid's `stat`, `statm`, `status`, `cmdline`, `environ` and `comm`; `self`; `uptime`, `loadavg`, `meminfo`, `cpuinfo` (CPUID decoded in Go), `version`, `filesystems`, `sys/kernel`. The VFS walks as a caller now (`ResolveAs`, `ReadLinkAs`), which is what makes `self` the asker's. `execve` keeps argv and the environment, a sampler keeps the load averages, `sysinfo` reports them. busybox's `ps`, `free`, `uptime`, `pidof`, `pgrep`, `pkill`; `user/proctest` agrees with the host's Linux; `make proc-smoke`.
+
+**Surprise:** busybox's `ps` printed no header; it is only compiled in with one of `ps`'s options (`FEATURE_PS_WIDE`). And a thread reading its own `stat` is inside a system call, so "not in a syscall" would have called it sleeping; Linux says running, so a call has to hold a thread 10 ms before it counts as waiting. WSL's kernel reports 0 resident pages for a tiny static program (RSS is counted in batches), so proctest only checks resident <= size.
+
+**Next:** W23-S02: CPU time and top.
+
 ## 2026-11-06 — W22 done: sound and an absolute pointer (M22)
 
 **Did:** the wave in six slices. Shared interrupt lines in Go (S01); an AC'97 driver and OSS's `/dev/dsp` (S02); Doom's sound effects, and BUG-0028 on the way (S03); a virtio 1.0 transport and the tablet's driver (S04); the tablet as `/dev/input/event2` and as moves in `/dev/input/mice`, followed by paint, X and Qt, with absolute steps in the harness (S05); and the desktop smoke with both, a click by position moving dwm's focus and Doom heard from dmenu (S06). `make sound-smoke`, `make tablet-smoke` and `desktop-smoke` pass on four CPUs and on one.

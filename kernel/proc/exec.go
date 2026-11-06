@@ -78,6 +78,10 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	t.TID, t.fs, t.altSP, t.altSize, t.clearTID = p.PID, 0, 0, 0, 0
 	p.threads[t.TID], p.main = t, t
 	p.mem, p.Path, p.cred = im.mem, "/"+file, cred
+	if len(argv) == 0 {
+		argv = []string{"/" + file}
+	}
+	p.argv, p.envp = argv, envp
 	p.brkStart, p.brk, p.mmapNext = im.end, im.end, mmapBase
 	for sig := range p.actions { // handlers do not survive the old program; "ignore" does
 		if p.actions[sig].handler != sigIGN {

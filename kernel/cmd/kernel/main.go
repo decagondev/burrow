@@ -142,6 +142,7 @@ func main() {
 		}
 	}
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
+	k.mountProc(log.With("procfs"))
 	k.tty, k.input = tty.New(out, rows, cols), input
 	k.procs.SetTerminal(k.tty)
 	k.procs.SetVT(keys.vt)

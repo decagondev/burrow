@@ -15,14 +15,20 @@ import (
 	"io/fs"
 	"strings"
 	"syscall"
+
+	"burrow/kernel/vfs"
 )
 
 const oNofollow = 0o400000
 
-// resolver is the VFS's walker.
+// resolver is the VFS's walker; links that depend on the caller (/proc/self,
+// W23-S01) read as the walking process's.
 type resolver interface {
-	Resolve(raw string, follow bool, visit func(dir string, info fs.FileInfo) error) (string, error)
+	ResolveAs(raw string, follow bool, c vfs.Caller, visit func(dir string, info fs.FileInfo) error) (string, error)
 }
+
+// caller is p as the VFS knows it.
+func (p *Process) caller() vfs.Caller { return vfs.Caller{PID: p.PID, TID: p.PID} }
 
 // rawPath is name as the walker takes it: from the root for an absolute
 // name, else after the cwd (AT_FDCWD) or the directory open at dirfd.
@@ -55,7 +61,7 @@ func (p *Process) lookupAs(c *Cred, raw string, follow bool) (string, error) {
 		name := cleanPath(raw)
 		return name, p.search(c, name)
 	}
-	return r.Resolve(raw, follow, func(_ string, info fs.FileInfo) error {
+	return r.ResolveAs(raw, follow, p.caller(), func(_ string, info fs.FileInfo) error {
 		if !c.allows(info, mayExec) {
 			return syscall.EACCES
 		}

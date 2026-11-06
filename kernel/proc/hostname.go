@@ -7,6 +7,14 @@ package proc
 
 import "syscall"
 
+// uname's other fields, which /proc/version and /proc/sys/kernel repeat
+const (
+	unameSys     = "Burrow"
+	unameRelease = "0.10"
+	unameVersion = "#1 Wave 10"
+	unameMachine = "x86_64"
+)
+
 const (
 	defaultHost   = "burrow"
 	defaultDomain = "(none)"

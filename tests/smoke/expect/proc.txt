@@ -1,0 +1,20 @@
+# Ordered markers for busybox's process tools over /proc (W23-S01,
+# tests/smoke/keys/proc.keys). Append-only. cat runs inside the shell's
+# fork (busybox's standalone shell does not exec its applets), so its comm
+# is busybox's, as on Linux.
+[procfs] INFO: /proc mounted
+burrow> run /bin/busybox sh
+# ps
+PID USER       VSZ STAT COMMAND
+1 root         0 SW   init
+/bin/busybox sh
+# free
+Mem:
+# uptime
+load average:
+# cat /proc/self/comm /proc/version
+busybox
+Burrow version 0.10
+found spinning
+spinning gone
+burrow> poweroff

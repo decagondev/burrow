@@ -81,5 +81,10 @@ type run /bin/spawntest
 key ret
 wait spawntest: ok
 wait burrow> 
+# W23-S01: /proc as the tools read it (passed on the host's Linux first)
+type run /bin/proctest a b
+key ret
+wait proctest: ok
+wait burrow> 
 type poweroff
 key ret

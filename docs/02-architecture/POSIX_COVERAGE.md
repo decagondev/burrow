@@ -64,7 +64,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 90-94, 260, 268 | `chmod` `fchmod` `chown` `fchown` `lchown` `fchownat` `fchmodat` | done | W19 | `ownercalls.go`, Linux's rules: the owner or root changes a mode, a user's chmod drops set-group-id when the file's group is not theirs; only root gives a file away, an owner may change its group to one they are in; a chown of a non-directory drops set-uid (and set-group-id with group execute), root's too; on ext2, memfs (`/tmp`, the initrd); FAT and devfs say `EPERM`, as vfat; descriptors without a path accept; `lchown` follows links until W19-S05 |
 | 95 | `umask` | stub | W14 | kept per process (022 at first) and inherited by `fork`; nothing applies it yet |
 | 98 | `getrusage` | stub | W14 | `RUSAGE_SELF` `RUSAGE_CHILDREN` `RUSAGE_THREAD`: all zeros, nothing is accounted |
-| 99 | `sysinfo` | partial | W14 | uptime, RAM total and free (the nucleus's frame allocator, `nu_mem_info`), the process count; no swap, load average 0 |
+| 99 | `sysinfo` | partial | W14 | uptime, RAM total and free (the nucleus's frame allocator, `nu_mem_info`), the process count, and since W23-S01 the load averages (`/proc/loadavg`'s, in 1/65536ths); no swap |
 | 97, 160, 302 | `getrlimit` `setrlimit` `prlimit64` | partial | W12 | fixed limits (`RLIMIT_NOFILE` 256, `RLIMIT_STACK` the stack size, others unlimited); lowering is accepted, raising past the hard limit `-EPERM` |
 | 130 | `rt_sigsuspend` | done | W10 | |
 | 143, 145 | `sched_getparam` `sched_getscheduler` | done | W14 | `SCHED_OTHER`, priority 0; `-ESRCH` for no such process or thread |
@@ -136,3 +136,7 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 ## Devices: /dev/dsp (W22-S02)
 
 OSS's playback subset: `SNDCTL_DSP_RESET`, `SYNC`, `POST`, `SPEED` (8000-48000 Hz, the codec's VRA), `SETFMT` (`AFMT_U8`, `AFMT_S16_LE`; others answer the format in force), `CHANNELS`/`STEREO` (1, 2), `GETFMTS`, `GETCAPS` (0), `SETFRAGMENT` (accepted, ignored: 32 fixed 4 KiB buffers), `GETBLKSIZE`, `GETOSPACE`, `GETODELAY`; anything else `ENOTTY`. One opener (`EBUSY`), `write` blocks while the ring is full (`O_NONBLOCK` and `poll`'s `POLLOUT` honoured), `read` is `EINVAL` (no recording), close drains. `kernel/sound/dsp.go`.
+
+## Files: /proc (W23-S01)
+
+`kernel/procfs`, mounted at `/proc`, formatted as proc(5): per process `stat` (52 fields; CPU times 0 until W23-S02), `statm`, `status` (`Name`, `Umask`, `State`, `Tgid`, `Pid`, `PPid`, `Uid`, `Gid`, `FDSize`, `Groups`, `VmPeak`/`VmSize`/`VmHWM`/`VmRSS` but not for a zombie or init, `Threads`, the signal masks, `Cpus_allowed_list`), `cmdline` and `environ` (as `execve` gave them; `environ` is 0400), `comm`; at the root `self` (a link that reads as the caller's pid), `uptime` (idle 0 until S02), `loadavg`, `meminfo` (no swap, no page cache), `cpuinfo` (from CPUID), `version`, `filesystems`, `sys/kernel/{hostname,domainname,ostype,osrelease,version,pid_max}`. Each pid directory and its files belong to the process's effective user. Read-only; files report size 0. Not yet: `fd/`, `exe`, `cwd`, `maps`, `mounts` (S03), `stat` at the root (S02), `task/`, `/sys`.

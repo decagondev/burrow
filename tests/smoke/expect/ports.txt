@@ -222,4 +222,9 @@ waitstress: 100 rounds ok
 spawntest: system ran echo
 spawntest: posix_spawn ran echo
 spawntest: ok
+burrow> run /bin/proctest a b
+proctest: stat-fields ok
+proctest: zombie ok
+proctest: cpuinfo ok
+proctest: ok
 burrow> poweroff

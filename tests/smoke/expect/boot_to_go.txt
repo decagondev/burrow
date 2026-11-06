@@ -10,7 +10,8 @@ BURROW:NUCLEUS:OK
 [random] INFO: seeded from
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
-[initrd] INFO: tarfs: 56 files, 5 directories
+# W23-S01: /bin/proctest is one more file, and /proc one more name in /
+[initrd] INFO: tarfs: 57 files, 5 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok
@@ -38,6 +39,7 @@ BURROW:GO:SELFTEST:OK
 [net] INFO: 10.0.2.2 answers ping in
 [block] INFO: hda sector 1: boot manifest "BRWMNFST" found
 [fat] INFO: hdb: FAT32 volume "BURROWDATA" mounted at /mnt
+[procfs] INFO: /proc mounted
 [console] INFO: ready
 burrow> echo hello from the keyboar
 hello from the keyboard
@@ -87,7 +89,8 @@ forktest: my parent is 1
 burrow> run /bin/fdtest
 fdtest: the pipe carried 18 bytes: hello from ring 3
 fdtest: /tmp/note says: written by fdtest
-fdtest: / holds: bin dev etc lib mnt opt tmp
+# W23-S01: /proc is mounted in /
+fdtest: / holds: bin dev etc lib mnt opt proc tmp
 fdtest: cwd is now /etc
 burrow> run /bin/sigtest
 sigtest: handler saw signal 10
@@ -105,7 +108,7 @@ spin: spinning until ^C
 run: /bin/spin: killed by signal 2
 burrow> sh
 $ ls / | wc -l
-7
+8
 $ echo hi > /tmp/x; cat /tmp/x
 hi
 $ cd /etc; pwd; ls

@@ -21,8 +21,9 @@ const (
 	grndInsecure = 4
 
 	defaultUmask = 0o022
-	sysinfoBytes = 112 // struct sysinfo
-	rusageBytes  = 144 // struct rusage
+	sysinfoBytes = 112     // struct sysinfo
+	siLoadScale  = 1 << 16 // SI_LOAD_SHIFT
+	rusageBytes  = 144     // struct rusage
 	rusageSelf   = 0
 	rusageThread = 1
 	rusageKids   = -1
@@ -44,16 +45,19 @@ func sysGetrandomFn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(int64(len(b)))
 }
 
-// sysinfo(info): uptime, RAM from the nucleus, the process count; no swap
-// and no load average.
+// sysinfo(info): uptime, the load averages (W23-S01, in 1/65536ths), RAM
+// from the nucleus, the process count; no swap.
 func sysSysinfoFn(p *Process, a [6]uint64) (int64, bool) {
 	total, free := p.sys.nu.MemInfo()
 	p.sys.mu.Lock()
-	procs := len(p.sys.byPID)
+	procs, loads := len(p.sys.byPID), p.sys.loadAvg
 	p.sys.mu.Unlock()
 	le := binary.LittleEndian
 	b := make([]byte, sysinfoBytes)
 	le.PutUint64(b[0:], uint64(time.Since(bootTime)/time.Second))
+	for i, l := range loads {
+		le.PutUint64(b[8+8*i:], uint64(l*siLoadScale))
+	}
 	le.PutUint64(b[32:], total)
 	le.PutUint64(b[40:], free)
 	le.PutUint16(b[80:], uint16(min(procs, 0xFFFF)))

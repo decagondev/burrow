@@ -7,9 +7,11 @@ package vfs
 // ELOOP; the last one only when asked), ".." goes back along the path as
 // walked, not as written, and mounts are crossed. Everything else in the
 // VFS takes the link-free paths Resolve gives. A file system without links
-// (FAT, tarfs before W19, devfs) has none to follow. Never decides who may
+// (FAT, tarfs before W19, devfs) has none to follow. Since W23-S01 a file
+// system's links may read differently for each process (procfs's self):
+// ResolveAs and ReadLinkAs carry the Caller to it. Never decides who may
 // pass: the visit callback does (kernel/proc checks search permission).
-// Docs: docs/04-plan/waves/WAVE-19-unix.md.
+// Docs: docs/04-plan/waves/WAVE-19-unix.md, WAVE-23-proc-virtio.md.
 
 import (
 	"errors"
@@ -21,6 +23,17 @@ import (
 )
 
 const maxLinks = 40 // as Linux
+
+// Caller is the process (and thread) a path is walked for; the zero Caller
+// is the kernel itself.
+type Caller struct{ PID, TID int }
+
+// CallerLinks is a file system whose links read differently for each
+// caller (procfs: self is the caller's pid). ReadLink without one is
+// ReadLinkAs for the zero Caller.
+type CallerLinks interface {
+	ReadLinkAs(name string, c Caller) (string, error)
+}
 
 // Lstat describes name; a final symbolic link is described itself.
 func (v *VFS) Lstat(name string) (fs.FileInfo, error) {
@@ -38,11 +51,18 @@ func (v *VFS) Lstat(name string) (fs.FileInfo, error) {
 }
 
 // ReadLink is the target of the symbolic link name.
-func (v *VFS) ReadLink(name string) (string, error) {
+func (v *VFS) ReadLink(name string) (string, error) { return v.ReadLinkAs(name, Caller{}) }
+
+// ReadLinkAs is the target of the symbolic link name, as c sees it.
+func (v *VFS) ReadLinkAs(name string, c Caller) (string, error) {
 	if !fs.ValidPath(name) {
 		return "", &fs.PathError{Op: "readlink", Path: name, Err: fs.ErrInvalid}
 	}
 	m, rel, ok := v.resolve(name)
+	if cl, isCL := m.fsys.(CallerLinks); ok && isCL && rel != "." {
+		target, err := cl.ReadLinkAs(rel, c)
+		return target, wrap("readlink", name, err)
+	}
 	if rl, isRL := m.fsys.(fs.ReadLinkFS); ok && isRL && rel != "." {
 		target, err := rl.ReadLink(rel)
 		return target, wrap("readlink", name, err)
@@ -109,6 +129,11 @@ func (v *VFS) Lchown(name string, uid, gid uint32) error {
 // before it is. visit, if not nil, sees every directory the walk looks
 // into (the root first) and may refuse with an error.
 func (v *VFS) Resolve(raw string, follow bool, visit func(dir string, info fs.FileInfo) error) (string, error) {
+	return v.ResolveAs(raw, follow, Caller{}, visit)
+}
+
+// ResolveAs is Resolve for c: links that depend on the caller read as c's.
+func (v *VFS) ResolveAs(raw string, follow bool, c Caller, visit func(dir string, info fs.FileInfo) error) (string, error) {
 	todo := strings.Split(raw, "/")
 	trailing := strings.HasSuffix(raw, "/")
 	var done []string
@@ -153,7 +178,7 @@ func (v *VFS) Resolve(raw string, follow bool, visit func(dir string, info fs.Fi
 			if links++; links > maxLinks {
 				return "", syscall.ELOOP
 			}
-			target, err := v.ReadLink(next)
+			target, err := v.ReadLinkAs(next, c)
 			if err != nil {
 				return "", err
 			}

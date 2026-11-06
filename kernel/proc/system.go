@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"burrow/kernel/klog"
 	"burrow/kernel/tty"
@@ -41,6 +42,7 @@ type System struct {
 	sysv                 sysvTab             // SysV shared memory segments (sysv.go, W18-S04)
 	vt                   *vt.VT              // its keyboard and display modes (SetVT), or nil
 	init                 *Process            // pid 1 (kernel-side, no thread)
+	loadAvg              [3]float64          // 1, 5 and 15 minutes (procsource.go, W23-S01)
 
 	futexMu sync.Mutex
 	futexes map[futexKey][]*futexWaiter // futex.go
@@ -55,6 +57,7 @@ func NewSystem(nu Nucleus, files fs.FS, console io.Writer, log *klog.Logger) *Sy
 		futexes: map[futexKey][]*futexWaiter{}}
 	s.init = s.newProcess("init", nil, &fdTable{fds: map[int]fd{}})
 	s.init.PGID, s.init.SID = 1, 1
+	s.init.argv = []string{"init"}
 	s.byPID[1] = s.init
 	go s.reap()
 	return s
@@ -159,6 +162,10 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 	}
 	p := s.newProcess("/"+file, im.mem, s.stdio())
 	p.brkStart, p.brk = im.end, im.end
+	if len(argv) == 0 {
+		argv = []string{"/" + file}
+	}
+	p.argv, p.envp = argv, envp
 	p.PGID, p.SID, p.PPID = p.PID, p.PID, 1
 	s.mu.Lock() // registered before it can make its first call
 	defer s.mu.Unlock()
@@ -176,7 +183,7 @@ func (s *System) Spawn(file string, argv, envp []string) (*Process, error) {
 func (s *System) newProcess(file string, mem *Mem, fds *fdTable) *Process {
 	return &Process{PID: s.newID(), Path: file, sys: s, mem: mem, fds: fds, mmapNext: mmapBase,
 		cwd: "/", umask: defaultUmask, children: map[int]*Process{}, childEvent: make(chan struct{}, 1), done: make(chan struct{}),
-		threads: map[int]*Thread{}}
+		threads: map[int]*Thread{}, start: time.Since(bootTime)}
 }
 
 // newID hands out the next pid or tid.
@@ -196,6 +203,7 @@ func (s *System) register(p *Process, nt uint64) *Thread {
 
 // Serve runs the dispatcher until the nucleus refuses to wait.
 func (s *System) Serve() error {
+	go s.sampleLoad() // /proc/loadavg and sysinfo's loads (W23-S01)
 	buf := make([]Request, 16)
 	for {
 		n, err := s.nu.Wait(buf)

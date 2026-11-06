@@ -5,7 +5,8 @@ BusyBox v1.36.1
 # echo $((6*7)) from busybox
 42 from busybox
 # ls / | wc -l
-7
+# W23-S01: /proc is a mount point in / (8 names)
+8
 # seq 5 | sort -r | head -n 2
 5
 4

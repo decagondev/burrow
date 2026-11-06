@@ -207,7 +207,14 @@ func (p *Process) readlinkAt(dirfd, nameVA, bufVA, size uint64) int64 {
 		}
 		return -int64(syscall.EINVAL)
 	}
-	target, err := rl.ReadLink(name)
+	var target string
+	if cl, as := p.sys.files.(interface {
+		ReadLinkAs(string, vfs.Caller) (string, error)
+	}); as {
+		target, err = cl.ReadLinkAs(name, p.caller()) // /proc/self (W23-S01)
+	} else {
+		target, err = rl.ReadLink(name)
+	}
 	if err != nil {
 		return errno(err)
 	}
