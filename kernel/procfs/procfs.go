@@ -33,7 +33,7 @@ type node struct {
 	attr fsattr.Attr
 	data func() []byte
 	list func() []string
-	link func(c vfs.Caller) string
+	link func(c vfs.Caller) (string, error)
 }
 
 const (
@@ -55,13 +55,17 @@ func (f *FS) lookup(name string) (node, error) {
 		if len(parts) == 1 {
 			return f.self(), nil
 		}
-		parts[0] = f.self().link(vfs.Caller{})
+		parts[0], _ = f.self().link(vfs.Caller{})
 	}
 	if parts[0] == "sys" {
 		return f.sysNode(parts[1:])
 	}
 	if pid, err := strconv.Atoi(parts[0]); err == nil && pid > 0 && parts[0] == strconv.Itoa(pid) {
 		return f.pidNode(pid, parts[1:])
+	}
+	if len(parts) == 1 && parts[0] == "mounts" { // as Linux: a link to the caller's own
+		return f.link("mounts", fsattr.Attr{Ino: inoRoot + 1001}, 0o777,
+			func(vfs.Caller) (string, error) { return "self/mounts", nil }), nil
 	}
 	if len(parts) == 1 {
 		for i, sf := range systemFiles {
@@ -85,7 +89,7 @@ func (f *FS) dir(name string, a fsattr.Attr, list func() []string) node {
 
 func (f *FS) root() node {
 	return f.dir(".", fsattr.Attr{Ino: inoRoot}, func() []string {
-		names := []string{"self", "sys"}
+		names := []string{"mounts", "self", "sys"}
 		for _, sf := range systemFiles {
 			names = append(names, sf.name)
 		}
@@ -99,11 +103,11 @@ func (f *FS) root() node {
 // self is the caller's own directory; the kernel itself reads as init.
 func (f *FS) self() node {
 	return node{name: "self", mode: linkMode, attr: fsattr.Attr{Ino: inoRoot + 1000, Nlink: 1},
-		link: func(c vfs.Caller) string {
+		link: func(c vfs.Caller) (string, error) {
 			if c.PID == 0 {
-				return "1"
+				return "1", nil
 			}
-			return strconv.Itoa(c.PID)
+			return strconv.Itoa(c.PID), nil
 		}}
 }
 
@@ -117,15 +121,24 @@ func (f *FS) pidNode(pid int, rest []string) (node, error) {
 	switch len(rest) {
 	case 0:
 		return f.dir(strconv.Itoa(pid), a, func() []string {
-			names := []string{"task"}
+			names := []string{"task", "fd", "fdinfo", "cwd", "root"}
+			if p.Exe != "" {
+				names = append(names, "exe")
+			}
 			for _, pf := range pidFiles {
 				names = append(names, pf.name)
 			}
 			return names
 		}), nil
 	}
-	if rest[0] == "task" {
+	switch rest[0] {
+	case "task":
 		return f.taskNode(&p, a, rest[1:])
+	case "fd", "fdinfo":
+		return f.fdNode(&p, a, rest[0], rest[1:])
+	}
+	if l, ok := f.procLink(&p, a, rest[0]); ok && len(rest) == 1 {
+		return l, nil
 	}
 	switch len(rest) {
 	case 1:
@@ -171,7 +184,14 @@ func (f *FS) Open(name string) (fs.File, error) {
 	}
 	n, err := f.lookup(name)
 	if err == nil && n.link != nil {
-		n, err = f.lookup(n.link(vfs.Caller{}))
+		// self and mounts lead inside /proc; a descriptor's or exe's target
+		// is elsewhere in the tree, which the VFS's walker follows: opened
+		// here, such a link is an empty file
+		if target, terr := n.link(vfs.Caller{}); terr == nil && !strings.HasPrefix(target, "/") && !strings.Contains(target, ":") {
+			n, err = f.lookup(target)
+		} else {
+			n.data = func() []byte { return nil }
+		}
 	}
 	if err != nil {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: err}
@@ -216,7 +236,11 @@ func (f *FS) ReadLinkAs(name string, c vfs.Caller) (string, error) {
 	case n.link == nil:
 		return "", &fs.PathError{Op: "readlink", Path: name, Err: fs.ErrInvalid}
 	}
-	return n.link(c), nil
+	target, err := n.link(c)
+	if err != nil {
+		return "", &fs.PathError{Op: "readlink", Path: name, Err: err}
+	}
+	return target, nil
 }
 
 // sorted is names in fs.ReadDir's order.

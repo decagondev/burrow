@@ -63,3 +63,16 @@ type Linker interface {
 	Link(oldname, newname string) error
 	Lchown(name string, uid, gid uint32) error
 }
+
+// Space is a file system's size in bytes (statfs, df; W23-S03): the whole,
+// what is free, and what files use. A file system only memory limits
+// (a writable memfs) reports Total 0, and the kernel sizes it as Linux
+// sizes tmpfs.
+type Space struct{ Total, Free, Used uint64 }
+
+// Sizer is a file system that knows its Space; ReadOnly says whether it
+// takes writes at all (the mount table's ro or rw).
+type Sizer interface {
+	Space() Space
+	ReadOnly() bool
+}

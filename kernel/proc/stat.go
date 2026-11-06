@@ -53,6 +53,18 @@ func statBuf(name string, info fs.FileInfo) []byte {
 	return st
 }
 
+// withDev sets st_dev to a number for the mount holding name, so that
+// programs tell file systems apart (df, find -xdev; W23-S03): an anonymous
+// device, major 0, as Linux gives tmpfs and procfs.
+func (p *Process) withDev(st []byte, name string) []byte {
+	if m, ok := p.sys.files.(interface{ MountOf(string) string }); ok {
+		h := fnv.New32a()
+		h.Write([]byte(m.MountOf(name)))
+		binary.LittleEndian.PutUint64(st[0:], uint64(h.Sum32()%0xFFFF+1)) // st_dev
+	}
+	return st
+}
+
 func unixMode(m fs.FileMode) uint64 {
 	t := uint64(syscall.S_IFREG)
 	switch {
@@ -88,13 +100,13 @@ func (p *Process) fdStat(fd uint64) ([]byte, int64) {
 		return nil, -int64(syscall.EBADF)
 	}
 	if f.console != nil {
-		return statBuf("dev/console", consoleInfo{}), 0
+		return p.withDev(statBuf("dev/console", consoleInfo{}), "dev/console"), 0
 	}
 	info, err := f.f.Stat()
 	if err != nil {
 		return nil, errno(err)
 	}
-	return statBuf(f.path, info), 0
+	return p.withDev(statBuf(f.path, info), f.path), 0
 }
 
 // statOf is struct stat for name relative to dirfd; with AT_EMPTY_PATH and
@@ -117,7 +129,7 @@ func (p *Process) statOf(dirfd, nameVA, flags uint64) ([]byte, int64) {
 	if err != nil {
 		return nil, errno(err)
 	}
-	return statBuf(name, info), 0
+	return p.withDev(statBuf(name, info), name), 0
 }
 
 func (p *Process) copyStat(st []byte, e int64, bufVA uint64) int64 {

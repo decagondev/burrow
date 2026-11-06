@@ -3,7 +3,8 @@
  * a zombie child's entries and a reaped one's absence; the listing; uptime,
  * loadavg, meminfo, cpuinfo, version and sys/kernel against the system calls
  * that say the same; CPU time (W23-S02) from times, getrusage, wait4's rusage,
- * /proc/self/stat and /proc/stat against a busy loop. Every check holds on Linux too: `make ports-smoke` runs
+ * /proc/self/stat and /proc/stat against a busy loop; descriptors, links,
+ * maps, mounts, statfs and ttyname (W23-S03). Every check holds on Linux too: `make ports-smoke` runs
  * this binary on the host first. Run it with arguments to check cmdline.
  * Prints "proctest: <name> ok" per check, then "proctest: ok"; a failed check
  * prints FAIL. Never checks numbers that differ between machines.
@@ -17,6 +18,8 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
+#include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <sys/times.h>
 #include <sys/utsname.h>
@@ -203,11 +206,50 @@ static void cpu_times(void) {
     check("proc-stat-grows", u1 >= u0 + 5);
 }
 
+static int readlinkIs(const char *path, const char *want, int prefix) {
+    char got[256] = {0};
+    ssize_t n = readlink(path, got, sizeof got - 1);
+    return n > 0 && (prefix ? !strncmp(got, want, strlen(want)) : !strcmp(got, want));
+}
+
+static void descriptors(void) {
+    int p[2];
+    pipe(p);
+    char path[64], a[64] = {0}, b[64] = {0};
+    snprintf(path, sizeof path, "/proc/self/fd/%d", p[0]);
+    readlink(path, a, sizeof a - 1);
+    snprintf(path, sizeof path, "/proc/self/fd/%d", p[1]);
+    readlink(path, b, sizeof b - 1);
+    check("fd-pipe", !strncmp(a, "pipe:[", 6) && !strcmp(a, b));
+    int w = open(path, O_WRONLY); /* the same pipe */
+    char c = 0;
+    check("fd-reopen", w >= 0 && write(w, "x", 1) == 1 && read(p[0], &c, 1) == 1 && c == 'x');
+    close(w); close(p[0]); close(p[1]);
+    char cwd[256];
+    check("exe-cwd", readlinkIs("/proc/self/exe", "/", 1) && strstr(realpath("/proc/self/exe", path) ? path : "", "proctest") &&
+                         getcwd(cwd, sizeof cwd) && readlinkIs("/proc/self/cwd", cwd, 0) && readlinkIs("/proc/self/root", "/", 0));
+    int f = open("/proc/version", O_RDONLY);
+    read(f, a, 5);
+    snprintf(path, sizeof path, "/proc/self/fdinfo/%d", f);
+    check("fdinfo", slurp(path) > 0 && !strncmp(buf, "pos:\t5\n", 7));
+    close(f);
+    long top = syscall(SYS_brk, 0);
+    syscall(SYS_brk, top + 65536); /* the heap grows: a [heap] line */
+    check("maps", slurp("/proc/self/maps") > 0 && strstr(buf, "[stack]") && strstr(buf, "proctest") && strstr(buf, "[heap]"));
+    check("mounts", slurp("/proc/mounts") > 0 && strstr(buf, " / ") && readlinkIs("/proc/mounts", "self/mounts", 0));
+    struct statfs sf;
+    check("statfs", statfs("/", &sf) == 0 && sf.f_blocks > 0 && sf.f_bsize > 0 && statfs("/tmp", &sf) == 0 && sf.f_blocks > 0);
+    char *t = isatty(0) ? ttyname(0) : "(not a tty)";
+    printf("proctest: stdin is %s\n", t ? t : "nothing");
+    check("ttyname", t != 0);
+}
+
 int main(int argc, char **argv, char **envp) {
     self(argc, argv, envp);
     others();
     system_files();
     cpu_times();
+    descriptors();
     printf("proctest: %s\n", failures ? "FAIL" : "ok");
     return failures != 0;
 }

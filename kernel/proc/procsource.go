@@ -79,12 +79,18 @@ func (s *System) Process(pid int) (procfs.Proc, bool) {
 		out.SigPending |= p.main.pending
 	}
 	out.SigIgnored, out.SigCaught = p.sigSets()
-	mem, ctty := p.mem, p.ctty
+	mem, ctty, cwd, brkStart, brk := p.mem, p.ctty, p.cwd, p.brkStart, p.brk
 	p.mu.Unlock()
+	if !out.Kernel {
+		out.Exe, out.Cwd = p.Path, cwd
+	}
 	if mem != nil && out.State != 'Z' {
 		out.SizeBytes, out.RSSBytes = mem.usage()
+		out.Maps = mem.maps(out.Exe, brkStart, brk)
 	}
-	out.FDs = p.fds.count()
+	if out.State != 'Z' {
+		out.Files = p.fds.snapshot()
+	}
 	out.TTY, out.TPGID = s.ttyOf(ctty)
 	own := p.cpu()
 	kids, _ := p.childTimes()
@@ -179,13 +185,6 @@ func (m *Mem) usage() (size, rss uint64) {
 		}
 	}
 	return size, rss
-}
-
-// count is how many descriptors are open.
-func (t *fdTable) count() int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return len(t.fds)
 }
 
 // Uptime is the time since boot.

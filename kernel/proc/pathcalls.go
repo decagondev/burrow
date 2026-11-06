@@ -43,6 +43,10 @@ func sysOpenatFn(p *Process, a [6]uint64) (int64, bool) {
 // /dev/shm are not files of the tree and are not checked).
 func (p *Process) openAt(dirfd, nameVA uint64, flags int, mode uint32) int64 {
 	follow := flags&oNofollow == 0 && flags&(oCreat|oExcl) != oCreat|oExcl // O_EXCL creates the link's own name
+	// /proc/<pid>/fd/N of a pipe, socket or the like: the same description (W23-S03)
+	if res, done := p.openProcFD(dirfd, nameVA, flags); done {
+		return res
+	}
 	name, err := p.atFollow(dirfd, nameVA, follow)
 	if err != nil {
 		return errno(err)

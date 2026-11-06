@@ -41,8 +41,12 @@ type mount struct {
 	kind  string
 }
 
-// MountInfo describes one mount, for `mounts`.
-type MountInfo struct{ Point, Kind string }
+// MountInfo describes one mount, for `mounts` and /proc/mounts (ReadOnly
+// since W23-S03: a file system that cannot be written, or says it is not).
+type MountInfo struct {
+	Point, Kind string
+	ReadOnly    bool
+}
 
 func New() *VFS { return &VFS{now: time.Now} }
 
@@ -94,7 +98,7 @@ func (v *VFS) Mounts() []MountInfo {
 	defer v.mu.RUnlock()
 	out := make([]MountInfo, len(v.mounts))
 	for i, m := range v.mounts {
-		out[len(out)-1-i] = MountInfo{"/" + strings.TrimPrefix(m.point, "."), m.kind}
+		out[len(out)-1-i] = MountInfo{"/" + strings.TrimPrefix(m.point, "."), m.kind, readOnly(m.fsys)}
 	}
 	return out
 }

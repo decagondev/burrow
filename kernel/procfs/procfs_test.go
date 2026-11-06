@@ -1,8 +1,10 @@
 package procfs
 
 import (
+	"errors"
 	"io/fs"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -23,7 +25,10 @@ func newFake() *fake {
 			Start: 1500 * time.Millisecond, UID: [4]uint32{1000, 1000, 1000, 1000}, GID: [4]uint32{100, 100, 100, 100},
 			Groups: []uint32{100, 10}, Umask: 0o022, SizeBytes: 8 << 20, RSSBytes: 64 << 10, SigBlocked: 1 << 1, BrkStart: 0x404000,
 			User: 2500 * time.Millisecond, Sys: 300 * time.Millisecond, ChildUser: time.Second, ChildSys: 20 * time.Millisecond,
-			Tasks: []Task{{TID: 7, State: 'R', User: 2 * time.Second, Sys: 300 * time.Millisecond}, {TID: 9, State: 'S', User: 500 * time.Millisecond}}},
+			Tasks: []Task{{TID: 7, State: 'R', User: 2 * time.Second, Sys: 300 * time.Millisecond}, {TID: 9, State: 'S', User: 500 * time.Millisecond}},
+			Files: []FD{{Num: 0, Target: "/dev/tty1", Flags: 2}, {Num: 1, Target: "pipe:[42]", Flags: 1}, {Num: 3, Target: "/etc/motd", Pos: 6}},
+			Exe:   "/bin/sh", Cwd: "/tmp",
+			Maps: []Map{{Start: 0x400000, End: 0x401000, Perms: "r-xp", Name: "/bin/sh"}, {Start: 0x7fff0000, End: 0x7fff1000, Perms: "rw-p", Name: "[stack]"}}},
 	}}
 }
 
@@ -41,6 +46,13 @@ func (f *fake) CPUs() []CPUTime {
 	return []CPUTime{{User: 2 * time.Second, Sys: time.Second, Idle: 10 * time.Second, Switches: 40},
 		{User: time.Second, Sys: 500 * time.Millisecond, Idle: 20 * time.Second, Switches: 2}}
 }
+func (f *fake) Mounts() []Mount {
+	return []Mount{{"tarfs", "/", "tarfs", true}, {"ramfs", "/tmp", "ramfs", false}}
+}
+
+// MayTrace: a process traces itself; pid 1 (root) traces anyone.
+func (f *fake) MayTrace(c vfs.Caller, pid int) bool { return c.PID == pid || c.PID == 1 }
+
 func (f *fake) Uname() Uname {
 	return Uname{Sys: "Burrow", Node: "burrow", Release: "0.10", Version: "#1 Wave 10", Domain: "(none)"}
 }
@@ -214,5 +226,37 @@ func TestStatAndTasks(t *testing.T) {
 	}
 	if _, err := f.Open("7/task/8/stat"); err == nil {
 		t.Error("a thread nobody has")
+	}
+}
+
+func TestDescriptorsAndLinks(t *testing.T) {
+	f := testFS()
+	entries, err := fs.ReadDir(f, "7/fd")
+	if err != nil || len(entries) != 3 || entries[2].Name() != "3" {
+		t.Fatalf("fd/ = %v, %v", entries, err)
+	}
+	if info, _ := f.Lstat("7/fd"); info.Mode().Perm() != 0o500 {
+		t.Errorf("fd/ mode %v", info.Mode())
+	}
+	for name, want := range map[string]string{"7/fd/0": "/dev/tty1", "7/fd/1": "pipe:[42]", "7/exe": "/bin/sh", "7/cwd": "/tmp", "7/root": "/"} {
+		if got, err := f.ReadLinkAs(name, vfs.Caller{PID: 7}); err != nil || got != want {
+			t.Errorf("%s = %q, %v; want %q", name, got, err, want)
+		}
+	}
+	if _, err := f.ReadLinkAs("7/fd/0", vfs.Caller{PID: 99}); !errors.Is(err, syscall.EACCES) {
+		t.Errorf("another user's fd/0: %v", err)
+	}
+	if got := read(t, f, "7/fdinfo/3"); got != "pos:\t6\nflags:\t00\nmnt_id:\t0\n" {
+		t.Errorf("fdinfo/3 = %q", got)
+	}
+	m := read(t, f, "7/maps")
+	if !strings.HasPrefix(m, "00400000-00401000 r-xp 00000000 00:00 0 ") || !strings.HasSuffix(m, " [stack]\n") {
+		t.Errorf("maps =\n%s", m)
+	}
+	if got, _ := f.ReadLink("mounts"); got != "self/mounts" {
+		t.Errorf("mounts -> %q", got)
+	}
+	if got := read(t, f, "7/mounts"); got != "tarfs / tarfs ro 0 0\nramfs /tmp ramfs rw 0 0\n" {
+		t.Errorf("mounts = %q", got)
 	}
 }

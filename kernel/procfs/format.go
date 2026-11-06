@@ -21,6 +21,8 @@ var pidFiles = []struct {
 	{"cmdline", fileMode, func(_ *FS, p *Proc) []byte { return nulList(p.Cmdline) }},
 	{"comm", fileMode, func(_ *FS, p *Proc) []byte { return []byte(p.Comm + "\n") }},
 	{"environ", 0o400, func(_ *FS, p *Proc) []byte { return nulList(p.Environ) }},
+	{"maps", fileMode, func(_ *FS, p *Proc) []byte { return []byte(maps(p)) }},
+	{"mounts", fileMode, func(f *FS, _ *Proc) []byte { return []byte(mounts(f.src.Mounts())) }},
 	{"stat", fileMode, func(_ *FS, p *Proc) []byte { return []byte(statLine(p)) }},
 	{"statm", fileMode, func(_ *FS, p *Proc) []byte { return []byte(statm(p)) }},
 	{"status", fileMode, func(f *FS, p *Proc) []byte { return []byte(status(p, f.st.CPUs)) }},
@@ -115,7 +117,7 @@ func status(p *Proc, cpus int) string {
 	line("TracerPid", "0")
 	line("Uid", "%d\t%d\t%d\t%d", p.UID[0], p.UID[1], p.UID[2], p.UID[3])
 	line("Gid", "%d\t%d\t%d\t%d", p.GID[0], p.GID[1], p.GID[2], p.GID[3])
-	line("FDSize", "%d", max(64, p.FDs))
+	line("FDSize", "%d", max(64, len(p.Files)))
 	var groups strings.Builder
 	for _, g := range p.Groups {
 		fmt.Fprintf(&groups, "%d ", g)

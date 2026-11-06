@@ -67,7 +67,7 @@ func (s *System) stdio() *fdTable {
 		return newFDTable(s.console)
 	}
 	f := newFile(ttyFile{t, nil}, nil)
-	f.path, f.flags = "dev/tty", oRDWR
+	f.path, f.flags = "dev/tty1", oRDWR // the console's own name: what ttyname finds (W23-S03)
 	f.refs.Store(3)
 	return &fdTable{fds: map[int]fd{0: {file: f}, 1: {file: f}, 2: {file: f}}}
 }

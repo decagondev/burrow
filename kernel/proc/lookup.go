@@ -105,6 +105,9 @@ func (p *Process) resolvePath(name string, follow bool) (string, error) {
 
 // statPath describes name, a final link itself unless follow is set.
 func (p *Process) statPath(name string, follow bool) (fs.FileInfo, error) {
+	if isPTYPath(name) { // a table, not the tree (procfd.go, W23-S03)
+		return p.sys.ptyInfo(name)
+	}
 	if rl, ok := p.sys.files.(fs.ReadLinkFS); ok && !follow {
 		return rl.Lstat(name)
 	}

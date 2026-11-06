@@ -7,6 +7,8 @@ threads: ok
 burrow> run /bin/gohello
 gohello: 8 goroutines squared 1..100: 338350 (want 338350)
 gohello: 50 goroutines counted 50000 (want 50000)
+# W23-S03: os.Executable reads /proc/self/exe
+gohello: executable "/bin/gohello"
 gohello: ok
 burrow> run /bin/startup
 startup: select-empty-pipe ok
@@ -230,5 +232,9 @@ proctest: times ok
 proctest: wait4-rusage ok
 proctest: children ok
 proctest: proc-stat-grows ok
+proctest: fd-reopen ok
+proctest: maps ok
+proctest: stdin is /dev/tty1
+proctest: ttyname ok
 proctest: ok
 burrow> poweroff

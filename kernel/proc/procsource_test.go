@@ -23,8 +23,11 @@ func TestProcSnapshot(t *testing.T) {
 		strings.Join(s.Cmdline, "|") != "prog|-x|two words" || strings.Join(s.Environ, "|") != "A=1|HOME=/" {
 		t.Fatalf("snapshot = %+v", s)
 	}
-	if s.SizeBytes < s.RSSBytes || s.RSSBytes == 0 || s.FDs != 3 {
-		t.Errorf("size %d rss %d fds %d", s.SizeBytes, s.RSSBytes, s.FDs)
+	if s.SizeBytes < s.RSSBytes || s.RSSBytes == 0 || len(s.Files) != 3 || s.Files[2].Target != "/dev/console" {
+		t.Errorf("size %d rss %d fds %+v", s.SizeBytes, s.RSSBytes, s.Files)
+	}
+	if s.Exe != "/bin/prog" || s.Cwd != "/" || len(s.Maps) < 2 || s.Maps[0].Name != "/bin/prog" || s.Maps[len(s.Maps)-1].Name != "[stack]" {
+		t.Errorf("exe %q cwd %q maps %+v", s.Exe, s.Cwd, s.Maps)
 	}
 	if init, ok := r.sys.Process(1); !ok || !init.Kernel || init.Comm != "init" || init.State != 'S' {
 		t.Errorf("init = %+v", init)

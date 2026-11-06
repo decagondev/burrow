@@ -58,6 +58,9 @@ sleep 1
 type echo desktop: two in $(pwd) > /dev/tty1
 key ret
 wait desktop: two in /home
+type echo desktop: second is $(tty) > /dev/tty1
+key ret
+wait desktop: second is
 abs 800 400
 sleep 1
 click left
@@ -65,6 +68,9 @@ sleep 1
 type echo desktop: focus on ${ONE:-the second} > /dev/tty1
 key ret
 wait desktop: focus on first
+type echo desktop: first is $(tty) > /dev/tty1
+key ret
+wait desktop: first is
 key alt-p
 wait xfocus: dmenu
 sleep 1

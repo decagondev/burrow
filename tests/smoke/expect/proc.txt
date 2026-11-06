@@ -20,5 +20,10 @@ spin computed for 2 s
 # top -b -n 1 | grep '[/]bin/spin' (the pattern does not match its own command line)
 /bin/spin
 real	0m 1.
+# W23-S03: tty, the console's fd links, df on two file systems, mount's list
+/dev/tty1
+% /tmp
+% /
+proc on /proc type proc
 spinning gone
 burrow> poweroff

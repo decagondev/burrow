@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S03 Descriptors, links and mounts
+
+**Did:** procfs `fd/`, `fdinfo/`, `exe`, `cwd`, `root`, `maps`, `mounts` (and `/proc/mounts` as Linux links it), readable only by the process's user or root; opening `fd/N` reopens a path or shares a pipe's description. musl's `ttyname` works: the console's stdio is named `/dev/tty1` and `/dev/pts/N` can be stat'ed. `statfs` reports sizes from the file systems (`fsattr.Space`), and `stat` gives every mount its own `st_dev`. busybox `mount`, `df`, `fuser`, `lsof`; Go's `os.Executable`; each st on the desktop says which terminal it is.
+
+**Surprise:** `df /tmp` printed the root file system: busybox finds a path's mount by `st_dev`, and every file had device 0. And `ttyname` is a check, not a lookup: musl stats the link's target and compares it with `fstat` of the descriptor, so the console's descriptions needed a name that `stat` agrees with, and the pseudo-terminals a `stat` at all.
+
+**Next:** W23-S04: virtio-blk.
+
 ## 2026-11-06 — W23-S02 CPU time and top
 
 **Did:** the nucleus counts every thread's user and kernel time and every CPU's user, kernel and idle time (`nucleus/cputime.c`), charged at switches, ticks and ring crossings; `nu_thread_times` and `nu_cpu_times`; `kt_cputime`. The Go kernel keeps the time of threads that end, fixes a process's at exit and gives it to the parent that reaps it: `times`, `getrusage`, `wait4`'s and `waitid`'s rusage, `/proc/stat`, the times in every `stat`, `task/<tid>/`. busybox `top` and `time`; `proc-smoke` watches a spinning program's `utime` grow.

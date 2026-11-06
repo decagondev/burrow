@@ -6,7 +6,11 @@
 // one snapshot. Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md.
 package procfs
 
-import "time"
+import (
+	"time"
+
+	"burrow/kernel/vfs"
+)
 
 // Source is what /proc shows: the process table and the system's numbers.
 type Source interface {
@@ -17,6 +21,10 @@ type Source interface {
 	Memory() Memory
 	Uname() Uname
 	CPUs() []CPUTime // each online CPU's time (W23-S02)
+	Mounts() []Mount // the mount table (W23-S03)
+	// MayTrace says whether c may read pid's descriptors and links: the
+	// same user, or root (W23-S03).
+	MayTrace(c vfs.Caller, pid int) bool
 }
 
 // Proc is one process as /proc/<pid>/ shows it.
@@ -38,7 +46,9 @@ type Proc struct {
 	SigIgnored           uint64
 	SigCaught            uint64
 	BrkStart, Brk        uint64
-	FDs                  int // open descriptors (status's FDSize is a capacity)
+	Files                []FD   // open descriptors (W23-S03)
+	Exe, Cwd             string // the program's path and the working directory
+	Maps                 []Map
 	Kernel               bool
 	User, Sys            time.Duration // CPU time (W23-S02)
 	ChildUser, ChildSys  time.Duration // its reaped children's

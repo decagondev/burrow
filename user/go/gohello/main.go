@@ -97,6 +97,8 @@ func main() {
 	check(m.NumGC > 0 && len(keep) == 10, "GC: %d cycles, %d MiB allocated in all", m.NumGC, m.TotalAlloc>>20)
 
 	// files through os
+	exe, err := os.Executable() // /proc/self/exe (W23-S03)
+	check(err == nil && strings.HasSuffix(exe, "/gohello"), "executable %q (%v)", exe, err)
 	motd, err := os.ReadFile("/etc/motd")
 	check(err == nil && len(motd) > 0, "read /etc/motd: %d bytes (%v)", len(motd), err)
 	host, _ := os.Hostname()

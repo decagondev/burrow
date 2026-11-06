@@ -3,9 +3,10 @@ package proc
 // fscalls.go - what programs ask about files beyond stat (W16-S02, from
 // the X census: fontconfig asks both): posix_fadvise (fadvise64), which has
 // nothing to tune and is accepted for any open file, and statfs/fstatfs,
-// which name the file system holding a path with Linux's magic number. The
-// sizes are not tracked (blocks and inodes read as 0), as for /proc on
-// Linux. link and linkat moved to linkcalls.go when Burrow got hard links
+// which name the file system holding a path with Linux's magic number and,
+// since W23-S03, its size in blocks when the file system knows it (FAT,
+// ext2, the initrd; a writable ramfs is sized as Linux sizes tmpfs, half
+// the RAM); devfs and /proc read as 0, as /proc does on Linux. link and linkat moved to linkcalls.go when Burrow got hard links
 // (W19-S05); on FAT they still say EPERM, as vfat does, which sends
 // fontconfig's cache lock to its mkdir fallback there.
 // Docs: docs/02-architecture/POSIX_COVERAGE.md.
@@ -13,6 +14,8 @@ package proc
 import (
 	"encoding/binary"
 	"syscall"
+
+	"burrow/kernel/fsattr"
 )
 
 const (
@@ -26,22 +29,50 @@ var fsMagic = map[string]uint64{
 	"ramfs": 0x01021994, // TMPFS_MAGIC
 	"devfs": 0x01021994, // devtmpfs reports TMPFS_MAGIC
 	"fat32": 0x4d44,     // MSDOS_SUPER_MAGIC
+	"ext2":  0xef53,     // EXT2_SUPER_MAGIC
+	"proc":  0x9fa0,     // PROC_SUPER_MAGIC
+}
+
+type spaceFS interface {
+	Space(name string) (fsattr.Space, bool)
+}
+
+// space is the size of the file system holding name, a ramfs sized as tmpfs.
+func (p *Process) space(name string) fsattr.Space {
+	sp, ok := p.sys.files.(spaceFS)
+	if !ok {
+		return fsattr.Space{}
+	}
+	s, _ := sp.Space(name)
+	if s.Total == 0 && p.kindOf(name) == "ramfs" {
+		total, _ := p.sys.nu.MemInfo()
+		s.Total = total / 2
+		s.Free = s.Total - min(s.Used, s.Total)
+	}
+	return s
+}
+
+func (p *Process) kindOf(name string) string {
+	if k, ok := p.sys.files.(kindFS); ok {
+		return k.KindOf(name)
+	}
+	return ""
 }
 
 type kindFS interface{ KindOf(name string) string }
 
 // statfs is struct statfs for the file system holding name.
 func (p *Process) statfs(name string) []byte {
-	kind := ""
-	if k, ok := p.sys.files.(kindFS); ok {
-		kind = k.KindOf(name)
-	}
 	b := make([]byte, statfsBytes)
 	le := binary.LittleEndian
-	le.PutUint64(b[0:], fsMagic[kind])
-	le.PutUint64(b[8:], PageSize)  // f_bsize
-	le.PutUint64(b[64:], nameMax)  // f_namelen
-	le.PutUint64(b[72:], PageSize) // f_frsize
+	le.PutUint64(b[0:], fsMagic[p.kindOf(name)])
+	s := p.space(name)
+	le.PutUint64(b[16:], s.Total/PageSize) // f_blocks
+	le.PutUint64(b[24:], s.Free/PageSize)  // f_bfree
+	le.PutUint64(b[32:], s.Free/PageSize)  // f_bavail
+	le.PutUint64(b[8:], PageSize)          // f_bsize
+	le.PutUint64(b[64:], nameMax)          // f_namelen
+	le.PutUint64(b[72:], PageSize)         // f_frsize
 	return b
 }
 
