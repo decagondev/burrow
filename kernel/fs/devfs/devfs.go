@@ -79,6 +79,9 @@ func (f *FS) Open(name string) (fs.File, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	if e, ok := f.devs[name]; ok {
+		if e.dev == nil { // a socket node (sockets.go): reached with connect, not open
+			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+		}
 		d := e.dev
 		if o, isO := d.(Opener); isO {
 			h, err := o.Open()
@@ -137,9 +140,8 @@ func (f *FS) Mkdir(name string, _ fs.FileMode, _ time.Time) error {
 	return &fs.PathError{Op: "mkdir", Path: name, Err: fs.ErrPermission}
 }
 
-func (f *FS) Remove(name string) error {
-	return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrPermission}
-}
+// Remove takes away a socket node (W23-S06); devices stay.
+func (f *FS) Remove(name string) error { return f.removeSocket(name) }
 
 type info struct {
 	name string

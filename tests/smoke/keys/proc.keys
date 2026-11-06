@@ -4,7 +4,10 @@
 # in /proc/<pid>/stat grows by most of 2 s of ticks, top lists it, time
 # reports a second of real time. W23-S03: tty names the console (musl's
 # ttyname over /proc/self/fd), ls -l shows the links, df sizes /tmp and /,
-# mount lists /proc. Expect file: tests/smoke/expect/proc.txt.
+# mount lists /proc. W23-S06: syslogd on /dev/log (a named datagram
+# socket) writes logger's line to a file, then to its circular buffer
+# (SysV shared memory and semaphores), where logread finds it.
+# Expect file: tests/smoke/expect/proc.txt.
 wait burrow>
 type run /bin/busybox sh
 key ret
@@ -40,6 +43,13 @@ key ret
 type df /tmp /; mount | grep proc
 key ret
 wait type proc
+type syslogd -O /tmp/messages; logger -t smoke first'' message; sleep 1; grep -c 'smoke: first message' /tmp/messages
+key ret
+type killall syslogd; sleep 1; syslogd -C16; logger -t smoke second'' message; sleep 1; logread | grep -o 'smoke: second message'
+key ret
+wait smoke: second message
+type killall syslogd
+key ret
 type pkill spin; sleep 1; pidof spin || echo spin'ning' gone
 key ret
 wait spinning gone

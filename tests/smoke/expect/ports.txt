@@ -94,6 +94,11 @@ socknames: rights-send ok
 socknames: rights-recv ok
 socknames: rights-ctrunc ok
 socknames: credentials ok
+socknames: dgram-bind ok
+socknames: dgram-recvfrom ok
+socknames: dgram-boundaries ok
+socknames: dgram-refusals ok
+socknames: dgram-closed ok
 socknames: ok
 burrow> run /bin/ptytest
 ptytest: winsize-onlcr ok

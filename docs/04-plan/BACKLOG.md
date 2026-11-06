@@ -133,7 +133,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E14.F04 As a user, I want a real-time clock, so that files and programs see the real date.
 - [x] E14.F05 As a porter, I want `mmap` of regular files, so that fonts map and a dynamic loader becomes possible.
 - [x] E14.F06 As a porter, I want `AF_UNIX` sockets (pairs, names, abstract names, `SCM_RIGHTS`), so that an X server and its clients can talk.
-- [ ] E14.F08 As a porter, I want named datagram Unix sockets (`bind`, `connect` and `sendto` with an address on `SOCK_DGRAM`), so that `syslog` and other datagram clients reach their servers (W14-S07 left them `-EOPNOTSUPP`). [W23]
+- [x] E14.F08 As a porter, I want named datagram Unix sockets (`bind`, `connect` and `sendto` with an address on `SOCK_DGRAM`), so that `syslog` and other datagram clients reach their servers (W14-S07 left them `-EOPNOTSUPP`). [W23]
 - [x] E14.F07 As a porter, I want the `KD*`/`VT_*` terminal calls, so that graphics programs can take and give back the screen.
 
 ## E15 Qt
@@ -187,7 +187,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E20.F03 As a user, I want virtio-blk disks behind `block.Device`, so that the root and home disks use QEMU's paravirtual bus. [W23]
 - [x] E20.F04 As a user, I want a virtio-net card behind `netdev.Device`, so that the network uses QEMU's paravirtual card. [W23]
 - [x] E20.F05 As a user, I want DHCP in the kernel (`eth0 dhcp` in `/etc/net.conf`), so that Burrow takes its address from the network. [W23]
-- [ ] E20.F06 As a porter, I want named datagram Unix sockets and SysV semaphores, so that `syslogd` and `logger` work (E14.F08). [W23]
+- [x] E20.F06 As a porter, I want named datagram Unix sockets and SysV semaphores, so that `syslogd` and `logger` work (E14.F08). [W23]
 - Later: `/sys` · `AF_PACKET` (`udhcpc`, `tcpdump`) · network offloads and multiqueue · MSI-X · `ptrace` and `/proc/<pid>/mem`.
 
 ## E12 Hardening & Evolution

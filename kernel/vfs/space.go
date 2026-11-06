@@ -4,7 +4,11 @@ package vfs
 // size, from the file system's fsattr.Sizer, and whether it is read-only.
 // Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md.
 
-import "burrow/kernel/fsattr"
+import (
+	"io/fs"
+
+	"burrow/kernel/fsattr"
+)
 
 // Space is the size of the file system holding name; ok is false when it
 // does not know (devfs, procfs).
@@ -24,6 +28,22 @@ func (v *VFS) MountOf(name string) string {
 		return ""
 	}
 	return m.point
+}
+
+// Stat describes name as opening it would; what cannot be opened (a socket
+// node in devfs, W23-S06) is described by its file system's own Stat.
+func (v *VFS) Stat(name string) (fs.FileInfo, error) {
+	f, err := v.Open(name)
+	if err == nil {
+		defer f.Close()
+		return f.Stat()
+	}
+	if m, rel, ok := v.resolve(name); ok && rel != "." {
+		if info, serr := fs.Stat(m.fsys, rel); serr == nil {
+			return info, nil
+		}
+	}
+	return nil, err
 }
 
 // readOnly says whether fsys takes no writes: it says so, or it is not Writable.

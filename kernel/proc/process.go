@@ -31,16 +31,17 @@ type Process struct {
 	brkStart, brk uint64
 	mmapNext      uint64
 	cwd           string
-	umask         uint32        // umask(2); applied from W19-S04
-	cred          Cred          // who it is (W19-S03, cred.go); the zero value is root
-	timers        [3]itimer     // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
-	ctty          *tty.TTY      // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
-	argv, envp    []string      // as execve gave them, for /proc/<pid>/cmdline and environ (W23-S01)
-	start         time.Duration // since boot (/proc/<pid>/stat's starttime)
-	ended         cpuTimes      // CPU time of its threads that have ended (cputime.go, W23-S02)
-	final         cpuTimes      // its own CPU time, fixed at exit before it is a zombie
-	finalRSS      uint64        // its memory at exit (wait4's ru_maxrss)
-	kids          cpuTimes      // its reaped children's CPU time, and theirs
+	umask         uint32         // umask(2); applied from W19-S04
+	cred          Cred           // who it is (W19-S03, cred.go); the zero value is root
+	timers        [3]itimer      // setitimer's ITIMER_REAL, _VIRTUAL, _PROF (itimer.go)
+	ctty          *tty.TTY       // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
+	argv, envp    []string       // as execve gave them, for /proc/<pid>/cmdline and environ (W23-S01)
+	start         time.Duration  // since boot (/proc/<pid>/stat's starttime)
+	ended         cpuTimes       // CPU time of its threads that have ended (cputime.go, W23-S02)
+	final         cpuTimes       // its own CPU time, fixed at exit before it is a zombie
+	finalRSS      uint64         // its memory at exit (wait4's ru_maxrss)
+	kids          cpuTimes       // its reaped children's CPU time, and theirs
+	semAdj        map[semKey]int // SEM_UNDO's adjustments, applied at exit (sem.go, W23-S06)
 	kidsRSS       uint64
 
 	children   map[int]*Process // live and zombie (s.mu)
@@ -131,6 +132,7 @@ func (p *Process) exit(code, sig int, reason string) {
 	s.futexDrop(p.mem)
 	s.releaseVT(p.PID) // a crashed graphics program gives the console back (W14-S08)
 	p.stopTimers()
+	p.semExit() // SEM_UNDO (W23-S06)
 	_, p.finalRSS = p.mem.usage()
 	if err := p.mem.Close(); err != nil {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)

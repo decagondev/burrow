@@ -129,12 +129,12 @@ func (p *Process) socket(fd uint64) (*sockEnd, *file, int64) {
 
 // sendBytes sends b, and fds with it, on fd with flags; EPIPE raises
 // SIGPIPE unless MSG_NOSIGNAL. It owns fds.
-func (t *Thread) sendBytes(fd uint64, b []byte, fds []*file, flags uint64, toVA uint64) int64 {
+func (t *Thread) sendBytes(fd uint64, b []byte, fds []*file, flags uint64, toVA, toLen uint64) int64 {
 	s, f, e := t.p.socket(fd)
 	switch {
 	case e < 0:
-	case s.pair() == nil && toVA != 0:
-		e = -int64(syscall.EOPNOTSUPP) // named datagram sockets are not supported
+	case s.unpairedDgram(): // to a name (W23-S06)
+		return t.sendDgram(s, f, b, fds, flags, toVA, toLen)
 	case s.pair() == nil:
 		e = -int64(syscall.ENOTCONN)
 	case toVA != 0:
@@ -148,6 +148,21 @@ func (t *Thread) sendBytes(fd uint64, b []byte, fds []*file, flags uint64, toVA 
 	if err == syscall.EPIPE && flags&msgNosignal == 0 {
 		t.send(sigPIPE, sigInfo{signo: sigPIPE, code: siKernel})
 	}
+	if err != nil {
+		return errno(err)
+	}
+	return int64(n)
+}
+
+// sendDgram sends one datagram from the unconnected s to the address at
+// toVA, or to its default peer.
+func (t *Thread) sendDgram(s *sockEnd, f *file, b []byte, fds []*file, flags, toVA, toLen uint64) int64 {
+	dst, e := t.p.dgramTarget(s, toVA, toLen)
+	if e < 0 {
+		unrefAll(fds)
+		return e
+	}
+	n, err := s.sendTo(dst, b, fds, t.p.peerCred(), f.flags&oNonblock == 0 && flags&msgDontwait == 0, t.cancel())
 	if err != nil {
 		return errno(err)
 	}
@@ -169,7 +184,7 @@ func (t *Thread) recvBytes(fd, n, flags uint64) (received, int64) {
 	switch {
 	case e < 0:
 		return received{}, e
-	case s.pair() == nil:
+	case s.pair() == nil && s.typ != sockDgram: // a datagram socket reads its mailbox
 		return received{}, -int64(syscall.EINVAL)
 	}
 	b := make([]byte, min(n, maxIO))
@@ -190,7 +205,7 @@ func sysSendtoFn(t *Thread, a [6]uint64) (int64, bool) {
 	if is, f := t.p.inetFD(a[0]); is != nil {
 		return ok(t.inetSend(is, f, b, a[3], a[4], a[5]))
 	}
-	return ok(t.sendBytes(a[0], b, nil, a[3], a[4]))
+	return ok(t.sendBytes(a[0], b, nil, a[3], a[4], a[5]))
 }
 
 // recvfrom(fd, buf, len, flags, addr, addrlen *).
@@ -206,7 +221,7 @@ func sysRecvfromFn(t *Thread, a [6]uint64) (int64, bool) {
 	if err := t.p.mem.CopyOut(a[1], r.b); err != nil {
 		return ok(errno(err))
 	}
-	if e := t.p.putPeerName(a[0], a[4], a[5]); e < 0 {
+	if e := t.p.putPeerName(a[0], r, a[4], a[5]); e < 0 {
 		return ok(e)
 	}
 	if a[3]&msgTrunc != 0 {
@@ -215,8 +230,9 @@ func sysRecvfromFn(t *Thread, a [6]uint64) (int64, bool) {
 	return ok(int64(len(r.b)))
 }
 
-// putPeerName writes fd's peer address at va (recvfrom).
-func (p *Process) putPeerName(fd, va, lenVA uint64) int64 {
+// putPeerName writes the address r came from at va (recvfrom, recvmsg):
+// the peer's, or for an unconnected datagram socket the sender's (W23-S06).
+func (p *Process) putPeerName(fd uint64, r received, va, lenVA uint64) int64 {
 	s, _, e := p.socket(fd)
 	if e < 0 {
 		return e
@@ -224,6 +240,12 @@ func (p *Process) putPeerName(fd, va, lenVA uint64) int64 {
 	s.mu.Lock()
 	name := s.peerName
 	s.mu.Unlock()
+	if s.unpairedDgram() {
+		if r.cred.name == "" {
+			return p.putAddr(nil, va, lenVA) // an unnamed sender: length 0, as Linux
+		}
+		name = r.cred.name
+	}
 	return p.putSockaddr(name, va, lenVA)
 }
 

@@ -25,10 +25,10 @@ func sysConnectFn(t *Thread, a [6]uint64) (int64, bool) {
 	switch {
 	case e < 0:
 		return ok(e)
+	case s.typ == sockDgram: // a default peer, not a connection (W23-S06)
+		return ok(p.connectDgram(s, name, key))
 	case name == "":
 		return ok(-int64(syscall.EINVAL))
-	case s.typ == sockDgram:
-		return ok(-int64(syscall.EOPNOTSUPP))
 	}
 	s.mu.Lock()
 	connected, listening := s.pair() != nil, s.lis != nil

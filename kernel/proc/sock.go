@@ -58,9 +58,11 @@ type sockEnd struct {
 	peerName string
 	peerCred peerCred // SO_PEERCRED
 	passcred bool
-	lis      *listenQ // listening
+	lis      *listenQ  // listening
+	box      *sockPair // an unconnected datagram socket's mailbox (sockdgram.go, W23-S06)
+	dest     string    // its default peer's table key (connect)
 
-	// Guarded by the pair's lock once connected.
+	// Guarded by the pair's lock once connected (by the mailbox's, W23-S06).
 	side   int
 	queue  []chunk
 	queued int
@@ -114,7 +116,7 @@ func unrefAll(fds []*file) {
 // peer's sending side is shut it returns 0. waitAll keeps a stream read
 // going until b is full.
 func (e *sockEnd) recv(b []byte, peek, block, waitAll bool, cancel <-chan struct{}) (n, full int, fds []*file, cred peerCred, err error) {
-	sp := e.pair()
+	sp := e.inbox()
 	for {
 		sp.mu.Lock()
 		if e.err != 0 && n == 0 {

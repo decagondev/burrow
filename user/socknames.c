@@ -4,7 +4,9 @@
  * forked client talk over a path name in /tmp and over an abstract name;
  * a pipe end travels through SCM_RIGHTS; SO_PASSCRED brings
  * SCM_CREDENTIALS; the refusals (EADDRINUSE, ENOENT after unlink,
- * ECONNREFUSED, ENXIO, EINVAL) match. Prints "socknames: <name> ok" per
+ * ECONNREFUSED, ENXIO, EINVAL) match. Named datagram sockets (W23-S06,
+ * syslog's shape): sendto a path and an abstract name, connect then send,
+ * recvfrom names the sender, ECONNREFUSED and EPROTOTYPE. Prints "socknames: <name> ok" per
  * check, then "socknames: ok"; a failure prints FAIL. Never leaves its
  * socket node behind. Docs: docs/04-plan/waves/WAVE-14-desktop-groundwork.md. */
 #define _GNU_SOURCE
@@ -20,6 +22,7 @@
 #include <unistd.h>
 
 #define PATH "/tmp/socknames.sock"
+#define DGRAM_PATH "/tmp/socknames.dgram"
 
 static int failures;
 
@@ -177,11 +180,56 @@ static void descriptors(void) {
     close(p[0]);
 }
 
+/* dgram_bound is a datagram socket bound to name. */
+static int dgram_bound(const char *name) {
+    struct sockaddr_un a;
+    socklen_t n = addr(&a, name);
+    int s = socket(AF_UNIX, SOCK_DGRAM, 0);
+    return bind(s, (struct sockaddr *)&a, n) == 0 ? s : -1;
+}
+
+static void datagrams(void) {
+    unlink(DGRAM_PATH);
+    int srv = dgram_bound(DGRAM_PATH), named = dgram_bound("@socknames-client");
+    struct stat st;
+    check("dgram-bind", srv >= 0 && named >= 0 && stat(DGRAM_PATH, &st) == 0 && S_ISSOCK(st.st_mode));
+    struct sockaddr_un to, from;
+    socklen_t tolen = addr(&to, DGRAM_PATH), fromlen = sizeof from;
+    char buf[64] = {0};
+    check("dgram-sendto", sendto(named, "one", 3, 0, (struct sockaddr *)&to, tolen) == 3);
+    ssize_t n = recvfrom(srv, buf, sizeof buf, 0, (struct sockaddr *)&from, &fromlen);
+    check("dgram-recvfrom", n == 3 && !memcmp(buf, "one", 3) && fromlen == offsetof(struct sockaddr_un, sun_path) + 17 &&
+                                from.sun_path[0] == 0 && !memcmp(from.sun_path + 1, "socknames-client", 16));
+    int anon = socket(AF_UNIX, SOCK_DGRAM, 0);
+    check("dgram-connect", connect(anon, (struct sockaddr *)&to, tolen) == 0 && write(anon, "two!", 4) == 4 &&
+                               send(anon, "three", 5, 0) == 5);
+    fromlen = sizeof from;
+    n = recvfrom(srv, buf, sizeof buf, 0, (struct sockaddr *)&from, &fromlen);
+    ssize_t m = recv(srv, buf + 8, sizeof buf - 8, 0);
+    check("dgram-boundaries", n == 4 && m == 5 && !memcmp(buf, "two!", 4) && !memcmp(buf + 8, "three", 5) &&
+                                  fromlen == 0); /* an unnamed sender: no address at all, as Linux says */
+    struct sockaddr_un nobody;
+    socklen_t nl = addr(&nobody, "@socknames-nobody");
+    int refused = sendto(anon, "x", 1, 0, (struct sockaddr *)&nobody, nl) == -1 && errno == ECONNREFUSED;
+    int lis = serve("@socknames-stream");
+    struct sockaddr_un sa;
+    socklen_t sl = addr(&sa, "@socknames-stream");
+    int unconnected = socket(AF_UNIX, SOCK_DGRAM, 0);
+    check("dgram-refusals", refused && sendto(unconnected, "x", 1, 0, (struct sockaddr *)&sa, sl) == -1 &&
+                                (errno == EPROTOTYPE || errno == ECONNREFUSED) &&
+                                send(unconnected, "x", 1, 0) == -1 && (errno == ENOTCONN || errno == EDESTADDRREQ));
+    close(srv);
+    check("dgram-closed", send(anon, "x", 1, 0) == -1 && errno == ECONNREFUSED);
+    close(named); close(anon); close(lis); close(unconnected);
+    unlink(DGRAM_PATH);
+}
+
 int main(void) {
     setvbuf(stdout, 0, _IONBF, 0);
     path_names();
     abstract_names();
     descriptors();
+    datagrams();
     if (failures) {
         printf("socknames: %d FAILED\n", failures);
         return 1;

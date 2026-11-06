@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S06 Named datagram sockets and syslog
+
+**Did:** named datagram Unix sockets: an unconnected datagram socket has a mailbox that any socket sends to by name, `connect` sets a default peer, `recvfrom` names the sender; socket nodes in `/dev`. SysV semaphores with `SEM_UNDO`. busybox `syslogd`, `logger` and `logread`: logger's line in syslogd's file and in its circular buffer. E14.F08, open since W14-S07, closed.
+
+**Surprise:** that busybox's syslog needed so little beyond the socket: one more SysV object, and `/dev` taking a socket node. And Linux gives an unnamed datagram sender an address length of 0, not the 2 bytes of a bare family; socknames' check said so on the host before Burrow's did.
+
+**Next:** W23-S07: M23.
+
 ## 2026-11-06 — W23-S05 virtio-net and DHCP
 
 **Did:** `drivers/virtionet`, the virtio network card as `eth0` (receive buffers offered again, transmit slots freed on the interrupt, a zeroed header, no offloads), tested on S04's fake device. A DHCP client in `kernel/netstack`: messages built and parsed, the first exchange as raw broadcast frames before the stack exists, renewal over the stack's UDP; `eth0 dhcp` in net.conf or `net=dhcp` in the kargs. `NIC=virtio` for the run targets; `virtio-smoke` runs both network smokes on virtio-net with a lease; `make net-bench` on both cards.

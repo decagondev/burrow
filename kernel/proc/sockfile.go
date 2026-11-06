@@ -15,7 +15,7 @@ import (
 )
 
 func (e *sockEnd) ReadCancel(b []byte, cancel <-chan struct{}) (int, error) {
-	if e.pair() == nil {
+	if e.pair() == nil && e.typ != sockDgram {
 		return 0, syscall.EINVAL
 	}
 	n, _, fds, _, err := e.recv(b, false, true, false, cancel)
@@ -29,6 +29,9 @@ func (e *sockEnd) WriteCancel(b []byte, cancel <-chan struct{}) (int, error) {
 
 // sendFrom is write(2) by the process cred names (write passes it: SCM_CREDENTIALS).
 func (e *sockEnd) sendFrom(b []byte, cred peerCred, cancel <-chan struct{}) (int, error) {
+	if e.unpairedDgram() { // W23-S06
+		return e.sendDefault(b, cred, cancel)
+	}
 	if e.pair() == nil {
 		return 0, syscall.ENOTCONN
 	}
@@ -62,6 +65,7 @@ func (e *sockEnd) shutdown(how int) error {
 func (e *sockEnd) Close() error {
 	e.unlisten()
 	e.sys.names.drop(e)
+	e.closeMailbox()
 	sp := e.pair()
 	if sp == nil {
 		return nil
@@ -121,6 +125,9 @@ func (e *sockEnd) Poll() (int16, <-chan struct{}) {
 }
 
 func (e *sockEnd) pollUnconnected() (int16, <-chan struct{}) {
+	if e.typ == sockDgram {
+		return e.pollMailbox()
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if q := e.lis; q != nil {
@@ -153,7 +160,8 @@ func (e *sockEnd) Ioctl(req, arg uint64, _, out func(va uint64, b []byte) error)
 		return 0, syscall.ENOTTY
 	}
 	n := 0
-	if sp := e.pair(); sp != nil {
+	if e.pair() != nil || e.typ == sockDgram {
+		sp := e.inbox()
 		sp.mu.Lock()
 		n = e.queued
 		if !e.stream() && len(e.queue) > 0 {

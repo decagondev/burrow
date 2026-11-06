@@ -40,6 +40,7 @@ type System struct {
 	hostname, domainname string              // uname's names (hostname.go; "" until set)
 	shmNames             shmTab              // /dev/shm (shm.go, W18-S03)
 	sysv                 sysvTab             // SysV shared memory segments (sysv.go, W18-S04)
+	sems                 semTab              // SysV semaphores (sem.go, W23-S06)
 	vt                   *vt.VT              // its keyboard and display modes (SetVT), or nil
 	init                 *Process            // pid 1 (kernel-side, no thread)
 	loadAvg              [3]float64          // 1, 5 and 15 minutes (procsource.go, W23-S01)

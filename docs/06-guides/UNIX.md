@@ -55,3 +55,9 @@ The root disk is an ordinary ext2 image (with QEMU stopped): `debugfs -R "cat /e
 - Record locks (`fcntl F_SETLK`) are granted and not kept; nothing on Burrow contends for one yet.
 - A program running from the disk must not be rewritten or deleted while it runs (no `ETXTBSY` yet): it reads its pages from the disk as it goes.
 - Terminals are not owned by whoever logs in, and `/dev/shm` is not checked; there is no `/proc`, so tools that look there (`ps`, `w`) are not built.
+
+## Processes and logs (W23)
+
+busybox's process tools read `/proc`: `ps`, `top` (CPU time is counted by the nucleus), `free`, `uptime`, `pidof`, `pgrep`, `pkill`, `killall`, `tty`, `df`, `mount` (it lists; mounting is not served), `fuser` and `lsof`. A process's `/proc/<pid>/fd`, `exe`, `cwd` and `maps` are readable by its own user and root only.
+
+`syslogd` takes the messages programs send to `/dev/log` (`logger`, or `syslog(3)`): `syslogd -O /tmp/messages` writes them to a file (the initrd has no writable `/var`; an ext2 root does), and `syslogd -C16` keeps them in a 16 KiB circular buffer in shared memory, which `logread` prints (`logread -f` follows it).

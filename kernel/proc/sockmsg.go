@@ -133,7 +133,7 @@ func sysSendmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 	if e < 0 {
 		return ok(e)
 	}
-	return ok(t.sendBytes(a[0], all, fds, a[2], h.name))
+	return ok(t.sendBytes(a[0], all, fds, a[2], h.name, h.namelen))
 }
 
 func sysRecvmsgFn(t *Thread, a [6]uint64) (int64, bool) {
@@ -179,7 +179,7 @@ func sysRecvmsgFn(t *Thread, a [6]uint64) (int64, bool) {
 		return ok(errno(err))
 	}
 	if h.name != 0 { // msg_namelen is the room in, the length out, as accept's
-		if e := p.putPeerName(a[0], h.name, a[1]+8); e < 0 {
+		if e := p.putPeerName(a[0], r, h.name, a[1]+8); e < 0 {
 			return ok(e)
 		}
 	}

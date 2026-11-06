@@ -25,5 +25,8 @@ real	0m 1.
 % /tmp
 % /
 proc on /proc type proc
+# W23-S06: logger to syslogd over /dev/log, in its file and in logread's buffer
+1
+smoke: second message
 spinning gone
 burrow> poweroff

@@ -7,9 +7,9 @@ package proc
 // abstract name (a leading NUL) lives only in the system's table. The
 // table maps names to bound sockets; a node whose socket is gone refuses
 // connections. A Unix connect completes or fails at once: the server end
-// waits in the listener's queue until accept takes it. Only stream and
-// seqpacket sockets take names; named datagram sockets are not supported
-// (EOPNOTSUPP). Docs: docs/02-architecture/POSIX_COVERAGE.md.
+// waits in the listener's queue until accept takes it. Datagram sockets
+// take names too since W23-S06 (sockdgram.go: sendto by name, connect sets
+// a default peer); they never listen. Docs: docs/02-architecture/POSIX_COVERAGE.md.
 
 import (
 	"encoding/binary"
@@ -167,11 +167,8 @@ func sysBindFn(p *Process, a [6]uint64) (int64, bool) {
 		return ok(e)
 	}
 	name, key, e := p.sockaddr(a[1], a[2], false)
-	switch {
-	case e < 0:
+	if e < 0 {
 		return ok(e)
-	case s.typ == sockDgram:
-		return ok(-int64(syscall.EOPNOTSUPP))
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

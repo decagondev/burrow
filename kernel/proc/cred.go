@@ -130,12 +130,13 @@ func (p *Process) Cred() Cred {
 type peerCred struct {
 	pid      int32
 	uid, gid uint32
+	name     string // a datagram's sender's bound name (sockdgram.go, W23-S06)
 }
 
 func (p *Process) peerCred() peerCred {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return peerCred{int32(p.PID), p.cred.UID[idEff], p.cred.GID[idEff]}
+	return peerCred{pid: int32(p.PID), uid: p.cred.UID[idEff], gid: p.cred.GID[idEff]}
 }
 
 // mayKill is Linux's check for kill(2): root, or the sender's real or
