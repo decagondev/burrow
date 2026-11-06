@@ -135,6 +135,7 @@ func (t *Thread) exitThread(code int) {
 	delete(s.byTID, t.nt)
 	s.gone[t.nt] = true
 	s.mu.Unlock()
+	p.endThreads([]*Thread{t}) // its CPU time stays the process's (W23-S02)
 	p.mu.Lock()
 	delete(p.threads, t.TID)
 	p.mu.Unlock()

@@ -46,6 +46,10 @@ struct thread {
     int      pin_cpu;           /* CPU index it may run on, -1 = any (sched_priv.h) */
     int      is_idle;           /* a CPU's idle thread: never picked by the queue */
     uint32_t cpu;               /* CPU index it last ran on */
+    /* CPU time (cputime.c, W23-S02): written by the CPU running it */
+    uint64_t user_ns, sys_ns;   /* in ring 3; in the kernel (an idle thread: idle) */
+    uint64_t acct_mark;         /* when its current stint began, 0 = not yet */
+    int      in_user;           /* a user thread in ring 3 */
     uint8_t  fx[FPU_AREA_BYTES] __attribute__((aligned(64)));   /* XSAVE (or FXSAVE) area (fpu.h) */
 };
 _Static_assert(__builtin_offsetof(struct thread, rsp) == 0, "switch.asm offset");

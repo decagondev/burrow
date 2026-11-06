@@ -37,6 +37,11 @@ type Process struct {
 	ctty          *tty.TTY      // the controlling terminal (TIOCSCTTY, ptycalls.go); nil: the console
 	argv, envp    []string      // as execve gave them, for /proc/<pid>/cmdline and environ (W23-S01)
 	start         time.Duration // since boot (/proc/<pid>/stat's starttime)
+	ended         cpuTimes      // CPU time of its threads that have ended (cputime.go, W23-S02)
+	final         cpuTimes      // its own CPU time, fixed at exit before it is a zombie
+	finalRSS      uint64        // its memory at exit (wait4's ru_maxrss)
+	kids          cpuTimes      // its reaped children's CPU time, and theirs
+	kidsRSS       uint64
 
 	children   map[int]*Process // live and zombie (s.mu)
 	childEvent chan struct{}    // a child exited (capacity 1)
@@ -108,6 +113,10 @@ func (p *Process) exit(code, sig int, reason string) {
 	}
 	p.threads = map[int]*Thread{}
 	p.mu.Unlock()
+	p.endThreads(threads) // their CPU time, while the nucleus still has them (W23-S02)
+	p.mu.Lock()
+	p.final = p.ended
+	p.mu.Unlock()
 	s.mu.Lock()
 	for _, t := range threads {
 		delete(s.byTID, t.nt)
@@ -122,6 +131,7 @@ func (p *Process) exit(code, sig int, reason string) {
 	s.futexDrop(p.mem)
 	s.releaseVT(p.PID) // a crashed graphics program gives the console back (W14-S08)
 	p.stopTimers()
+	_, p.finalRSS = p.mem.usage()
 	if err := p.mem.Close(); err != nil {
 		s.log.Errorf("pid %d: free memory: %v", p.PID, err)
 	}
@@ -215,13 +225,16 @@ const (
 
 // wait4(pid, status, options, rusage): pid > 0 that child, -1 any child,
 // 0 any in our group, < -1 any in group -pid. Blocks unless WNOHANG.
-func (t *Thread) wait4(pid int64, statusVA, options uint64) int64 {
+func (t *Thread) wait4(pid int64, statusVA, options, rusageVA uint64) int64 {
 	p := t.p
 	found, e := t.waitChild(func(c *Process) bool {
 		return !(pid > 0 && int64(c.PID) != pid || pid == 0 && c.PGID != p.PGID || pid < -1 && int64(c.PGID) != -pid)
 	}, options&wNoHang != 0, false)
 	if found == nil {
 		return e // -ECHILD, -EINTR, or 0 for WNOHANG
+	}
+	if err := p.childUsage(found, rusageVA); err != nil {
+		return errno(err)
 	}
 	if statusVA != 0 {
 		var b [4]byte

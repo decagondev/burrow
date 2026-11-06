@@ -9,7 +9,10 @@
 // (Nucleus.Frame).
 package proc
 
-import "unsafe"
+import (
+	"time"
+	"unsafe"
+)
 
 // Prot is a page's access; read is implied (NUCLEUS_ABI nu_as_map).
 type Prot uint8
@@ -50,6 +53,10 @@ type Nucleus interface {
 	StartThreadFrom(as uint64, r *Regs) (uint64, error)
 	SetSpace(tid, as uint64) error
 	Interrupt(tid uint64) error
+
+	// W23-S02: CPU time, a thread's and every online CPU's.
+	ThreadTimes(tid uint64) (user, sys time.Duration, err error)
+	CPUTimes() []CPUTime
 }
 
 // Regs is a user thread's register image (NUCLEUS_ABI nu_uthread_regs).

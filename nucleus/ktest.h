@@ -87,6 +87,7 @@ int kt_uthread_fork_exec(void);
 
 /* ktest_smp.c (W20-S05): suite "smp" runs on -smp 4 */
 int kt_uthread_gs_reload(void);
+int kt_cputime(void);
 int kt_smp_cpus_online(void);
 int kt_smp_percpu(void);
 int kt_smp_spin_counter(void);

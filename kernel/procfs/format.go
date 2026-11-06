@@ -1,9 +1,9 @@
 package procfs
 
 // format.go - the files' contents, field for field as proc(5) gives them:
-// a pid's stat (52 fields), statm, status, cmdline, environ and comm, and
-// the system's uptime, loadavg, meminfo, version and filesystems. CPU time
-// is zero until W23-S02 counts it. Docs: WAVE-23-proc-virtio.md.
+// a pid's stat (52 fields, CPU time since W23-S02), statm, status, cmdline,
+// environ and comm, and the system's uptime, loadavg, meminfo, version and
+// filesystems. Docs: WAVE-23-proc-virtio.md.
 
 import (
 	"fmt"
@@ -35,7 +35,8 @@ var systemFiles = []struct {
 	{"filesystems", func(*FS) []byte { return []byte(filesystems) }},
 	{"loadavg", func(f *FS) []byte { return []byte(loadavg(f.src.Load())) }},
 	{"meminfo", func(f *FS) []byte { return []byte(meminfo(f.src.Memory())) }},
-	{"uptime", func(f *FS) []byte { return []byte(uptime(f.src.Uptime(), f.st.CPUs)) }},
+	{"stat", func(f *FS) []byte { return []byte(statFile(f)) }},
+	{"uptime", func(f *FS) []byte { return []byte(uptime(f.src.Uptime(), idle(f))) }},
 	{"version", func(f *FS) []byte { return []byte(version(f.src.Uname())) }},
 }
 
@@ -74,7 +75,7 @@ func statLine(p *Proc) string {
 		p.PID, p.Comm, p.State, p.PPID, p.PGID, p.SID, p.TTY, p.TPGID,
 		0,          // flags
 		0, 0, 0, 0, // minflt cminflt majflt cmajflt
-		0, 0, 0, 0, // utime stime cutime cstime (W23-S02)
+		ticks(p.User), ticks(p.Sys), ticks(p.ChildUser), ticks(p.ChildSys),
 		20, 0, // priority nice
 		p.Threads, 0, ticks(p.Start), p.SizeBytes, rss,
 		^uint64(0),    // rsslim
@@ -103,7 +104,11 @@ func status(p *Proc, cpus int) string {
 	line("Name", "%s", p.Comm)
 	line("Umask", "%04o", p.Umask)
 	line("State", "%s", stateNames[p.State])
-	line("Tgid", "%d", p.PID)
+	tgid := p.PID
+	if p.TGID != 0 {
+		tgid = p.TGID
+	}
+	line("Tgid", "%d", tgid)
 	line("Ngid", "0")
 	line("Pid", "%d", p.PID)
 	line("PPid", "%d", p.PPID)
@@ -135,9 +140,9 @@ func status(p *Proc, cpus int) string {
 
 const sigQueueMax = 7823 // RLIMIT_SIGPENDING's usual value
 
-func uptime(up time.Duration, cpus int) string {
-	idle := 0.0 // the idle threads' time is counted from W23-S02
-	return fmt.Sprintf("%.2f %.2f\n", up.Seconds(), idle*float64(cpus))
+// uptime: the time since boot and every CPU's idle time together.
+func uptime(up, idle time.Duration) string {
+	return fmt.Sprintf("%.2f %.2f\n", up.Seconds(), idle.Seconds())
 }
 
 func loadavg(l Load) string {

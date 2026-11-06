@@ -16,6 +16,7 @@ type Source interface {
 	Load() Load
 	Memory() Memory
 	Uname() Uname
+	CPUs() []CPUTime // each online CPU's time (W23-S02)
 }
 
 // Proc is one process as /proc/<pid>/ shows it.
@@ -39,6 +40,17 @@ type Proc struct {
 	BrkStart, Brk        uint64
 	FDs                  int // open descriptors (status's FDSize is a capacity)
 	Kernel               bool
+	User, Sys            time.Duration // CPU time (W23-S02)
+	ChildUser, ChildSys  time.Duration // its reaped children's
+	Tasks                []Task        // its threads (task/)
+	TGID                 int           // in a task's view, the process's pid (0: PID)
+}
+
+// Task is one thread of a process.
+type Task struct {
+	TID       int
+	State     byte
+	User, Sys time.Duration
 }
 
 // Load is /proc/loadavg: the 1, 5 and 15 minute averages of runnable

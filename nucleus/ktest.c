@@ -60,6 +60,7 @@ static const struct ktest g_tests[] = {
     { "uthread_interrupt",  kt_uthread_interrupt },
     { "uthread_fork_exec",  kt_uthread_fork_exec },
     { "uthread_gs_reload",  kt_uthread_gs_reload },     /* W20-S05 */
+    { "cputime",            kt_cputime },               /* W23-S02 */
     { "smp_cpus_online",    kt_smp_cpus_online },
     { "smp_percpu",         kt_smp_percpu },
     { "smp_spin_counter",   kt_smp_spin_counter },

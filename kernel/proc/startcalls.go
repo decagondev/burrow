@@ -1,7 +1,7 @@
 package proc
 
 // startcalls.go - the small calls that start-up code makes (W14-S03):
-// getrandom, sysinfo, umask, getrusage, the scheduler queries and
+// getrandom, sysinfo, umask, the scheduler queries and
 // membarrier. Each answers what Linux answers on a one-CPU machine where
 // everyone is root. getrandom reads kernel/random, which must never be
 // taken for a cryptographic source. Docs: POSIX_COVERAGE.md.
@@ -72,15 +72,6 @@ func sysUmaskFn(p *Process, a [6]uint64) (int64, bool) {
 	old := p.umask
 	p.umask = uint32(a[0]) & 0o777
 	return ok(int64(old))
-}
-
-// getrusage(who, usage): nothing is accounted yet, so all zeros.
-func sysGetrusageFn(p *Process, a [6]uint64) (int64, bool) {
-	switch int32(a[0]) {
-	case rusageSelf, rusageThread, rusageKids:
-		return ok(errno(p.mem.CopyOut(a[1], make([]byte, rusageBytes))))
-	}
-	return ok(-int64(syscall.EINVAL))
 }
 
 // schedTarget checks a scheduler call's pid: 0 (the caller), or any live
@@ -164,7 +155,7 @@ func sysMembarrierFn(p *Process, a [6]uint64) (int64, bool) {
 
 func init() {
 	for nr, h := range map[uint64]handler{
-		318: sysGetrandomFn, 99: sysSysinfoFn, 95: sysUmaskFn, 98: sysGetrusageFn,
+		318: sysGetrandomFn, 99: sysSysinfoFn, 95: sysUmaskFn,
 		143: sysSchedGetparamFn, 145: sysSchedGetschedulerFn, 203: sysSchedSetaffinityFn,
 		324: sysMembarrierFn,
 	} {

@@ -8,6 +8,8 @@
 #include "syscall.h"
 #include "uthread.h"
 #include "vmm.h"
+#include "cputime.h"
+#include "sched.h"
 
 #define PF_PRESENT 1u   /* #PF error code bit 0: the page was present (a protection fault) */
 
@@ -138,6 +140,7 @@ void trap_dispatch(struct trap_frame *f);   /* called from trap.asm only */
 
 void trap_dispatch(struct trap_frame *f) {
     int from_user = (f->cs & 3) == 3;
+    if (from_user) cputime_enter_kernel(thread_current());   /* W23-S02 */
     if (f->vector < 32) {
         uint64_t cr2 = f->vector == VEC_PF ? read_cr2() : 0;
         /* A discarded page of kernel-space memory (the Go heap): zero-fill it (BUG-0012). */

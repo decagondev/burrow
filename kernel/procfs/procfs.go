@@ -117,12 +117,17 @@ func (f *FS) pidNode(pid int, rest []string) (node, error) {
 	switch len(rest) {
 	case 0:
 		return f.dir(strconv.Itoa(pid), a, func() []string {
-			names := make([]string, len(pidFiles))
-			for i, pf := range pidFiles {
-				names[i] = pf.name
+			names := []string{"task"}
+			for _, pf := range pidFiles {
+				names = append(names, pf.name)
 			}
 			return names
 		}), nil
+	}
+	if rest[0] == "task" {
+		return f.taskNode(&p, a, rest[1:])
+	}
+	switch len(rest) {
 	case 1:
 		for i, pf := range pidFiles {
 			if pf.name == rest[0] {

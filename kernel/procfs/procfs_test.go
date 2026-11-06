@@ -21,7 +21,9 @@ func newFake() *fake {
 		7: {PID: 7, PPID: 1, PGID: 7, SID: 7, TTY: 0x401, TPGID: 7, State: 'R', Comm: "sh",
 			Cmdline: []string{"/bin/sh", "-c", "echo hi"}, Environ: []string{"HOME=/", "PATH=/bin"}, Threads: 1,
 			Start: 1500 * time.Millisecond, UID: [4]uint32{1000, 1000, 1000, 1000}, GID: [4]uint32{100, 100, 100, 100},
-			Groups: []uint32{100, 10}, Umask: 0o022, SizeBytes: 8 << 20, RSSBytes: 64 << 10, SigBlocked: 1 << 1, BrkStart: 0x404000},
+			Groups: []uint32{100, 10}, Umask: 0o022, SizeBytes: 8 << 20, RSSBytes: 64 << 10, SigBlocked: 1 << 1, BrkStart: 0x404000,
+			User: 2500 * time.Millisecond, Sys: 300 * time.Millisecond, ChildUser: time.Second, ChildSys: 20 * time.Millisecond,
+			Tasks: []Task{{TID: 7, State: 'R', User: 2 * time.Second, Sys: 300 * time.Millisecond}, {TID: 9, State: 'S', User: 500 * time.Millisecond}}},
 	}}
 }
 
@@ -35,6 +37,10 @@ func (f *fake) Load() Load {
 	return Load{Avg: [3]float64{0.5, 0.25, 0.125}, Running: 1, Threads: 2, LastPID: 7}
 }
 func (f *fake) Memory() Memory { return Memory{Total: 512 << 20, Free: 400 << 20, Shared: 1 << 20} }
+func (f *fake) CPUs() []CPUTime {
+	return []CPUTime{{User: 2 * time.Second, Sys: time.Second, Idle: 10 * time.Second, Switches: 40},
+		{User: time.Second, Sys: 500 * time.Millisecond, Idle: 20 * time.Second, Switches: 2}}
+}
 func (f *fake) Uname() Uname {
 	return Uname{Sys: "Burrow", Node: "burrow", Release: "0.10", Version: "#1 Wave 10", Domain: "(none)"}
 }
@@ -54,7 +60,7 @@ func read(t *testing.T, f *FS, name string) string {
 }
 
 func TestFSConformance(t *testing.T) {
-	if err := fstest.TestFS(testFS(), "1", "7", "7/stat", "7/status", "uptime", "meminfo", "sys/kernel/ostype", "self"); err != nil {
+	if err := fstest.TestFS(testFS(), "1", "7", "7/stat", "7/status", "7/task/9/stat", "stat", "uptime", "meminfo", "sys/kernel/ostype", "self"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -71,6 +77,9 @@ func TestStatHas52Fields(t *testing.T) {
 	f := strings.Fields(rest)
 	if f[19] != "150" || f[20] != "8388608" || f[21] != "16" { // starttime ticks, vsize bytes, rss pages
 		t.Fatalf("starttime/vsize/rss = %s %s %s", f[19], f[20], f[21])
+	}
+	if strings.Join(f[11:15], " ") != "250 30 100 2" { // utime stime cutime cstime, in ticks
+		t.Fatalf("times = %v", f[11:15])
 	}
 }
 
@@ -99,7 +108,7 @@ func TestStatusAndLists(t *testing.T) {
 func TestSystemFiles(t *testing.T) {
 	f := testFS()
 	for name, want := range map[string]string{
-		"uptime":            "125.34 0.00\n",
+		"uptime":            "125.34 30.00\n",
 		"loadavg":           "0.50 0.25 0.12 1/2 7\n",
 		"version":           "Burrow version 0.10 (burrow@burrow) #1 Wave 10\n",
 		"sys/kernel/ostype": "Burrow\n",
@@ -182,5 +191,28 @@ func TestDecodeCPU(t *testing.T) {
 	}
 	if c.PhysBits != 40 || c.VirtBits != 48 {
 		t.Fatalf("address bits %d %d", c.PhysBits, c.VirtBits)
+	}
+}
+
+func TestStatAndTasks(t *testing.T) {
+	f := testFS()
+	want := "cpu  300 0 150 3000 0 0 0 0 0 0\ncpu0 200 0 100 1000 0 0 0 0 0 0\ncpu1 100 0 50 2000 0 0 0 0 0 0\n" +
+		"intr 0\nctxt 42\nbtime 1893553445\nprocesses 7\nprocs_running 1\nprocs_blocked 0\nsoftirq 0\n"
+	if got := read(t, f, "stat"); got != want {
+		t.Errorf("stat =\n%s\nwant\n%s", got, want)
+	}
+	entries, err := fs.ReadDir(f, "7/task")
+	if err != nil || len(entries) != 2 || entries[0].Name() != "7" || entries[1].Name() != "9" {
+		t.Fatalf("task/ = %v, %v", entries, err)
+	}
+	st := read(t, f, "7/task/9/stat")
+	if !strings.HasPrefix(st, "9 (sh) S 1 7 7 ") || strings.Fields(st)[13] != "50" {
+		t.Errorf("task 9's stat = %q", st)
+	}
+	if s := read(t, f, "7/task/9/status"); !strings.Contains(s, "\nTgid:\t7\n") || !strings.Contains(s, "\nPid:\t9\n") {
+		t.Errorf("task 9's status:\n%s", s)
+	}
+	if _, err := f.Open("7/task/8/stat"); err == nil {
+		t.Error("a thread nobody has")
 	}
 }

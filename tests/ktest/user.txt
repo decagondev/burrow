@@ -15,3 +15,5 @@ uthread_interrupt
 uthread_fork_exec
 # W20-S05: ring 3 reloads GS; the kernel's per-CPU base must survive
 uthread_gs_reload
+# W23-S02: CPU time, kernel and user, per thread and per CPU
+cputime

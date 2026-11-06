@@ -69,11 +69,10 @@ func (s *System) Process(pid int) (procfs.Proc, bool) {
 	out.Umask = p.umask
 	out.BrkStart, out.Brk = p.brkStart, p.brk
 	out.Threads, out.SigPending = len(p.threads), p.pending
-	now := time.Now().UnixNano()
-	for _, t := range p.threads {
-		if t.running(now) && out.State == 'S' && !out.Kernel {
-			out.State = 'R'
-		}
+	var running bool
+	out.Tasks, running = p.tasksLocked()
+	if running && out.State == 'S' && !out.Kernel {
+		out.State = 'R'
 	}
 	if p.main != nil {
 		out.SigBlocked = p.main.sigMask
@@ -87,7 +86,37 @@ func (s *System) Process(pid int) (procfs.Proc, bool) {
 	}
 	out.FDs = p.fds.count()
 	out.TTY, out.TPGID = s.ttyOf(ctty)
+	own := p.cpu()
+	kids, _ := p.childTimes()
+	out.User, out.Sys, out.ChildUser, out.ChildSys = own.user, own.sys, kids.user, kids.sys
 	return out, true
+}
+
+// tasksLocked is p's threads in tid order with their state and CPU time,
+// and whether any is running (p.mu held).
+func (p *Process) tasksLocked() ([]procfs.Task, bool) {
+	now, running := time.Now().UnixNano(), false
+	tasks := make([]procfs.Task, 0, len(p.threads))
+	for _, t := range p.threads {
+		task := procfs.Task{TID: t.TID, State: 'S'}
+		if t.running(now) {
+			task.State, running = 'R', true
+		}
+		c := t.times()
+		task.User, task.Sys = c.user, c.sys
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool { return tasks[i].TID < tasks[j].TID })
+	return tasks, running
+}
+
+// CPUs is every online CPU's time, as the nucleus counts it.
+func (s *System) CPUs() []procfs.CPUTime {
+	var out []procfs.CPUTime
+	for _, c := range s.nu.CPUTimes() {
+		out = append(out, procfs.CPUTime{User: c.User, Sys: c.Sys, Idle: c.Idle, Switches: c.Switches})
+	}
+	return out
 }
 
 // comm is a program's name as the kernel keeps it: the last part, 15 bytes.

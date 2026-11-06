@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"syscall"
+	"time"
 
 	"burrow/kernel/proc"
 )
@@ -22,8 +23,9 @@ type Fake struct {
 	threads    map[uint64]*Thread
 	nextTID    uint64
 	reqs       chan proc.Request
-	batchCalls int            // Protect and MapBatch calls (W18-S06)
-	killCalls  map[uint64]int // Kill calls per thread, ESRCH ones too (BUG-0023)
+	batchCalls int                         // Protect and MapBatch calls (W18-S06)
+	killCalls  map[uint64]int              // Kill calls per thread, ESRCH ones too (BUG-0023)
+	times      map[uint64][2]time.Duration // SetTimes: user and system per thread (W23-S02)
 }
 
 type mapping struct {
@@ -280,6 +282,32 @@ func (f *Fake) SetSpace(tid, as uint64) error {
 	}
 	t.AS = as
 	return nil
+}
+
+// SetTimes is what ThreadTimes answers for tid from now on (W23-S02).
+func (f *Fake) SetTimes(tid uint64, user, sys time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.times == nil {
+		f.times = map[uint64][2]time.Duration{}
+	}
+	f.times[tid] = [2]time.Duration{user, sys}
+}
+
+// ThreadTimes: what SetTimes said (zero by default); ESRCH once killed.
+func (f *Fake) ThreadTimes(tid uint64) (user, sys time.Duration, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if t, ok := f.threads[tid]; !ok || t.Killed {
+		return 0, 0, syscall.ESRCH
+	}
+	v := f.times[tid]
+	return v[0], v[1], nil
+}
+
+// CPUTimes: one CPU, a second of each.
+func (f *Fake) CPUTimes() []proc.CPUTime {
+	return []proc.CPUTime{{User: time.Second, Sys: time.Second, Idle: time.Second, Switches: 10}}
 }
 
 // Interrupt behaves like the nucleus: a thread computing in ring 3 stops at

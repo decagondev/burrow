@@ -226,5 +226,9 @@ burrow> run /bin/proctest a b
 proctest: stat-fields ok
 proctest: zombie ok
 proctest: cpuinfo ok
+proctest: times ok
+proctest: wait4-rusage ok
+proctest: children ok
+proctest: proc-stat-grows ok
 proctest: ok
 burrow> poweroff

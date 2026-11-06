@@ -51,6 +51,9 @@ func (t *Thread) waitChild(match func(c *Process) bool, noHang, keep bool) (*Pro
 		s.mu.Unlock()
 		switch {
 		case found != nil:
+			if !keep {
+				p.reaped(found) // its CPU time joins ours (W23-S02)
+			}
 			return found, 0
 		case !any:
 			return nil, -int64(syscall.ECHILD)
@@ -92,6 +95,11 @@ func sysWaitidFn(t *Thread, a [6]uint64) (int64, bool) {
 	c, e := t.waitChild(match, options&wNoHang != 0, options&wNoWait != 0)
 	if e < 0 {
 		return ok(e)
+	}
+	if c != nil {
+		if err := p.childUsage(c, a[4]); err != nil {
+			return ok(errno(err))
+		}
 	}
 	if infoVA != 0 {
 		return ok(errno(p.mem.CopyOut(infoVA, siginfo(c))))

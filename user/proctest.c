@@ -2,7 +2,8 @@
  * stat (52 fields), status, cmdline, environ, comm and statm; a parent's and
  * a zombie child's entries and a reaped one's absence; the listing; uptime,
  * loadavg, meminfo, cpuinfo, version and sys/kernel against the system calls
- * that say the same. Every check holds on Linux too: `make ports-smoke` runs
+ * that say the same; CPU time (W23-S02) from times, getrusage, wait4's rusage,
+ * /proc/self/stat and /proc/stat against a busy loop. Every check holds on Linux too: `make ports-smoke` runs
  * this binary on the host first. Run it with arguments to check cmdline.
  * Prints "proctest: <name> ok" per check, then "proctest: ok"; a failed check
  * prints FAIL. Never checks numbers that differ between machines.
@@ -14,8 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
+#include <sys/times.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -150,10 +153,61 @@ static void system_files(void) {
     check("sys-kernel", ostype && release && slurp("/proc/sys/kernel/hostname") > 0 && !strcmp(buf, want));
 }
 
+/* busy computes for ms milliseconds of wall time, making no system call
+ * but the clock's (musl reads CLOCK_MONOTONIC through the vDSO or a call). */
+static void busy(long ms) {
+    struct timespec t0, t;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (volatile unsigned long i = 0;; i++) {
+        if (i % 100000) continue;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        if ((t.tv_sec - t0.tv_sec) * 1000 + (t.tv_nsec - t0.tv_nsec) / 1000000 >= ms) return;
+    }
+}
+
+static long tv_ms(struct timeval tv) { return tv.tv_sec * 1000 + tv.tv_usec / 1000; }
+
+/* statTicks is field n (1-based) of a stat line in buf. */
+static unsigned long statTicks(int n) {
+    const char *p = strrchr(buf, ')') + 2;
+    for (int i = 3; i < n; i++) p = strchr(p, ' ') + 1;
+    return strtoul(p, 0, 10);
+}
+
+static void cpu_times(void) {
+    long hz = sysconf(_SC_CLK_TCK);
+    busy(300);
+    struct tms tm;
+    check("clock-ticks", hz == 100);
+    check("times", times(&tm) != (clock_t)-1 && tm.tms_utime >= 20 && tm.tms_utime <= 40 && tm.tms_stime < tm.tms_utime);
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
+    check("getrusage", tv_ms(ru.ru_utime) >= 200 && tv_ms(ru.ru_utime) / 10 <= tm.tms_utime + 2 && ru.ru_maxrss > 0);
+    slurp("/proc/self/stat");
+    unsigned long ut = statTicks(14), st = statTicks(15);
+    check("stat-times", ut + 2 >= (unsigned long)tm.tms_utime && ut <= (unsigned long)tm.tms_utime + 10 && st <= ut);
+    int child = fork();
+    if (child == 0) { busy(200); _exit(0); }
+    int status;
+    struct rusage cru;
+    check("wait4-rusage", wait4(child, &status, 0, &cru) == child && tv_ms(cru.ru_utime) >= 120);
+    times(&tm);
+    getrusage(RUSAGE_CHILDREN, &ru);
+    check("children", tm.tms_cutime >= 12 && tv_ms(ru.ru_utime) >= 120);
+    unsigned long u0 = 0, u1 = 0, n0 = 0, s0 = 0, i0 = 0;
+    check("proc-stat", slurp("/proc/stat") > 0 && sscanf(buf, "cpu %lu %lu %lu %lu", &u0, &n0, &s0, &i0) == 4 &&
+                           strstr(buf, "\ncpu0 ") && strstr(buf, "\nctxt ") && strstr(buf, "\nbtime "));
+    busy(100);
+    slurp("/proc/stat");
+    sscanf(buf, "cpu %lu", &u1);
+    check("proc-stat-grows", u1 >= u0 + 5);
+}
+
 int main(int argc, char **argv, char **envp) {
     self(argc, argv, envp);
     others();
     system_files();
+    cpu_times();
     printf("proctest: %s\n", failures ? "FAIL" : "ok");
     return failures != 0;
 }

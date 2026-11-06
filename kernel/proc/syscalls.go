@@ -264,5 +264,5 @@ func sysForkFn(t *Thread, _ [6]uint64) (int64, bool) { return ok(t.fork()) }
 func sysExecveFn(t *Thread, a [6]uint64) (int64, bool) { return ok(t.execve(a[0], a[1], a[2])) }
 
 func sysWait4Fn(t *Thread, a [6]uint64) (int64, bool) {
-	return ok(t.wait4(int64(int32(a[0])), a[1], a[2]))
+	return ok(t.wait4(int64(int32(a[0])), a[1], a[2], a[3]))
 }

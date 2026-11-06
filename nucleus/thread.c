@@ -14,6 +14,7 @@
 #include "cpu.h"
 #include "kprintf.h"
 #include "panic.h"
+#include "cputime.h"
 
 #define MSR_FS_BASE 0xC0000100u
 
@@ -68,6 +69,7 @@ static void reset_fields(struct thread *t, const char *name, int pin) {
     t->name = name;
     t->pin_cpu = pin;
     t->cpu = 0;
+    cputime_reset(t, 0);
     fpu_init_area(t->fx);
 }
 
@@ -134,6 +136,7 @@ struct thread *thread_create_user(const char *name, const struct trap_frame *fra
     if (fx) fpu_set_legacy(t->fx, fx);   /* a fork child keeps its parent's x87/SSE state */
     t->cr3 = cr3;                       /* before thread_publish: it may run at once */
     t->uspace = uspace;
+    t->in_user = uspace != 0;           /* its first stint is spent in ring 3 (cputime.c) */
     /* [top - frame] the trap frame  [below] thread_start_frame  then 6 zero
      * registers: switch_to pops, "returns" into thread_start_frame, which
      * drops the scheduler's lock and goes to trap_resume with RSP at the frame. */

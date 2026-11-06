@@ -27,7 +27,8 @@ enum { NU_BASE = 0x1000, NU_irq_wait = 0x1000, NU_irq_ack = 0x1001,
        NU_as_protect = 0x1017, NU_as_map_batch = 0x1018,
        NU_uthread_create = 0x1020, NU_syscall_wait = 0x1021, NU_syscall_reply = 0x1022,
        NU_uthread_kill = 0x1023, NU_uthread_set_fs = 0x1024, NU_uthread_regs = 0x1025,
-       NU_uthread_create_from = 0x1026, NU_uthread_set_space = 0x1027, NU_uthread_interrupt = 0x1028 };
+       NU_uthread_create_from = 0x1026, NU_uthread_set_space = 0x1027, NU_uthread_interrupt = 0x1028,
+       NU_thread_times = 0x1029, NU_cpu_times = 0x102A };
 
 typedef long (*sys_fn)(struct syscall_frame *f);
 

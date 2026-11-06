@@ -16,5 +16,9 @@ load average:
 busybox
 Burrow version 0.10
 found spinning
+spin computed for 2 s
+# top -b -n 1 | grep '[/]bin/spin' (the pattern does not match its own command line)
+/bin/spin
+real	0m 1.
 spinning gone
 burrow> poweroff

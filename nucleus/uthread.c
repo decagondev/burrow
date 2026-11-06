@@ -10,6 +10,7 @@
 #include "spinlock.h"
 #include "errno.h"
 #include "lib_string.h"
+#include "cputime.h"
 
 enum { REQ_NONE, REQ_QUEUED, REQ_TAKEN, REQ_DONE };
 
@@ -98,6 +99,7 @@ static long post_and_wait(struct trap_frame *f, uint64_t nr, const uint64_t args
 }
 
 void nu_user_syscall(struct trap_frame *f) {
+    cputime_enter_kernel(thread_current());   /* W23-S02 */
     const uint64_t args[6] = { f->rdi, f->rsi, f->rdx, f->r10, f->r8, f->r9 };
     f->rax = (uint64_t)post_and_wait(f, f->rax, args);
     uthread_return_to_user(f);
@@ -123,7 +125,10 @@ void uthread_return_to_user(struct trap_frame *f) {
             if (!user_addr(f->rip) || f->rip == 0) die();
             continue;
         }
-        if (!me->interrupt) return;
+        if (!me->interrupt) {
+            cputime_enter_user(me);      /* W23-S02: back to ring 3 */
+            return;
+        }
         const uint64_t args[6] = { f->rip, 0, 0, 0, 0, 0 };
         post_and_wait(f, UREQ_INTERRUPT, args);   /* the answer is not a register: */
     }                                             /* Go changes them with nu_uthread_regs */

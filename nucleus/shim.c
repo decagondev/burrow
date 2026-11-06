@@ -23,6 +23,8 @@
 #include "uthread.h"
 #include "frames.h"
 #include "time.h"
+#include "cputime.h"
+#include "sched.h"
 #include "lib_string.h"
 
 #define MSR_STAR   0xC0000081u
@@ -154,6 +156,28 @@ static long nu_uthread_create_from(struct syscall_frame *f) {
 static long nu_uthread_set_space(struct syscall_frame *f) { return uthread_set_space(SYSARG0(f), SYSARG1(f)); }
 static long nu_uthread_interrupt(struct syscall_frame *f) { return uthread_interrupt(SYSARG0(f)); }
 
+/* CPU time (W23-S02): thread tid's {user, kernel} nanoseconds, 16 bytes. */
+static long nu_thread_times(struct syscall_frame *f) {
+    uint64_t user = 0, sys = 0, fl = irq_save();
+    struct thread *t = thread_find((uint32_t)SYSARG0(f));
+    if (t) cputime_thread(t, &user, &sys);
+    irq_restore(fl);
+    if (!t) return -ESRCH;
+    uint64_t *out = (uint64_t *)SYSARG1(f);
+    out[0] = user;
+    out[1] = sys;
+    return 16;
+}
+
+/* Every online CPU's {user, kernel, idle, switches}, at most max of them:
+ * the count written. */
+static long nu_cpu_times(struct syscall_frame *f) {
+    struct cputime_cpu c[SMP_MAX_CPUS];
+    uint32_t n = cputime_cpus(c, SYSARG1(f) < SMP_MAX_CPUS ? (uint32_t)SYSARG1(f) : SMP_MAX_CPUS);
+    memcpy((void *)SYSARG0(f), c, n * sizeof c[0]);
+    return n;
+}
+
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
@@ -181,6 +205,8 @@ static const sys_fn g_nu_table[] = {
     [NU_uthread_create_from - NU_BASE] = nu_uthread_create_from,
     [NU_uthread_set_space - NU_BASE] = nu_uthread_set_space,
     [NU_uthread_interrupt - NU_BASE] = nu_uthread_interrupt,
+    [NU_thread_times - NU_BASE] = nu_thread_times,
+    [NU_cpu_times - NU_BASE] = nu_cpu_times,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {

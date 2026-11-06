@@ -130,6 +130,7 @@ func (t *Thread) endOthers() {
 		}
 	}
 	p.mu.Unlock()
+	p.endThreads(others) // their CPU time stays the process's (W23-S02)
 	s.mu.Lock()
 	for _, o := range others {
 		delete(s.byTID, o.nt)

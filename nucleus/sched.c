@@ -17,6 +17,7 @@
 #include "panic.h"
 #include "syscall.h"
 #include "tlb.h"
+#include "cputime.h"
 
 #define MSR_FS_BASE 0xC0000100u
 /* An idle CPU polls this long for a kick before it halts (W20-S08): waking a
@@ -80,6 +81,7 @@ static void schedule_locked(void) {
     if ((next->uspace != 0) != c->lstar_user) syscall_set_entry(next->uspace != 0);   /* ADR-0011 */
     fpu_save(prev->fx);
     fpu_restore(next->fx);
+    cputime_switch(prev, next, time_monotonic_ns());   /* W23-S02 */
     g_switches++;
     switch_to(prev, next);              /* returns when prev is picked again, on any CPU */
 }
@@ -135,6 +137,7 @@ void sched_on_tick(void) {
     struct percpu *c = this_cpu();
     if (!c->idle) return;               /* this CPU does not schedule yet */
     spin_lock(&g_sched_lock);
+    cputime_tick(c->current, time_monotonic_ns());   /* a reader is never more than a tick behind */
     if (c->index == 0) wake_sleepers();
     if (++c->slice >= TIMESLICE_TICKS || c->current == c->idle) schedule_locked();
     spin_unlock(&g_sched_lock);

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S02 CPU time and top
+
+**Did:** the nucleus counts every thread's user and kernel time and every CPU's user, kernel and idle time (`nucleus/cputime.c`), charged at switches, ticks and ring crossings; `nu_thread_times` and `nu_cpu_times`; `kt_cputime`. The Go kernel keeps the time of threads that end, fixes a process's at exit and gives it to the parent that reaps it: `times`, `getrusage`, `wait4`'s and `waitid`'s rusage, `/proc/stat`, the times in every `stat`, `task/<tid>/`. busybox `top` and `time`; `proc-smoke` watches a spinning program's `utime` grow.
+
+**Surprise:** no sequence count was needed. Only the CPU running a thread ever writes its counters, and a reader never adds the stint in progress, so every counter only grows and a 64-bit load is enough. And busybox's `top` shows a program spinning on one of four CPUs at 26 %: it divides by all the CPUs' time, so the smoke reads `utime` from `/proc/<pid>/stat` instead of matching a percentage.
+
+**Next:** W23-S03: descriptors, links and mounts.
+
 ## 2026-11-06 — W23-S01 /proc: the file system and the process table
 
 **Did:** `kernel/procfs`, an `io/fs.FS` over a `Source` that `proc.System` implements, mounted at `/proc`: each pid's `stat`, `statm`, `status`, `cmdline`, `environ` and `comm`; `self`; `uptime`, `loadavg`, `meminfo`, `cpuinfo` (CPUID decoded in Go), `version`, `filesystems`, `sys/kernel`. The VFS walks as a caller now (`ResolveAs`, `ReadLinkAs`), which is what makes `self` the asker's. `execve` keeps argv and the environment, a sampler keeps the load averages, `sysinfo` reports them. busybox's `ps`, `free`, `uptime`, `pidof`, `pgrep`, `pkill`; `user/proctest` agrees with the host's Linux; `make proc-smoke`.

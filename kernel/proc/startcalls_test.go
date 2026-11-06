@@ -80,8 +80,9 @@ func TestReadlinkUmaskRusage(t *testing.T) {
 		t.Errorf("child's umask = %#o, want 077", old)
 	}
 	r.put(p, scratch, bytes.Repeat([]byte{0xAA}, 144))
-	if e := r.call(p, 98, 0, scratch); e != 0 || !bytes.Equal(read(p, scratch, 144), make([]byte, 144)) {
-		t.Errorf("getrusage = %d, want zeros", e)
+	if e := r.call(p, 98, 0, scratch); e != 0 || !bytes.Equal(read(p, scratch, 32), make([]byte, 32)) ||
+		le.Uint64(read(p, scratch+32, 8)) == 0 { // no time on the fake (W23-S02 counts it), ru_maxrss set
+		t.Errorf("getrusage = %d: % x", e, read(p, scratch, 40))
 	}
 	if e := r.call(p, 98, 5, scratch); e != -int64(syscall.EINVAL) {
 		t.Errorf("getrusage(5) = %d", e)
