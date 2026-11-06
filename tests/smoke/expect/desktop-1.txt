@@ -8,9 +8,11 @@ xfocus: st-256color
 written with vi on the desktop
 xfocus: st-256color #2
 desktop: two in /home
+desktop: focus on first
 xfocus: dmenu
 doom: X window 640x400 at 192,184
  adding /opt/x11/share/doom/freedoom1.wad
+i_burrowsound: /dev/dsp at 22050 Hz, 8 channels mixed
 startx: done
 desktop: console back
 burrow> poweroff

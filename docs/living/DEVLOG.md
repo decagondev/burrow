@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W22 done: sound and an absolute pointer (M22)
+
+**Did:** the wave in six slices. Shared interrupt lines in Go (S01); an AC'97 driver and OSS's `/dev/dsp` (S02); Doom's sound effects, and BUG-0028 on the way (S03); a virtio 1.0 transport and the tablet's driver (S04); the tablet as `/dev/input/event2` and as moves in `/dev/input/mice`, followed by paint, X and Qt, with absolute steps in the harness (S05); and the desktop smoke with both, a click by position moving dwm's focus and Doom heard from dmenu (S06). `make sound-smoke`, `make tablet-smoke` and `desktop-smoke` pass on four CPUs and on one.
+
+**Surprise:** how much of the wave was the test harness hearing and pointing: a WAV checker that tells sounds apart by pitch, QMP beside the monitor, and resynchronising a relative stream by overshooting edges. And BUG-0028, a crash in `posix_spawn` that only the first program to call `system()` could find.
+
+**Learned:** QEMU's pc machine shares lines as soon as there are a few PCI devices; doing sharing in Go first made the AC'97 and the tablet uneventful. An absolute pointer is easy for programs that read it, and only the relative stream needs care.
+
+**Next:** UEFI and GOP, towards real hardware; virtio-blk and virtio-net could reuse the transport.
+
+## 2026-11-06 — W22-S06 M22
+
+**Did:** `desktop-smoke`'s first boot with the tablet and a recording AC'97: the pointer put on the first terminal and clicked gives it dwm's focus back from the second, and Doom's menu sounds from dmenu are in the WAV (5 found). The M22 docs: ARCHITECTURE.md §7.7, DESKTOP.md and PORTING.md sections on sound and the pointer. Budgets: `doom-bench` with sound 121.5 fps (budget 20), `mem-smoke`'s `syslat` within its budget in `make test`; sound, tablet and desktop smokes green with `SMP=1` too.
+
+**Surprise:** dwm puts a new window in the master area, so the second terminal is on the left and the first on the right; the first try clicked the window that already had the focus. And busybox's `tty` cannot name a pseudo-terminal on Burrow (there is no `/proc/self/fd`), so the shells tell themselves apart by a variable.
+
+**Next:** the wave summary above.
+
 ## 2026-11-06 — W22-S05 An absolute pointer everywhere
 
 **Did:** `/dev/input/event2`, the tablet as Linux evdev (`EV_ABS`, `EVIOCGABS`); `/dev/input/mice` gets its packets as moves scaled to the screen; paint reads the tablet directly, X follows through mice with `xaccel` turning acceleration off, Qt's evdev handler gets `event2` with `abs`. The harness puts the pointer on exact pixels through QMP (`screen`, `abs`), and `make tablet-smoke` checks all three: paint's stroke pixels, xhello's click at exactly (400,200), qtdemo's button and menu. PIT-32, PIT-73 and PIT-75 closed: `run-desktop` and `run-qt` need no grab.

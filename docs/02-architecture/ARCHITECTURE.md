@@ -363,6 +363,48 @@ Programs must take the geometry from `FBIOGET_VSCREENINFO` and step rows by
 `line_length`; `make fb-smoke` boots 1280x1024 with a 5248-byte pitch to
 keep that true.
 
+### 7.7 Sound and input (Wave 22)
+
+Two PCI devices arrived together, and QEMU put both on IRQ 11 beside the
+e1000, so the wave started with **shared lines**: the nucleus still lets one
+thread wait on a line, and in Go that thread is the line's goroutine
+(`driver.Lines`), which calls every handler registered there; each reads its
+own device's status and says whether the interrupt was its own (an
+unclaimed one is counted and logged once).
+
+**Sound** is an AC'97 (`drivers/ac97`): the mixer and the bus master are two
+I/O BARs, and playback is a ring of 32 buffer descriptors pointing at DMA
+pages. The driver fills buffers ahead of the card and moves the last valid
+index forward after the data is written; an interrupt per completed buffer
+frees room. `kernel/sound` puts OSS's playback subset over it as
+`/dev/dsp`: rates through the codec's variable rate, 16-bit stereo native and
+8-bit or mono converted, `write` blocking while the ring is full, one
+opener. Doom mixes its effects in a thread and writes them there.
+
+**The pointer** is QEMU's virtio tablet. `kernel/virtio` is the virtio 1.0
+PCI transport, pure Go: the capabilities in configuration space, the status
+handshake with `VIRTIO_F_VERSION_1` required, split virtqueues in DMA pages
+whose indices are read and written as whole aligned words, notification
+and the ISR. `drivers/virtioinput` keeps the event queue full of 8-byte
+buffers; the device's events are already Linux input events, and
+`kernel/evdev` makes them `/dev/input/event2` (`EV_ABS` with `EVIOCGABS`
+ranges). Readers of the relative `/dev/input/mice` (TinyX) get the same
+packets as moves: the position scaled to the current mode minus the last
+one, a session starting at the screen's centre, and moves to an edge
+overshot by a screen so a reader that lost packets clamps back in step.
+
+```mermaid
+flowchart LR
+    irq11["IRQ 11<br/>(8259 line)"] --> lines["driver.Lines<br/>one goroutine per line"]
+    lines --> e1000["e1000"] & ac97["ac97: ring of 32<br/>DMA buffers"] & vin["virtioinput:<br/>event queue"]
+    ac97 --> dsp["/dev/dsp<br/>(OSS)"] --> doom["Doom, tone"]
+    vin --> ev2["/dev/input/event2<br/>EV_ABS"] --> paintqt["paint, Qt (abs)"]
+    ev2 --> mice["/dev/input/mice<br/>scaled moves"] --> x["TinyX (xaccel: 1/1)"]
+```
+
+The virtio transport is meant for more than input: virtio-blk and
+virtio-net would use the same capabilities, negotiation and queues.
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

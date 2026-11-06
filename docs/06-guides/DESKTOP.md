@@ -64,7 +64,19 @@ TinyX is a small X server from 2006, and Burrow's build switches more off:
 - **No XINERAMA.** dmenu says so on start and carries on; one screen is all there is.
 - **One display, one screen** at 1024x768x24, no resizing (RandR) and no display manager; clients connect over the Unix socket `/tmp/.X11-unix/X0` (Burrow has no TCP until W17).
 - **Fonts:** the core font `fixed` (and the cursor font), plus DejaVu through Xft and fontconfig for st, dmenu and dwm's bar.
-- **Input:** the US keymap, read from the console with `KDGKBENT`, and the PS/2 mouse through `/dev/input/mice`.
+- **Input:** the US keymap, read from the console with `KDGKBENT`, and the pointer through `/dev/input/mice` (the PS/2 mouse, and since W22 QEMU's tablet as moves; see below).
+
+## Sound and the pointer (W22)
+
+`make run-desktop` (and every run target) boots with an AC'97 card and QEMU's virtio tablet. The tablet is an absolute pointer: X's pointer sits where the host's is, with no click into the window to grab it and no Ctrl-Alt-G to let go (`startx` runs `xaccel` first, which turns X's acceleration off so the moves stay exact). `TABLET=0 make run-desktop` leaves only the PS/2 mouse, which needs the grab again.
+
+Sound goes nowhere by default (`RUN_AUDIO ?= none`: the card is there and plays into nothing). To hear it, give QEMU a host backend:
+
+```sh
+make run-desktop RUN_AUDIO=pa     # PulseAudio; WSLg provides it on Windows
+```
+
+Doom from dmenu then plays its effects. Only one program plays at a time (`/dev/dsp` has one opener), and there is no music or recording.
 
 ## What to know
 

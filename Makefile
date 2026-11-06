@@ -432,11 +432,17 @@ run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
 desktop-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom)"; fi
+# W22-S06 (M22): the first boot with the tablet (a click by absolute
+# position moves dwm's focus) and an AC'97 recording Doom's menu sounds.
+DESKTOP_WAV := $(BUILD)/desktop-smoke.wav
+DESKTOP_SOUND := -audiodev wav,id=snd0,path=$(DESKTOP_WAV) -device AC97,audiodev=snd0
 desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
 	rm -f $(BUILD)/home-desktop.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-desktop.img -label burrowhome -size 64 ../workbench
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC)" \
+	rm -f $(DESKTOP_WAV)
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC) $(TABLET_DEV) $(DESKTOP_SOUND)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-1.txt 360 tests/smoke/keys/desktop-1.keys
+	python3 tests/smoke/checkwav.py $(DESKTOP_WAV) sounds 3
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-2.txt 90 tests/smoke/keys/desktop-2.keys
 	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-desktop.img >/dev/null && echo "DESKTOP HOME PASS (fsck.fat after a desktop session)"; \

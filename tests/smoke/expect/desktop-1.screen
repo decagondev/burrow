@@ -15,8 +15,10 @@ size  build/screen-desktop.ppm 1024 768
 pixel build/screen-desktop.ppm 20 3 #005577
 pixel build/screen-desktop.ppm 600 3 #005577
 pixel build/screen-desktop.ppm 66 3 #222222
-pixel build/screen-desktop.ppm 555 600 #005577
-pixel build/screen-desktop.ppm 563 600 #444444
+# (since W22-S06 the tablet's click gave the first terminal, the stack on
+# the right, the focus: its border is cyan and the master's grey)
+pixel build/screen-desktop.ppm 555 600 #444444
+pixel build/screen-desktop.ppm 563 600 #005577
 pixel build/screen-desktop.ppm 192 184 #000000
 # after Alt+Shift+q: startx stopped the server and the console is back
 # (the band and the paper)

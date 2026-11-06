@@ -5,7 +5,12 @@
 # on /dev/tty1. Two terminals, vi saves a file in the first, the second
 # shows .xinitrc's /home, Doom from dmenu to its title and out through the
 # menu, Alt+Shift+q, and startx hands the console back.
+# W22-S06: with QEMU's tablet and an AC'97 that records: the pointer is put
+# on the first terminal by absolute position and clicked, which gives it
+# dwm's focus back from the second (only the first shell set ONE); Doom's menu
+# sounds land in the WAV, which checkwav.py counts.
 wait burrow>
+screen 1024 768
 type run /bin/busybox sh
 key ret
 wait built-in shell
@@ -13,6 +18,23 @@ type X=/opt/x11/bin/xfocus; for w in dwm st-256color '-n 2 st-256color' dmenu; d
 key ret
 wait startx: /home/.xinitrc
 wait xfocus: dwm
+sleep 1
+# TinyX spends its first packets finding the mouse's protocol: small moves,
+# then the corner, which puts X's pointer in step (the kernel overshoots
+# edges), then the left, where dwm will put the second terminal (a new
+# window is the master), so that until the click the pointer is over it
+abs 200 400
+abs 210 410
+abs 200 400
+abs 210 410
+abs 200 400
+abs 210 410
+abs 200 400
+abs 210 410
+sleep 1
+abs 0 0
+sleep 1
+abs 200 400
 sleep 1
 key alt-shift-ret
 wait xfocus: st-256color
@@ -27,7 +49,7 @@ sleep 1
 type :wq
 key ret
 sleep 2
-type cat desk.txt > /dev/tty1
+type cat desk.txt > /dev/tty1; ONE=first
 key ret
 wait written with vi on the desktop
 key alt-shift-ret
@@ -36,6 +58,13 @@ sleep 1
 type echo desktop: two in $(pwd) > /dev/tty1
 key ret
 wait desktop: two in /home
+abs 800 400
+sleep 1
+click left
+sleep 1
+type echo desktop: focus on ${ONE:-the second} > /dev/tty1
+key ret
+wait desktop: focus on first
 key alt-p
 wait xfocus: dmenu
 sleep 1
