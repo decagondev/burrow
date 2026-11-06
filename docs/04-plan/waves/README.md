@@ -25,6 +25,7 @@
 | W20 | Many CPUs, hardened | M20 | done | [WAVE-20](WAVE-20-smp.md) |
 | W21 | A firmware framebuffer | M21 | done | [WAVE-21](WAVE-21-framebuffer.md) |
 | W22 | Sound and an absolute pointer | M22 | done | [WAVE-22](WAVE-22-sound-tablet.md) |
+| W23 | /proc and virtio devices | M23 | planned | [WAVE-23](WAVE-23-proc-virtio.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 

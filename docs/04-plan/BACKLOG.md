@@ -133,7 +133,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E14.F04 As a user, I want a real-time clock, so that files and programs see the real date.
 - [x] E14.F05 As a porter, I want `mmap` of regular files, so that fonts map and a dynamic loader becomes possible.
 - [x] E14.F06 As a porter, I want `AF_UNIX` sockets (pairs, names, abstract names, `SCM_RIGHTS`), so that an X server and its clients can talk.
-- [ ] E14.F08 As a porter, I want named datagram Unix sockets (`bind`, `connect` and `sendto` with an address on `SOCK_DGRAM`), so that `syslog` and other datagram clients reach their servers (W14-S07 left them `-EOPNOTSUPP`).
+- [ ] E14.F08 As a porter, I want named datagram Unix sockets (`bind`, `connect` and `sendto` with an address on `SOCK_DGRAM`), so that `syslog` and other datagram clients reach their servers (W14-S07 left them `-EOPNOTSUPP`). [W23]
 - [x] E14.F07 As a porter, I want the `KD*`/`VT_*` terminal calls, so that graphics programs can take and give back the screen.
 
 ## E15 Qt
@@ -177,7 +177,18 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E19.F03 As a user, I want permissions checked on every path, `open` and `execve`, so that one user cannot change another's files. [W19]
 - [x] E19.F04 As a porter, I want symbolic and hard links with Linux's path rules (`ELOOP`, `O_NOFOLLOW`, `..` after a link), so that install scripts and build tools work unchanged. [W19]
 - [x] E19.F05 As a user, I want to boot from an ext2 root disk to a `login:` prompt and manage users with `passwd` and `adduser`, so that Burrow is a multi-user system. [W19]
-- Later: ext3/ext4 (journal, extents) · ACLs and extended attributes · capabilities · `/proc` · ssh (dropbear, with E17).
+- Later: ext3/ext4 (journal, extents) · ACLs and extended attributes · capabilities · `/proc` (W23) · ssh (dropbear, with E17).
+
+## E20 /proc and virtio devices
+*Exit: the tools that look inside a Unix work, and disks and the network run on virtio.* [W23]
+
+- [ ] E20.F01 As a user, I want `/proc` (processes, their descriptors, maps and links, memory, CPUs, mounts), so that busybox `ps`, `free`, `tty`, `df` and `mount` and Go's `os.Executable` work unchanged. [W23]
+- [ ] E20.F02 As a user, I want CPU time counted per thread (`times`, `getrusage`, `/proc/stat`), so that `top` and `time` show where the CPUs went. [W23]
+- [ ] E20.F03 As a user, I want virtio-blk disks behind `block.Device`, so that the root and home disks use QEMU's paravirtual bus. [W23]
+- [ ] E20.F04 As a user, I want a virtio-net card behind `netdev.Device`, so that the network uses QEMU's paravirtual card. [W23]
+- [ ] E20.F05 As a user, I want DHCP in the kernel (`eth0 dhcp` in `/etc/net.conf`), so that Burrow takes its address from the network. [W23]
+- [ ] E20.F06 As a porter, I want named datagram Unix sockets and SysV semaphores, so that `syslogd` and `logger` work (E14.F08). [W23]
+- Later: `/sys` · `AF_PACKET` (`udhcpc`, `tcpdump`) · network offloads and multiqueue · MSI-X · `ptrace` and `/proc/<pid>/mem`.
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [W20, then later]
