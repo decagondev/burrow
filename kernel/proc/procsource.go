@@ -4,9 +4,10 @@ package proc
 // snapshot of one process (taken under s.mu, then p.mu, then the memory's
 // own lock, never two at once beyond that order), the uptime, the load
 // average sampled every five seconds as Linux does, memory and uname. A
-// thread counts as running unless a system call has held it for more than
-// blockedAfter (then it is waiting: read, wait4, nanosleep); one reading its
-// own stat is running, as on Linux. Never changes a process. Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md.
+// thread counts as running unless it has been in a call that waits (read,
+// wait4, nanosleep, poll, futex, ...) for more than blockedAfter; one
+// opening its own stat is in openat, so running, as on Linux, however
+// loaded the machine. Never changes a process. Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md.
 
 import (
 	"math"
@@ -26,9 +27,16 @@ const (
 	blockedAfter = 10 * time.Millisecond
 )
 
+// waits are the system calls a thread may sleep in (Linux numbers).
+var waits = map[int64]bool{
+	0: true, 7: true, 23: true, 34: true, 35: true, 43: true, 45: true, 47: true, 61: true,
+	130: true, 202: true, 230: true, 232: true, 247: true, 270: true, 271: true, 281: true, 288: true,
+}
+
 // running says whether t is on a CPU or ready for one.
 func (t *Thread) running(now int64) bool {
-	return t.inNr.Load() < 0 || time.Duration(now-t.inSince.Load()) < blockedAfter
+	nr := t.inNr.Load()
+	return nr < 0 || !waits[nr] || time.Duration(now-t.inSince.Load()) < blockedAfter
 }
 
 var _ procfs.Source = (*System)(nil)

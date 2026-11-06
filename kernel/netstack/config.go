@@ -13,12 +13,15 @@ import (
 //	address 10.0.2.15/24   (eth0's address and its subnet)
 //	gateway 10.0.2.2       (where everything else goes)
 //	dns     10.0.2.3       (for /etc/resolv.conf's readers; may repeat)
+//	eth0 dhcp              (ask a DHCP server first, W23-S05; the lines
+//	                        above, if any, are what to use without one)
 //
-// with # starting a comment. No DHCP yet: QEMU's user network is fixed.
+// with # starting a comment.
 type Config struct {
 	Addr    netip.Prefix
 	Gateway netip.Addr
 	DNS     []netip.Addr
+	DHCP    bool
 }
 
 // ParseConfig reads a net.conf.
@@ -36,6 +39,11 @@ func ParseConfig(r io.Reader) (Config, error) {
 		}
 		var err error
 		switch f[0] {
+		case "eth0":
+			if f[1] != "dhcp" {
+				err = fmt.Errorf("eth0 %q: only dhcp", f[1])
+			}
+			c.DHCP = true
 		case "address":
 			c.Addr, err = netip.ParsePrefix(f[1])
 		case "gateway":
@@ -54,6 +62,9 @@ func ParseConfig(r io.Reader) (Config, error) {
 	}
 	if err := sc.Err(); err != nil {
 		return c, err
+	}
+	if c.DHCP && !c.Addr.IsValid() {
+		return c, nil // the lease will say
 	}
 	if !c.Addr.IsValid() || !c.Addr.Addr().Is4() {
 		return c, fmt.Errorf("net.conf: no IPv4 address")

@@ -85,13 +85,18 @@ comma := ,
 ide_drive = -drive file=$(1)$(comma)format=raw$(comma)if=ide$(comma)index=$(2)$(comma)media=disk
 virtio_drive = -drive file=$(1)$(comma)format=raw$(comma)if=virtio
 data_drive = $(if $(filter virtio,$(DISK_IF)),$(call virtio_drive,$(1)),$(call ide_drive,$(1),$(2)))
+# W23-S05: the network card of the run targets: e1000 (QEMU's default), or
+# NIC=virtio for virtio-net. The smokes choose theirs (NIC_MODEL).
+NIC ?= e1000
+NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
+RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
 xp = $(if $(filter virtio,$(DISK_IF)),$(BUILD)/virtio-expect/$(notdir $(1)),$(1))
-QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) $(RUN_TABLET) \
+QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) $(RUN_TABLET) $(RUN_NIC) \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke disk-bench ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -630,14 +635,17 @@ smp-bench: $(BUILD)/go.img
 # from the host with gofetch and short connections to busybox httpd,
 # against the budgets in tests/smoke/net-budgets.py.
 net-bench: $(BUILD)/go-dev.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=e1000 tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
 # The workbench on the network (W17-S06): run-dev's image and home disk,
 # QEMU's user network (the host is 10.0.2.2, DNS 10.0.2.3, the internet
 # beyond if the host has it) and the host's port 8080 forwarded to 8080 in
 # Burrow: `httpd -p 8080 -h /home` there, then http://localhost:8080 here.
 RUN_NET_FWD ?= 8080
 run-net: $(BUILD)/go-dev.img $(HOME_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) 		$(call data_drive,$(HOME_IMG),1) 		-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
+		$(call data_drive,$(HOME_IMG),1) \
+		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
 # with tcc, write and rename a Lua script; power off; boot again and find
@@ -694,6 +702,24 @@ proc-smoke-run: $(BUILD)/go-busybox.img
 # derived from the IDE ones (tests/smoke/virtio-expect.py: hdb -> vda, ...).
 virtio-smoke:
 	$(MAKE) --no-print-directory DISK_IF=virtio disk-smoke dev-smoke unix-smoke
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory virtio-net-smoke; \
+	else echo "VIRTIO NET SMOKE SKIP (make busybox ports builds what it needs)"; fi
+# W23-S05: net-smoke's two parts on virtio-net, the address from DHCP
+# (kargs net=dhcp; QEMU's user network serves it).
+$(BUILD)/go-dev-dhcp.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
+	echo net=dhcp > $(BUILD)/kargs-dhcp.txt
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar \
+		-payload kargs=$(BUILD)/kargs-dhcp.txt >/dev/null
+virtio-net-smoke: $(BUILD)/go-dev-dhcp.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev-dhcp.img net 120
+	@grep -aq '\[virtionet\] INFO: eth0 52:54:00:12:34:56, link up' $(BUILD)/smoke-net.log \
+		&& grep -aq '\[net\] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease' $(BUILD)/smoke-net.log \
+		&& grep -aq '\[virtionet\] INFO: 10.0.2.2 is at' $(BUILD)/smoke-net.log \
+		&& echo "VIRTIO NET PASS (virtio-net's eth0 took 10.0.2.15/24 from DHCP)" \
+		|| { echo "VIRTIO NET FAIL: no virtio-net card, lease or ARP answer in build/smoke-net.log"; exit 1; }
+	rm -f $(BUILD)/home-net.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev-dhcp.img $(BUILD)/home-net.img 240
 # The disks' speed (W23-S04, not in make test): the kernel writes and reads
 # 64 MiB of a scratch disk at boot (kargs diskbench=), on IDE then virtio;
 # tests/smoke/disk-budgets.py wants virtio-blk no slower than IDE.

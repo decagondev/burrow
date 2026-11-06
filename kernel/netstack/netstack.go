@@ -48,6 +48,7 @@ type Stack struct {
 	dev    netdev.Device
 	link   *channel.Endpoint
 	stop   context.CancelFunc
+	lease  leaseState // eth0's DHCP lease, if it has one (lease.go, W23-S05)
 }
 
 // New makes a stack with loopback (127.0.0.1/8, ::1) and, if dev is not

@@ -28,4 +28,6 @@ for p in $PORT $TLSPORT; do # both servers listen before Burrow boots (the first
   for _ in $(seq 100); do python3 -c "import socket; socket.create_connection(('127.0.0.1', $p))" 2>/dev/null && break; sleep 0.1; done
 done
 sed "s/@PORT@/$PORT/g; s/@TLSPORT@/$TLSPORT/g; s/@SUM@/$(md5sum < "$WWW/big.bin" | cut -d' ' -f1)/g" "tests/smoke/keys/$NAME.keys" > "$B/$NAME.keys"
-tests/smoke/smoke.sh "$IMG" "tests/smoke/expect/$NAME.txt" "$TIMEOUT" "$B/$NAME.keys"
+# W23-S05: the card is NIC_MODEL's (QEMU's default e1000 unless set)
+QEMU_EXTRA="${QEMU_EXTRA:-} -nic user,model=${NIC_MODEL:-e1000}" \
+  tests/smoke/smoke.sh "$IMG" "tests/smoke/expect/$NAME.txt" "$TIMEOUT" "$B/$NAME.keys"

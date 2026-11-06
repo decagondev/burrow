@@ -20,7 +20,8 @@ python3 tests/smoke/fetch.py bench "$FWD" initrd/etc motd 200 > "$B/net-bench-fe
 FETCH=$!
 trap 'kill $SERVER $FETCH 2>/dev/null || true' EXIT
 sed "s/@PORT@/$PORT/g" tests/smoke/keys/net-bench.keys > "$B/net-bench.keys"
-QEMU_EXTRA="-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$FWD-:8080" \
+echo "NET BENCH card ${NIC_MODEL:-e1000}"
+QEMU_EXTRA="-nic user,model=${NIC_MODEL:-e1000},hostfwd=tcp:127.0.0.1:$FWD-:8080" \
   tests/smoke/smoke.sh "$IMG" tests/smoke/expect/net-bench.txt "$TIMEOUT" "$B/net-bench.keys"
 wait $FETCH
 cat "$B/net-bench-fetch.log"

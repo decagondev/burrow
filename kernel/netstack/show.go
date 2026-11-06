@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 )
@@ -37,6 +38,10 @@ func (s *Stack) Show(w io.Writer) {
 			via = "via " + r.Gateway.String()
 		}
 		fmt.Fprintf(w, "route %v %s dev %s\n", r.Destination, via, infos[r.NIC].Name)
+	}
+	if l, got, ok := s.lease.get(); ok {
+		left := time.Until(got.Add(l.Renew)).Round(time.Second)
+		fmt.Fprintf(w, "dhcp: %v from %v, lease %v, renew in %v\n", l.Addr, l.Server, l.Time, left)
 	}
 	if s.dev != nil {
 		c := s.dev.Stats()

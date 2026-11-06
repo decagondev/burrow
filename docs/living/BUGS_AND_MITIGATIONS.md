@@ -35,6 +35,16 @@ None (BUG-0023 closed in W21-S03).
 
 ## Closed
 
+### BUG-0029: A process reading its own stat was sometimes "sleeping"
+- Found: 2026-11-06, W23-S05, in the full `make test`: `SMOKE FAIL [ports]: timed out after 120s`; proctest had printed `proctest: stat-head FAIL` and the keys file waited for `proctest: ok`.
+- Severity: minor (a wrong state letter in `/proc/<pid>/stat` and `status`, and a flaky test; nothing acted on it).
+- Symptom: under the suite's load, `/proc/self/stat` said `S` for the process reading it; Linux says `R`.
+- Root cause: W23-S01 called a thread sleeping when any system call had held it 10 ms. The snapshot is taken in the reader's own `openat`, which took longer than that on a loaded machine.
+- Fix: only the calls that wait (`read`, `poll`, `select`, `nanosleep`, `wait4`, `futex`, `epoll_wait`, `accept`, `recvfrom`, `recvmsg`, `pause`, `rt_sigsuspend`, `waitid`, and their variants) count, and still only after 10 ms (`kernel/proc/procsource.go`, `waits`).
+- Mitigation: none needed beyond the test.
+- Regression: `TestBUG0029StateIsNotATimer` (`kernel/proc`; fails without the fix: `openat` held long was sleeping) and proctest's `stat-head` in `make ports-smoke`.
+- Lesson: a state guessed from a timer is a race with the machine's load; guess from what the thread is doing.
+
 ### BUG-0028: system() and posix_spawn crashed the calling program
 - Found: 2026-11-05, W22-S03: Doom built with sound stopped in `I_Error` (an unrelated build mistake), whose error box runs `system()`; the program was killed with a page fault in musl's `posix_spawn` child.
 - Severity: major (every musl program that calls `system()`, `popen()` or `posix_spawn` died; nothing in the tree had called them, which is why it hid since W10).
@@ -379,7 +389,7 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-79 | W23 | CPU-time counters change on every CPU at every switch: reads must not tear and the cost must stay out of `syslat` | closed (S02: one writer per counter, the CPU running the thread with IF=0; counters only grow and are read with 64-bit loads; a clock read and a few adds per switch, tick and ring crossing; `mem-smoke`'s `syslat` in budget) |
 | PIT-80 | W23 | virtio-blk's chains and memory ordering: data pages the device writes, many requests in flight on four CPUs | closed (S04: each slot owns its descriptors and DMA pages and goes back only after the device returned it (a request lost to a timeout keeps its slot out); descriptors are written before the available index, the used index is read before the status; `TestManyReaders` under `-race`; `virtio-smoke` on four CPUs) |
 | PIT-81 | W23 | Two disk buses, one set of labels: the same label on an IDE and a virtio disk must be refused, not mounted twice | closed (S04: `mountData` remembers each label and logs an error for the second disk that carries it, leaving it unmounted) |
-| PIT-82 | W23 | DHCP and a fixed network: slirp always answers 10.0.2.15, so tests must not mistake the fixed configuration for a lease, and a lease that never comes must time out | open (S05) |
+| PIT-82 | W23 | DHCP and a fixed network: slirp always answers 10.0.2.15, so tests must not mistake the fixed configuration for a lease, and a lease that never comes must time out | closed (S05: the lease has its own marker, `eth0 dhcp ... lease ... from`, that a fixed configuration never prints, and virtio-net-smoke checks it; no answer in four tries of 2 s is `ErrNoLease` and the fixed addresses are used, `TestNoServer`) |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
 | PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |

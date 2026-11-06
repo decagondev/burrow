@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S05 virtio-net and DHCP
+
+**Did:** `drivers/virtionet`, the virtio network card as `eth0` (receive buffers offered again, transmit slots freed on the interrupt, a zeroed header, no offloads), tested on S04's fake device. A DHCP client in `kernel/netstack`: messages built and parsed, the first exchange as raw broadcast frames before the stack exists, renewal over the stack's UDP; `eth0 dhcp` in net.conf or `net=dhcp` in the kargs. `NIC=virtio` for the run targets; `virtio-smoke` runs both network smokes on virtio-net with a lease; `make net-bench` on both cards.
+
+**Surprise:** how little the stack had to know: the lease is taken on raw frames, the same way the boot's ARP check already spoke to the card before gVisor existed, and only then does the stack start with the leased address. virtio-net worked on its first boot; the host tests on the fake device had already found what there was to find.
+
+**Bug:** BUG-0029: the full suite caught proctest's own stat saying `S`: S01 counted 10 ms in any system call as sleeping, and on a loaded machine the reader's own `openat` took that long. Only calls that wait count now.
+
+**Next:** W23-S06: named datagram sockets and syslog.
+
 ## 2026-11-06 — W23-S04 virtio-blk
 
 **Did:** `drivers/virtioblk`: virtio block devices as `block.Writer`s named `vda`.., requests as descriptor chains from slots with their own DMA pages, several in flight; the PCI side shared with virtioinput (`drivers/virtiopci`), chained descriptors in `kernel/virtio`, a fake device for tests (`virtio/virtiotest`). `DISK_IF=virtio` for the run targets; `make virtio-smoke` reruns the disk, dev and Unix smokes on virtio disks; `make disk-bench`.

@@ -13,7 +13,7 @@ P1=$(free) P2=$(free)
 python3 tests/smoke/fetch.py "$P1" "$P2" workbench hello.c 50 > "$B/net-serve-fetch.log" 2>&1 &
 FETCH=$!
 trap 'kill $FETCH 2>/dev/null || true' EXIT
-NIC="-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$P1-:8080,hostfwd=tcp:127.0.0.1:$P2-:8081"
+NIC="-nic user,model=${NIC_MODEL:-e1000},hostfwd=tcp:127.0.0.1:$P1-:8080,hostfwd=tcp:127.0.0.1:$P2-:8081"
 QEMU_EXTRA="-drive file=$HOME_DISK,format=raw,if=ide,index=1,media=disk $NIC" \
   tests/smoke/smoke.sh "$IMG" tests/smoke/expect/net-serve.txt "$TIMEOUT" tests/smoke/keys/net-serve.keys
 status=0

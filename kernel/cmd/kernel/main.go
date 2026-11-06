@@ -36,6 +36,7 @@ import (
 	"burrow/kernel/drivers/uart"
 	_ "burrow/kernel/drivers/virtioblk"
 	_ "burrow/kernel/drivers/virtioinput"
+	_ "burrow/kernel/drivers/virtionet"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/netstack"
