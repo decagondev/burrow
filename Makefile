@@ -77,11 +77,21 @@ RUN_SOUND  = -audiodev $(RUN_AUDIO),id=snd0 -device AC97,audiodev=snd0
 TABLET ?= 1
 TABLET_DEV = -device virtio-tablet-pci
 RUN_TABLET = $(if $(filter 1,$(TABLET)),$(TABLET_DEV))
+# W23-S04: the bus of the data disks. DISK_IF=virtio puts the run targets'
+# data disks (and make virtio-smoke's) on virtio-blk; the boot disk stays
+# IDE, which the BIOS reads. data_drive is $(call data_drive,image,ide-index).
+DISK_IF ?= ide
+comma := ,
+ide_drive = -drive file=$(1)$(comma)format=raw$(comma)if=ide$(comma)index=$(2)$(comma)media=disk
+virtio_drive = -drive file=$(1)$(comma)format=raw$(comma)if=virtio
+data_drive = $(if $(filter virtio,$(DISK_IF)),$(call virtio_drive,$(1)),$(call ide_drive,$(1),$(2)))
+# the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
+xp = $(if $(filter virtio,$(DISK_IF)),$(BUILD)/virtio-expect/$(notdir $(1)),$(1))
 QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) $(RUN_TABLET) \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke disk-bench ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -277,7 +287,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -342,14 +352,16 @@ doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # overwrite the end of a fresh blank scratch disk, flush and read it back;
 # then tests/smoke/checkdisk.py checks the image file on the host, so the
 # bytes are known to have reached the disk.
-$(BUILD)/go-disktest.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
-	echo disktest=hdb > $(BUILD)/kargs-disktest.txt
+# kargs disktest=<disk>: hdb, or vda on virtio (W23-S04)
+DISKTEST_DISK = $(if $(filter virtio,$(DISK_IF)),vda,hdb)
+$(BUILD)/go-disktest-%.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
+	echo disktest=$* > $(BUILD)/kargs-disktest-$*.txt
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
-		-payload kargs=$(BUILD)/kargs-disktest.txt >/dev/null
-disk-smoke: $(BUILD)/go-disktest.img $(BUILD)/ext2.img $(BUILD)/user/permtest $(BUILD)/user/linktest
+		-payload kargs=$(BUILD)/kargs-disktest-$*.txt >/dev/null
+disk-smoke: $(BUILD)/go-disktest-$(DISKTEST_DISK).img $(BUILD)/ext2.img $(BUILD)/user/permtest $(BUILD)/user/linktest $(call xp,tests/smoke/expect/disk.txt)
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/scratch.img,format=raw,if=ide,index=1,media=disk $(EXT2_DRIVE)" \
-		tests/smoke/smoke.sh $(BUILD)/go-disktest.img tests/smoke/expect/disk.txt 60 tests/smoke/keys/disk.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/scratch.img,1) $(call data_drive,$(BUILD)/ext2.img,2)" \
+		tests/smoke/smoke.sh $(BUILD)/go-disktest-$(DISKTEST_DISK).img $(call xp,tests/smoke/expect/disk.txt) 60 tests/smoke/keys/disk.keys
 	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
 	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/ext2.img >/dev/null \
 		&& echo "EXT2 DISK PASS (e2fsck after permtest and linktest wrote to it)" \
@@ -429,7 +441,7 @@ x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
 X11_DRIVE_HDC := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=2,media=disk
 run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call data_drive,$(HOME_IMG),1) $(call data_drive,$(BUILD)/x11-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 desktop-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom)"; fi
@@ -503,7 +515,7 @@ qtpad-smoke: $(BUILD)/go-dev.img $(BUILD)/qt-data.img
 # with the Qt disk at /opt/qt: run /opt/qt/bin/qtpad /home/hello.c
 run-qt: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/qt-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk $(QT_DRIVE_HDC) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call data_drive,$(HOME_IMG),1) $(call data_drive,$(BUILD)/qt-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds
@@ -541,7 +553,7 @@ $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call data_drive,$(HOME_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # A multi-user Unix (W19-S06): go-unix.img's kargs say "login", so the
 # kernel runs /bin/login before the console; the root disk (scripts/mkroot.py:
@@ -559,16 +571,16 @@ $(BUILD)/root-test.img: $(ROOT_SRC)
 	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $@
 $(ROOT_IMG):
 	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $(abspath $@)
-UNIX_DRIVE = -drive file=$(BUILD)/unix-test.img,format=raw,if=ide,index=1,media=disk
+UNIX_DRIVE = $(call data_drive,$(BUILD)/unix-test.img,1)
 unix-smoke:
 	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory unix-smoke-run; \
 	else echo "UNIX SMOKE SKIP (make busybox builds what the root disk needs)"; fi
-unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img
+unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(call xp,tests/smoke/expect/unix-1.txt) $(call xp,tests/smoke/expect/unix-2.txt)
 	cp $(BUILD)/root-test.img $(BUILD)/unix-test.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(UNIX_DRIVE) $(FIXED_RTC)" \
-		tests/smoke/smoke.sh $(BUILD)/go-unix.img tests/smoke/expect/unix-1.txt 120 tests/smoke/keys/unix-1.keys
+		tests/smoke/smoke.sh $(BUILD)/go-unix.img $(call xp,tests/smoke/expect/unix-1.txt) 120 tests/smoke/keys/unix-1.keys
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(UNIX_DRIVE)" \
-		tests/smoke/smoke.sh $(BUILD)/go-unix.img tests/smoke/expect/unix-2.txt 90 tests/smoke/keys/unix-2.keys
+		tests/smoke/smoke.sh $(BUILD)/go-unix.img $(call xp,tests/smoke/expect/unix-2.txt) 90 tests/smoke/keys/unix-2.keys
 	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/unix-test.img >/dev/null \
 		&& echo "UNIX DISK PASS (e2fsck after two boots of logins, su, adduser, passwd)" \
 		|| { echo "UNIX DISK FAIL: e2fsck rejects build/unix-test.img"; exit 1; }
@@ -580,7 +592,7 @@ unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img
 		|| { echo "UNIX ECHO FAIL: a password was echoed"; exit 1; }
 run-unix: $(BUILD)/go-unix.img $(ROOT_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		-drive file=$(ROOT_IMG),format=raw,if=ide,index=1,media=disk -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call data_drive,$(ROOT_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots
@@ -625,7 +637,7 @@ net-bench: $(BUILD)/go-dev.img
 # Burrow: `httpd -p 8080 -h /home` there, then http://localhost:8080 here.
 RUN_NET_FWD ?= 8080
 run-net: $(BUILD)/go-dev.img $(HOME_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) 		-drive file=$(HOME_IMG),format=raw,if=ide,index=1,media=disk 		-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) 		$(call data_drive,$(HOME_IMG),1) 		-nic user,model=e1000,hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
 # with tcc, write and rename a Lua script; power off; boot again and find
@@ -633,13 +645,13 @@ run-net: $(BUILD)/go-dev.img $(HOME_IMG)
 dev-smoke:
 	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory dev-smoke-run; \
 	else echo "DEV SMOKE SKIP (make busybox ports builds what the workbench needs)"; fi
-dev-smoke-run: $(BUILD)/go-dev.img
+dev-smoke-run: $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/dev-1.txt) $(call xp,tests/smoke/expect/dev-2.txt) $(call xp,tests/smoke/expect/dev-ext2-1.txt) $(call xp,tests/smoke/expect/dev-ext2-2.txt)
 	rm -f $(BUILD)/home-test.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-test.img -label burrowhome -size 64 ../workbench
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk $(FIXED_RTC)" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-1.txt 120 tests/smoke/keys/dev-1.keys
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-test.img,format=raw,if=ide,index=1,media=disk" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-2.txt 90 tests/smoke/keys/dev-2.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-test.img,1) $(FIXED_RTC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/dev-1.txt) 120 tests/smoke/keys/dev-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-test.img,1)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/dev-2.txt) 90 tests/smoke/keys/dev-2.keys
 	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-test.img >/dev/null && echo "HOME DISK PASS (fsck.fat after two boots)"; \
 	else echo "HOME DISK SKIP (no fsck.fat)"; fi
 	@if command -v mdir >/dev/null; then mdir -i $(BUILD)/home-test.img ::hello.c | grep -q 2030-01-02 \
@@ -650,10 +662,10 @@ dev-smoke-run: $(BUILD)/go-dev.img
 	# then e2fsck and debugfs check what the kernel wrote.
 	rm -f $(BUILD)/home-ext2.img
 	$(MKE2FS) -q -F -t ext2 -L BURROWHOME -E root_owner=0:0 -d workbench $(BUILD)/home-ext2.img 64M
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-ext2.img,format=raw,if=ide,index=1,media=disk $(FIXED_RTC)" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-ext2-1.txt 120 tests/smoke/keys/dev-1.keys
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-ext2.img,format=raw,if=ide,index=1,media=disk" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/dev-ext2-2.txt 90 tests/smoke/keys/dev-2.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-ext2.img,1) $(FIXED_RTC)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/dev-ext2-1.txt) 120 tests/smoke/keys/dev-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-ext2.img,1)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/dev-ext2-2.txt) 90 tests/smoke/keys/dev-2.keys
 	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/home-ext2.img >/dev/null && echo "EXT2 HOME PASS (e2fsck after two boots)"
 	@PATH="$$PATH:/usr/sbin:/sbin" debugfs -R "stat /hello.c" $(BUILD)/home-ext2.img 2>/dev/null | grep -q "mtime:.*2030" \
 		&& echo "EXT2 HOME DATES PASS (hello.c carries the RTC's date)" \
@@ -676,6 +688,30 @@ proc-smoke:
 	else echo "PROC SMOKE SKIP (make busybox downloads and builds it)"; fi
 proc-smoke-run: $(BUILD)/go-busybox.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/proc.txt 90 tests/smoke/keys/proc.keys
+
+# virtio-blk (W23-S04): disk-smoke, dev-smoke and unix-smoke again with
+# their data disks on virtio (vda, vdb), checked against expect files
+# derived from the IDE ones (tests/smoke/virtio-expect.py: hdb -> vda, ...).
+virtio-smoke:
+	$(MAKE) --no-print-directory DISK_IF=virtio disk-smoke dev-smoke unix-smoke
+# The disks' speed (W23-S04, not in make test): the kernel writes and reads
+# 64 MiB of a scratch disk at boot (kargs diskbench=), on IDE then virtio;
+# tests/smoke/disk-budgets.py wants virtio-blk no slower than IDE.
+$(BUILD)/go-diskbench-%.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
+	echo diskbench=$* > $(BUILD)/kargs-diskbench-$*.txt
+	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
+		-payload kargs=$(BUILD)/kargs-diskbench-$*.txt >/dev/null
+disk-bench: $(BUILD)/go-diskbench-hdb.img $(BUILD)/go-diskbench-vda.img
+	rm -f $(BUILD)/bench.img && truncate -s 80M $(BUILD)/bench.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call ide_drive,$(BUILD)/bench.img,1)" \
+		tests/smoke/smoke.sh $(BUILD)/go-diskbench-hdb.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
+	cp $(BUILD)/smoke-disk-bench.log $(BUILD)/disk-bench-ide.log
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call virtio_drive,$(BUILD)/bench.img)" \
+		tests/smoke/smoke.sh $(BUILD)/go-diskbench-vda.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
+	python3 tests/smoke/disk-budgets.py $(BUILD)/disk-bench-ide.log $(BUILD)/smoke-disk-bench.log
+$(BUILD)/virtio-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
+	@mkdir -p $(dir $@)
+	python3 tests/smoke/virtio-expect.py $< $@
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

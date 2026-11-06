@@ -69,11 +69,14 @@ var dataDisks = map[string]struct{ point, env string }{
 // disk can be written (W13-S04), or ext2 (W19-S01; read-write since S02), at
 // the place its label names: /home for the home disk (W13-S05), /opt/qt for
 // the Qt disk (W15-S02), /mnt for the first other one, and /opt/x11 for the
-// X disk (W16-S02).
+// X disk (W16-S02). Since W23-S04 the virtio disks (vda..vdd) are mounted
+// the same way, after the IDE ones; a label found on two disks is refused
+// the second time (PIT-81), never mounted twice.
 func (k *kernel) mountData(log *klog.Logger) {
-	for _, name := range []string{"hdb", "hdc", "hdd"} {
+	seen := map[string]string{}
+	for _, name := range []string{"hdb", "hdc", "hdd", "vda", "vdb", "vdc", "vdd"} {
 		if d, ok := block.Get(name); ok {
-			k.mountDisk(log, name, d)
+			k.mountDisk(log, name, d, seen)
 		}
 	}
 }
@@ -120,7 +123,7 @@ func openVolume(d block.Device) (volume, error) {
 	return volume{fsys: fsys, label: fsys.Label, mode: mode, kind: "fat32", shown: "FAT32"}, nil
 }
 
-func (k *kernel) mountDisk(base *klog.Logger, name string, d block.Device) {
+func (k *kernel) mountDisk(base *klog.Logger, name string, d block.Device, seen map[string]string) {
 	log := base.With("fat")
 	if ext2.Probe(block.ReaderAt(d)) {
 		log = base.With("ext2")
@@ -130,6 +133,11 @@ func (k *kernel) mountDisk(base *klog.Logger, name string, d block.Device) {
 		log.Warnf("%s: %v", name, err)
 		return
 	}
+	if first, dup := seen[v.label]; dup && v.label != "" {
+		log.Errorf("%s: volume %q is on %s too: not mounted twice", name, v.label, first)
+		return
+	}
+	seen[v.label] = name
 	point := "mnt"
 	disk, isData := dataDisks[v.label]
 	switch {

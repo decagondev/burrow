@@ -1,0 +1,5 @@
+# make disk-bench (W23-S04): the kernel measures the scratch disk at boot
+# (kargs diskbench=<disk>); this only waits for the console and powers off.
+wait burrow>
+type poweroff
+key ret

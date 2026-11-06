@@ -16,6 +16,7 @@ import (
 
 const (
 	descBytes  = 16
+	DescNext   = 1 // VIRTQ_DESC_F_NEXT: the chain goes on at next (W23-S04)
 	DescWrite  = 2 // VIRTQ_DESC_F_WRITE: the device writes this buffer
 	ringHeader = 4 // flags u16, idx u16
 	usedElem   = 8 // id u32, len u32
@@ -56,11 +57,18 @@ func (q *Queue) UsedPA() uint64  { return q.pa + uint64(q.usedOff) }
 
 // SetDesc fills descriptor i: length bytes at addr, flags (DescWrite).
 func (q *Queue) SetDesc(i uint16, addr uint64, length uint32, flags uint16) {
+	q.SetDescNext(i, addr, length, flags, 0)
+}
+
+// SetDescNext fills descriptor i as a link of a chain: with DescNext in
+// flags the device goes on to descriptor next (a block request's header,
+// data and status, W23-S04).
+func (q *Queue) SetDescNext(i uint16, addr uint64, length uint32, flags, next uint16) {
 	d := q.mem[int(i)*descBytes:]
 	le.PutUint64(d, addr)
 	le.PutUint32(d[8:], length)
 	le.PutUint16(d[12:], flags)
-	le.PutUint16(d[14:], 0)
+	le.PutUint16(d[14:], next)
 }
 
 func (q *Queue) word(off int) *uint32 { return (*uint32)(unsafe.Pointer(&q.mem[off])) }

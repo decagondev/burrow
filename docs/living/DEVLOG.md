@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W23-S04 virtio-blk
+
+**Did:** `drivers/virtioblk`: virtio block devices as `block.Writer`s named `vda`.., requests as descriptor chains from slots with their own DMA pages, several in flight; the PCI side shared with virtioinput (`drivers/virtiopci`), chained descriptors in `kernel/virtio`, a fake device for tests (`virtio/virtiotest`). `DISK_IF=virtio` for the run targets; `make virtio-smoke` reruns the disk, dev and Unix smokes on virtio disks; `make disk-bench`.
+
+**Surprise:** the size of the difference: 64 MiB written at 1.1 MiB/s through ATA's PIO and at 101.6 MiB/s through virtio-blk, read at 6.4 and 107. And the fake device needed the same discipline as a real one: two kicks served by two goroutines at once raced on the used index and lost a completion, which is what a single device engine never does.
+
+**Next:** W23-S05: virtio-net and DHCP.
+
 ## 2026-11-06 — W23-S03 Descriptors, links and mounts
 
 **Did:** procfs `fd/`, `fdinfo/`, `exe`, `cwd`, `root`, `maps`, `mounts` (and `/proc/mounts` as Linux links it), readable only by the process's user or root; opening `fd/N` reopens a path or shares a pipe's description. musl's `ttyname` works: the console's stdio is named `/dev/tty1` and `/dev/pts/N` can be stat'ed. `statfs` reports sizes from the file systems (`fsattr.Space`), and `stat` gives every mount its own `st_dev`. busybox `mount`, `df`, `fuser`, `lsof`; Go's `os.Executable`; each st on the desktop says which terminal it is.

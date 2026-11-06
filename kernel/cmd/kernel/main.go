@@ -34,6 +34,7 @@ import (
 	_ "burrow/kernel/drivers/ps2"
 	_ "burrow/kernel/drivers/rtc"
 	"burrow/kernel/drivers/uart"
+	_ "burrow/kernel/drivers/virtioblk"
 	_ "burrow/kernel/drivers/virtioinput"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
@@ -129,6 +130,7 @@ func main() {
 	k.startNetwork(log)
 	checkBootDisk(log.With("block"))
 	diskTest(log.With("disktest"))
+	diskBench(log.With("diskbench"))
 	k.mountData(log) // each disk logs as its file system: [fat] or [ext2]
 
 	rows, cols := 25, 80

@@ -1,0 +1,3 @@
+# Ordered markers for make disk-bench (W23-S04, tests/smoke/keys/disk-bench.keys).
+[diskbench] INFO:
+burrow> poweroff
