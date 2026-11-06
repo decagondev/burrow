@@ -10,7 +10,9 @@
  * /dev/input/event0: c clears, Esc quits, and the console comes back
  * (KD_TEXT, K_XLATE). "paint crash" takes the screen and then dies of a
  * NULL read: the kernel must give the console back by itself. Uses only
- * Linux interfaces. Prints "paint: ready" and "paint: N strokes".
+ * Linux interfaces. Prints "paint: ready" and "paint: N strokes". An
+ * absolute pointer at /dev/input/event2 (QEMU's tablet, W22-S05) moves the
+ * cursor too: its position scaled by EVIOCGABS's range to the screen.
  * tests/smoke/expect/desk.screen checks its pixels.
  * Docs: docs/04-plan/waves/WAVE-14-desktop-groundwork.md. */
 #include <fcntl.h>
@@ -93,6 +95,37 @@ static uint32_t ask(int conn, int i) {
     return c;
 }
 
+static struct input_absinfo abs_x, abs_y;
+
+/* open_tablet opens the absolute pointer, if there is one, and its ranges. */
+static int open_tablet(void) {
+    int fd = open("/dev/input/event2", O_RDONLY | O_NONBLOCK);
+    if (fd >= 0 && (ioctl(fd, EVIOCGABS(ABS_X), &abs_x) < 0 || ioctl(fd, EVIOCGABS(ABS_Y), &abs_y) < 0)) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+/* scale maps an absolute value onto [0, size): equal shares of the range. */
+static int scale(int v, const struct input_absinfo *a, int size) {
+    long long span = (long long)a->maximum - a->minimum + 1;
+    if (span <= 1) return 0;
+    if (v < a->minimum) v = a->minimum;
+    if (v > a->maximum) v = a->maximum;
+    return (int)((long long)(v - a->minimum) * size / span);
+}
+
+/* move applies one event's motion to the cursor, kept on the screen. */
+static void move(const struct input_event *e, int *x, int *y) {
+    if (e->type == EV_REL && e->code == REL_X) *x += e->value;
+    if (e->type == EV_REL && e->code == REL_Y) *y += e->value;
+    if (e->type == EV_ABS && e->code == ABS_X) *x = scale(e->value, &abs_x, width);
+    if (e->type == EV_ABS && e->code == ABS_Y) *y = scale(e->value, &abs_y, height);
+    *x = *x < 0 ? 0 : *x >= width ? width - 1 : *x;
+    *y = *y < 0 ? 0 : *y >= height ? height - 1 : *y;
+}
+
 static int take_screen(int tty) {
     return ioctl(tty, KDSETMODE, KD_GRAPHICS) == 0 && ioctl(tty, KDSKBMODE, K_OFF) == 0;
 }
@@ -121,27 +154,29 @@ int main(int argc, char **argv) {
     int kbd = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
     int mouse = open("/dev/input/event1", O_RDONLY | O_NONBLOCK);
     if (kbd < 0 || mouse < 0 || open_fb() < 0) { perror("paint: open"); return 1; }
+    int tablet = open_tablet();
     canvas();
     int x = width / 2, y = height / 2, down = 0, strokes = 0;
     uint32_t colour = ask(conn, 0);
     printf("paint: ready, the palette answers on " SOCK "\n");
     fflush(stdout);
     for (int done = 0; !done;) {
-        struct pollfd p[2] = {{.fd = mouse, .events = POLLIN}, {.fd = kbd, .events = POLLIN}};
-        poll(p, 2, -1);
+        struct pollfd p[3] = {{.fd = mouse, .events = POLLIN}, {.fd = kbd, .events = POLLIN},
+                              {.fd = tablet, .events = POLLIN}};
+        poll(p, tablet >= 0 ? 3 : 2, -1);
         struct input_event ev[32];
-        ssize_t n = read(mouse, ev, sizeof ev);
-        for (ssize_t i = 0; i < n / (ssize_t)sizeof ev[0]; i++) {
-            int ox = x, oy = y;
-            if (ev[i].type == EV_REL && ev[i].code == REL_X) x += ev[i].value;
-            if (ev[i].type == EV_REL && ev[i].code == REL_Y) y += ev[i].value;
-            x = x < 0 ? 0 : x >= width ? width - 1 : x;
-            y = y < 0 ? 0 : y >= height ? height - 1 : y;
-            if (down) line(ox, oy, x, y, colour);
-            if (ev[i].type == EV_KEY && ev[i].code == BTN_LEFT) {
-                down = ev[i].value && y >= SWATCH;
-                if (ev[i].value && y < SWATCH) colour = ask(conn, x / SWATCH < 8 ? x / SWATCH : 7);
-                if (down) strokes++;
+        ssize_t n;
+        for (int src = 0; src < 2; src++) {
+            n = src == 0 ? read(mouse, ev, sizeof ev) : tablet >= 0 ? read(tablet, ev, sizeof ev) : 0;
+            for (ssize_t i = 0; i < n / (ssize_t)sizeof ev[0]; i++) {
+                int ox = x, oy = y;
+                move(&ev[i], &x, &y);
+                if (down) line(ox, oy, x, y, colour);
+                if (ev[i].type == EV_KEY && ev[i].code == BTN_LEFT) {
+                    down = ev[i].value && y >= SWATCH;
+                    if (ev[i].value && y < SWATCH) colour = ask(conn, x / SWATCH < 8 ? x / SWATCH : 7);
+                    if (down) strokes++;
+                }
             }
         }
         n = read(kbd, ev, sizeof ev);

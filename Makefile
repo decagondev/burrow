@@ -81,7 +81,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -717,9 +717,19 @@ sound-smoke: $(BUILD)/go.img
 	python3 tests/smoke/checkwav.py $(SOUND_WAV) tone
 
 # W22-S04: go.img with QEMU's virtio tablet: the driver names it and its
-# axes, and a click reaches it as EV_KEY BTN_LEFT. S05 adds evdev and paint.
+# axes, and a click reaches it as EV_KEY BTN_LEFT. S05: the pointer put on
+# exact pixels by absolute steps (QMP): paint's swatch and a drag
+# (/dev/input/event2), xhello clicked at (400,200) under Xfbdev (moves
+# through /dev/input/mice, xaccel), qtdemo's button and menu (Qt's evdev
+# "abs"). The X and Qt halves skip without their disks.
 tablet-smoke: $(BUILD)/go.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet.txt 60 tests/smoke/keys/tablet.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet.txt 90 tests/smoke/keys/tablet.keys
+	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ]; then 		$(MAKE) --no-print-directory tablet-smoke-x11; else echo "TABLET X11 SKIP (make x11 busybox)"; fi
+	@if [ -f $(BUILD)/qt-root/bin/qthello ]; then 		$(MAKE) --no-print-directory tablet-smoke-qt; else echo "TABLET QT SKIP (make qt)"; fi
+tablet-smoke-x11: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(X11_DRIVE) $(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/tablet-x11.txt 180 tests/smoke/keys/tablet-x11.keys
+tablet-smoke-qt: $(BUILD)/go.img $(BUILD)/qt-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(QT_DRIVE) $(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet-qt.txt 150 tests/smoke/keys/tablet-qt.keys
 
 # W21-S05: a geometry no program hard-codes. VIDEO_ODD is asked of stage2 by
 # two images: go-doom's (the console, fbtest, paint, Doom's title) and

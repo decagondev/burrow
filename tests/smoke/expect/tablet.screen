@@ -1,0 +1,11 @@
+# Pixels of make tablet-smoke (tests/smoke/keys/tablet.keys). Append-only.
+# paint, moved by the tablet alone: red picked from the palette, and a red
+# 5-pixel stroke along y=400 from x=150 to x=650, nothing past its ends.
+size  build/screen-tablet-paint.ppm 1024 768
+pixel build/screen-tablet-paint.ppm 96 32 #ff0000
+pixel build/screen-tablet-paint.ppm 152 400 #ff0000
+pixel build/screen-tablet-paint.ppm 400 402 #ff0000
+pixel build/screen-tablet-paint.ppm 648 398 #ff0000
+pixel build/screen-tablet-paint.ppm 400 408 #ffffff
+pixel build/screen-tablet-paint.ppm 140 400 #ffffff
+pixel build/screen-tablet-paint.ppm 660 400 #ffffff

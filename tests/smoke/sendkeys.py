@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """sendkeys.py - type into a QEMU guest's PS/2 keyboard through the monitor.
 
-Usage: sendkeys.py <monitor-socket> <serial-log> <keys-file> [timeout-seconds]
+Usage: sendkeys.py <monitor-socket> <serial-log> <keys-file> [timeout-seconds] [qmp-socket]
 
 The keys file is a small script, one step per line ('#' comments):
     wait <text>    block until <text> appears in the serial log after
@@ -16,9 +16,15 @@ The keys file is a small script, one step per line ('#' comments):
     mouse <dx> <dy> move the PS/2 mouse (screen directions: dy > 0 is down)
     click <button>  press and release left, right or middle
     press <button>  hold that button down (mouse steps then drag); release <button> lets go
+    screen <w> <h>  the guest's screen size, for abs steps
+    abs <x> <y>     put the absolute pointer (QEMU's virtio tablet, through QMP's
+                    input-send-event) on guest pixel (x, y): the centre of that
+                    pixel's share of the tablet's 0-32767, so the guest's
+                    scaling, value * size / 32768, gives (x, y) back exactly
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
+import json
 import os
 import socket
 import sys
@@ -104,12 +110,42 @@ def pixel(path, x, y):
 
 
 DUMP_WAIT_S = 3  # time for the kernel's dump to reach the log
+ABS_RANGE = 32768  # QEMU's absolute axes run 0..32767
+ABS_DELAY_S = 0.1  # between abs steps, for the guest to take each one
+
+
+def abs_value(p, size):
+    return min(ABS_RANGE - 1, (2 * p + 1) * ABS_RANGE // (2 * size))
+
+
+class QMP:
+    """QEMU's machine protocol: one JSON command, then its answer."""
+
+    def __init__(self, path, deadline):
+        self.s = connect(path, deadline)
+        self.f = self.s.makefile('r')
+        self.f.readline()  # the greeting
+        self.call('qmp_capabilities')
+
+    def call(self, name, args=None):
+        msg = {'execute': name}
+        if args is not None:
+            msg['arguments'] = args
+        self.s.sendall((json.dumps(msg) + '\n').encode())
+        while True:
+            reply = json.loads(self.f.readline())
+            if 'error' in reply:
+                raise SystemExit(f'sendkeys: QMP {name}: {reply["error"]}')
+            if 'return' in reply:
+                return reply['return']
 
 
 def main():
     mon, log, keys = sys.argv[1:4]
     deadline = time.time() + float(sys.argv[4] if len(sys.argv) > 4 else 30)
     s = connect(mon, deadline)
+    qmp_path = sys.argv[5] if len(sys.argv) > 5 else None
+    qmp, screen = None, None
 
     def dump(path):
         if os.path.exists(path):
@@ -157,6 +193,18 @@ def main():
                     state = BUTTONS[arg] if op == 'press' else 0
                     s.sendall(f'mouse_button {state}\n'.encode())
                     time.sleep(0.1)
+                elif op == 'screen':
+                    screen = tuple(int(v) for v in arg.split())
+                elif op == 'abs':
+                    if screen is None or qmp_path is None:
+                        raise SystemExit('sendkeys: abs needs a screen step and a QMP socket')
+                    if qmp is None:
+                        qmp = QMP(qmp_path, deadline)
+                    x, y = (int(v) for v in arg.split())
+                    qmp.call('input-send-event', {'events': [
+                        {'type': 'abs', 'data': {'axis': 'x', 'value': abs_value(x, screen[0])}},
+                        {'type': 'abs', 'data': {'axis': 'y', 'value': abs_value(y, screen[1])}}]})
+                    time.sleep(ABS_DELAY_S)
                 elif op == 'sleep':
                     time.sleep(float(arg))
                 elif op == 'screendump':

@@ -1,0 +1,7 @@
+# make tablet-smoke's X half (W22-S05; keys tests/smoke/keys/tablet-x11.keys). Append-only.
+[virtioinput] INFO: QEMU Virtio Tablet, abs x 0-32767 y 0-32767
+mounted at /opt/x11
+xaccel: off
+xhello: exposed
+xhello: button 1 at 400,200
+xhello: ok

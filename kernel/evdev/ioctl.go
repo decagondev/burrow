@@ -4,7 +4,7 @@ package evdev
 // is before they read it (W11-S02, W14-S02): version, id, name, physical
 // path, EVIOCGRAB, and the bitmaps EVIOCGBIT (event types, then the codes of
 // one type), EVIOCGKEY (keys held now), EVIOCGPROP, EVIOCGLED and EVIOCGSW
-// (none here). Toolkits (Qt, libinput, X servers) classify devices by
+// (none here), and EVIOCGABS (an absolute axis's range; W22-S05). Toolkits (Qt, libinput, X servers) classify devices by
 // EVIOCGBIT alone: keys and no relative axes is a keyboard, REL_X/REL_Y with
 // BTN_LEFT is a mouse. Requests are _IOC(dir, 'E', nr, size).
 
@@ -30,6 +30,8 @@ const (
 	nrSw   = 0x1B
 	nrBit  = 0x20 // + event type, up to EV_MAX (0x1F)
 	evMax  = 0x1F
+	nrAbs  = 0x40 // EVIOCGABS(axis): + axis, up to ABS_MAX (0x3F)
+	absMax = 0x3F
 
 	version      = 0x010001
 	busI8042     = 0x11
@@ -56,11 +58,20 @@ func (c *core) bits(ev uint16, n int) []byte {
 		if len(c.id.rels) > 0 {
 			types = append(types, EvRel)
 		}
+		if len(c.id.abs) > 0 {
+			types = append(types, EvAbs)
+		}
 		return bitmap(n, types...)
 	case EvKey:
 		return bitmap(n, c.id.keys...)
 	case EvRel:
 		return bitmap(n, c.id.rels...)
+	case EvAbs:
+		codes := make([]uint16, len(c.id.abs))
+		for i, a := range c.id.abs {
+			codes[i] = a.code
+		}
+		return bitmap(n, codes...)
 	}
 	return bitmap(n)
 }
@@ -71,7 +82,14 @@ func (h *handle) Ioctl(req, arg uint64, in, out func(va uint64, b []byte) error)
 	case eviocgversion:
 		return 0, out(arg, binary.LittleEndian.AppendUint32(nil, version))
 	case eviocgid: // bustype, vendor, product, version
-		return 0, out(arg, []byte{busI8042, 0, 1, 0, byte(c.id.product), 0, 1, 0})
+		bus, vendor := c.id.bus, c.id.vendor
+		if bus == 0 {
+			bus, vendor = busI8042, 1
+		}
+		b := binary.LittleEndian.AppendUint16(nil, bus)
+		b = binary.LittleEndian.AppendUint16(b, vendor)
+		b = binary.LittleEndian.AppendUint16(b, c.id.product)
+		return 0, out(arg, binary.LittleEndian.AppendUint16(b, 1))
 	case eviocgrab:
 		return 0, nil // always granted: an open keyboard already has the keys
 	}
@@ -104,6 +122,12 @@ func (h *handle) Ioctl(req, arg uint64, in, out func(va uint64, b []byte) error)
 		return reply(bitmap(size))
 	case nr >= nrBit && nr <= nrBit+evMax:
 		return reply(c.bits(uint16(nr-nrBit), size))
+	case nr >= nrAbs && nr <= nrAbs+absMax:
+		b, ok := c.absinfo(uint16(nr - nrAbs))
+		if !ok {
+			return 0, syscall.EINVAL // no such axis, as on Linux
+		}
+		return 0, out(arg, b[:min(size, len(b))])
 	}
 	return 0, syscall.ENOTTY
 }

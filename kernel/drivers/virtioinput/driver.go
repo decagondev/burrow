@@ -70,18 +70,22 @@ func (d *inputDriver) Start(env *driver.Env) error {
 		*m.dst = mem
 	}
 	first := true
-	var tab *Tablet
+	var sink func(typ, code uint16, value int32) // set before the line is served
 	emit := func(e Event) {
 		if first {
 			first = false
 			env.Log.Infof("first event: type %d code %d value %d", e.Type, e.Code, e.Value)
 		}
-		if env.Tablet != nil {
-			env.Tablet(e.Type, e.Code, e.Value)
+		if sink != nil {
+			sink(e.Type, e.Code, e.Value)
 		}
 	}
-	if tab, err = New(vd, DMAPage(env.DMAPage), emit); err != nil {
+	tab, err := New(vd, DMAPage(env.DMAPage), emit)
+	if err != nil {
 		return err
+	}
+	if env.Tablet != nil && tab.HasAbs {
+		sink = env.Tablet(driver.TabletInfo{Name: tab.Name, XMin: tab.X.Min, XMax: tab.X.Max, YMin: tab.Y.Min, YMax: tab.Y.Max})
 	}
 	if env.Lines != nil {
 		env.Lines.Serve(int(d.dev.IRQLine), "virtioinput", tab.Interrupt)

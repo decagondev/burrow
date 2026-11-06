@@ -20,8 +20,10 @@ pixel build/screen-x11-after.ppm 500 500 #1e1e28
 # the focused cursor (a solid block in #cccccc), the root weave beside it
 size  build/screen-x11-st.ppm 1024 768
 pixel build/screen-x11-st.ppm 400 300 #000000
-pixel build/screen-x11-st.ppm 3 165 #e5e5e5
-pixel build/screen-x11-st.ppm 27 163 #cccccc
+# (the prompt's row follows the `ls /opt/x11/bin` typed before it: one row
+# lower since W22-S05 added xaccel, which made ls's listing three rows)
+pixel build/screen-x11-st.ppm 3 184 #e5e5e5
+pixel build/screen-x11-st.ppm 27 182 #cccccc
 pixel build/screen-x11-st.ppm 900 600 #000000
 pixel build/screen-x11-st.ppm 901 601 #ffffff
 # S04: dwm with two terminals tiled, the second (focused) as master: the bar

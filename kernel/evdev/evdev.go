@@ -58,9 +58,10 @@ func KeyCode(e0 bool, code byte) uint16 {
 
 // identity is what the identifying ioctls report about a device.
 type identity struct {
-	name, phys string
-	product    uint16
-	keys, rels []uint16 // the EV_KEY and EV_REL codes it can send
+	name, phys           string
+	bus, vendor, product uint16    // EVIOCGID; bus 0 means the 8042's
+	keys, rels           []uint16  // the EV_KEY and EV_REL codes it can send
+	abs                  []absAxis // the EV_ABS axes, in code order from ABS_X
 }
 
 // core is what the event devices share: the files that have one open and
@@ -71,10 +72,12 @@ type core struct {
 	mu    sync.Mutex
 	down  map[uint16]bool
 	opens map[*handle]bool
+	// absValue is each absolute axis's last value (EVIOCGABS)
+	absValue map[uint16]int32
 }
 
 func newCore(id identity, clock func() time.Duration) core {
-	return core{id: id, clock: clock, down: map[uint16]bool{}, opens: map[*handle]bool{}}
+	return core{id: id, clock: clock, down: map[uint16]bool{}, opens: map[*handle]bool{}, absValue: map[uint16]int32{}}
 }
 
 // send queues a batch of events for every open file (c.mu held).

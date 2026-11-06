@@ -165,7 +165,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E18.F03 As a porter, I want shared memory (`MAP_SHARED`, `/dev/shm`, `memfd_create`, SysV `shm*`), so that programs and the X server share buffers. [W18]
 - [x] E18.F04 As a porter, I want dynamic linking (`PT_INTERP`, musl's loader, `dlopen`), so that programs share code and load plugins. [W18]
 - [x] E18.F05 As a user, I want sound: an AC'97 card, `/dev/dsp` with OSS's interface, and Doom's sound effects, so that programs and games are heard. [W22-S02, S03]
-- [ ] E18.F06 As a user, I want an absolute pointer (QEMU's virtio tablet) that X, Qt and paint follow, so that the pointer is where the host's is, with no grab (PIT-32). [W22]
+- [x] E18.F06 As a user, I want an absolute pointer (QEMU's virtio tablet) that X, Qt and paint follow, so that the pointer is where the host's is, with no grab (PIT-32). [W22]
 - [x] E18.F07 As a kernel dev, I want a virtio 1.0 PCI transport (capabilities, feature negotiation, split virtqueues) and shared interrupt lines, so that virtio devices (input now, block and network later) share one tested driver core. [W22]
 - Later: shared Qt and X libraries · music (Doom's MIDI through an OPL emulator) · recording · `/dev/mixer`.
 

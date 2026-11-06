@@ -1,0 +1,38 @@
+# make tablet-smoke, its X half (W22-S05): Xfbdev on go-dev.img with the X
+# disk and QEMU's tablet. xaccel turns X's acceleration off first; TinyX
+# reads /dev/input/mice, whose moves the kernel computes from the tablet.
+wait burrow>
+screen 1024 768
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xaccel && /opt/x11/bin/xhello; kill $!; wait
+key ret
+wait xhello: exposed
+# TinyX spends its first packets finding the mouse's protocol (MAX_VALID,
+# then the IntelliMouse switch): small moves for that, then the corner,
+# which the kernel overshoots so X's pointer is at (0,0) too, whatever it
+# missed; then xhello's window (at 20,20) clicked at exactly (400,200).
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+sleep 1
+abs 0 0
+sleep 1
+abs 420 220
+sleep 1
+click left
+wait xhello: button 1
+type q
+wait xhello: ok
+sleep 2
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

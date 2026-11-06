@@ -32,6 +32,9 @@ const (
 type Mice struct {
 	mu    sync.Mutex
 	opens map[*miceHandle]bool
+	// sessions counts opens that found no other: a reader that tracks the
+	// pointer starts it afresh then (the tablet's moves, W22-S05)
+	sessions uint64
 }
 
 func NewMice() *Mice { return &Mice{opens: map[*miceHandle]bool{}} }
@@ -39,10 +42,15 @@ func NewMice() *Mice { return &Mice{opens: map[*miceHandle]bool{}} }
 func (m *Mice) Open() (devfs.Device, error) {
 	h := &miceHandle{m: m, changed: make(chan struct{})}
 	m.mu.Lock()
+	if len(m.opens) == 0 {
+		m.sessions++
+	}
 	m.opens[h] = true
 	m.mu.Unlock()
 	return h, nil
 }
+
+func (m *Mice) session() uint64 { m.mu.Lock(); defer m.mu.Unlock(); return m.sessions }
 
 func (m *Mice) Read([]byte) (int, error)  { return 0, syscall.EAGAIN }
 func (m *Mice) Write([]byte) (int, error) { return 0, syscall.EINVAL }

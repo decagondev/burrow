@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-06 — W22-S05 An absolute pointer everywhere
+
+**Did:** `/dev/input/event2`, the tablet as Linux evdev (`EV_ABS`, `EVIOCGABS`); `/dev/input/mice` gets its packets as moves scaled to the screen; paint reads the tablet directly, X follows through mice with `xaccel` turning acceleration off, Qt's evdev handler gets `event2` with `abs`. The harness puts the pointer on exact pixels through QMP (`screen`, `abs`), and `make tablet-smoke` checks all three: paint's stroke pixels, xhello's click at exactly (400,200), qtdemo's button and menu. PIT-32, PIT-73 and PIT-75 closed: `run-desktop` and `run-qt` need no grab.
+
+**Surprise:** how little resynchronising a relative stream takes. TinyX eats its first packets while it works out the mouse's protocol, so its pointer and the kernel's idea of it part at once; overshooting by a screen whenever the tablet reaches an edge lets both clamp to the same place, and from there every move is exact. Qt scales by max minus min, one less than the range, so it lands up to a pixel left of everyone else.
+
+**Next:** W22-S06: M22.
+
 ## 2026-11-05 — W22-S04 virtio and the tablet
 
 **Did:** a virtio 1.0 PCI transport in `kernel/virtio` (capabilities, the status handshake, feature negotiation, split virtqueues, notification, the ISR), tested against a device played in Go; `drivers/virtioinput` drives QEMU's virtio tablet on the shared line 11: `QEMU Virtio Tablet, abs x 0-32767 y 0-32767, irq 11`, and a click arrives as EV_KEY BTN_LEFT. `make tablet-smoke`; `TABLET ?= 1` gives the run targets the tablet.

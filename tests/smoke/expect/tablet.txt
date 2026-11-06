@@ -3,3 +3,5 @@
 [driver] INFO: started: [ata bga e1000 pci ps2 rtc serial virtioinput]
 [driver] INFO: irq 11: e1000, virtioinput
 [virtioinput] INFO: first event: type 1 code 272 value 1
+paint: ready
+paint: 1 strokes, last colour ff0000

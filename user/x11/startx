@@ -19,6 +19,9 @@ if [ ! -S /tmp/.X11-unix/X0 ]; then
 	kill $server 2> /dev/null
 	exit 1
 fi
+# W22-S05: no pointer acceleration, so a pointer moved by the tablet (its
+# moves through /dev/input/mice) stays where the host's is.
+/opt/x11/bin/xaccel
 for rc in "$HOME/.xinitrc" /home/.xinitrc /opt/x11/etc/xinitrc; do
 	[ -f "$rc" ] && break
 done

@@ -1,0 +1,28 @@
+# make tablet-smoke, its Qt half (W22-S05): qtdemo on go.img with the Qt
+# disk and QEMU's tablet; qt.env gives Qt's evdev mouse handler event2 with
+# "abs". No corner first: the tablet puts the pointer on the Add button
+# (529,125) and the File menu (21,12) wherever it was.
+wait burrow>
+screen 1024 768
+type run /opt/qt/bin/qtdemo
+key ret
+wait qtdemo: ready
+type hello burrow
+wait typed "hello burrow"
+abs 900 600
+sleep 1
+abs 529 125
+sleep 1
+click left
+wait added "hello burrow"
+abs 21 12
+sleep 1
+click left
+wait menu open
+key esc
+wait menu closed
+key ctrl-q
+wait qtdemo: quit
+wait burrow>
+type poweroff
+key ret

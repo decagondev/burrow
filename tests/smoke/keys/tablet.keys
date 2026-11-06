@@ -1,9 +1,31 @@
-# make tablet-smoke (W22-S04): go.img with QEMU's virtio tablet. A button
+# make tablet-smoke (W22-S04, S05): go.img with QEMU's virtio tablet. A button
 # press goes to the active pointer, the tablet once its driver is ready:
 # the driver logs the first event it is handed.
 wait burrow>
 press left
 release left
 wait first event
+# S05: paint follows /dev/input/event2. Wherever the pointer was, abs puts
+# it on exact pixels: the red swatch (96,32), clicked; then a drag along
+# y=400 from x=150 to x=650 in absolute steps.
+screen 1024 768
+type run /bin/paint
+key ret
+wait paint: ready
+abs 900 700
+abs 96 32
+click left
+abs 150 400
+press left
+abs 275 400
+abs 400 400
+abs 525 400
+abs 650 400
+release left
+sleep 1
+screendump build/screen-tablet-paint.ppm
+key esc
+wait paint: 1 strokes, last colour ff0000
+wait burrow>
 type poweroff
 key ret

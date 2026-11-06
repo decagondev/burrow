@@ -28,11 +28,12 @@ MONITOR=()
 rm -f "$LOG"
 if [ -n "$KEYS" ]; then
   MON="$(mktemp -u "${TMPDIR:-/tmp}/burrow-qemu-${NAME}.XXXXXX")"   # not on DrvFs: no sockets there
-  trap 'rm -f "$MON"' EXIT
-  MONITOR=(-monitor "unix:$MON,server,nowait")
+  QMP="$MON.qmp"   # QMP too, for absolute pointer events (W22-S05)
+  trap 'rm -f "$MON" "$QMP"' EXIT
+  MONITOR=(-monitor "unix:$MON,server,nowait" -qmp "unix:$QMP,server,nowait")
   # sendkeys gives up a little before QEMU is killed, so the kernel's dump
   # (SysRq, W20-S01) of a hang still reaches the log
-  python3 "$(dirname "$0")/sendkeys.py" "$MON" "$LOG" "$KEYS" "$((TIMEOUT > 12 ? TIMEOUT - 6 : TIMEOUT))" &
+  python3 "$(dirname "$0")/sendkeys.py" "$MON" "$LOG" "$KEYS" "$((TIMEOUT > 12 ? TIMEOUT - 6 : TIMEOUT))" "$QMP" &
 fi
 
 set +e

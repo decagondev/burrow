@@ -33,8 +33,8 @@ import (
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	_ "burrow/kernel/drivers/rtc"
-	_ "burrow/kernel/drivers/virtioinput"
 	"burrow/kernel/drivers/uart"
+	_ "burrow/kernel/drivers/virtioinput"
 	"burrow/kernel/hal"
 	"burrow/kernel/klog"
 	"burrow/kernel/netstack"
@@ -100,8 +100,8 @@ func main() {
 
 	input := make(chan byte, 256)
 	driver.Register(uart.NewInput(com1, "serial", uart.COM1IRQ))
-	scancodes, mouse := registerInput(dev, k.boot)
-	keys := &vtKeys{vt: vt.New(), evdev: scancodes} // the console's modes (W14-S08)
+	hooks := registerInput(dev, k.boot)
+	keys := &vtKeys{vt: vt.New(), evdev: hooks.scancodes} // the console's modes (W14-S08)
 	lines := driver.NewLines(func(line int) hal.IRQLine { return amd64.NewIRQ(line) }, log.With("driver"))
 	driver.StartAll(&driver.Env{
 		Ports:       amd64.Ports{},
@@ -113,7 +113,8 @@ func main() {
 		Input:       input,
 		Dev:         dev,
 		Scancodes:   keys.Feed,
-		Mouse:       mouse,
+		Mouse:       hooks.mouse,
+		Tablet:      hooks.tablet,
 		MapMMIO:     amd64.MapMMIO,
 		MapMMIOWC:   amd64.MapMMIOWC,
 		DMAPage:     dmaPage,

@@ -38,10 +38,11 @@ type Env struct {
 	// Mouse, if set, gets every mouse packet in screen directions (dy > 0
 	// down, wheel > 0 up; buttons: bit 0 left, 1 right, 2 middle; W14-S02).
 	Mouse func(dx, dy, wheel int, buttons uint8)
-	// Tablet, if set, gets every event of an absolute pointer (an evdev
-	// type, code and value: EV_ABS, EV_KEY, EV_SYN; virtioinput, W22-S04).
-	Tablet func(typ, code uint16, value int32)
-	Dev   *devfs.FS // where a driver registers its device files (/dev)
+	// Tablet, if set, makes the event device of an absolute pointer (its
+	// name and axes' ranges; virtioinput, W22-S04) and returns what gets each
+	// of its events (an evdev type, code and value: EV_ABS, EV_KEY, EV_SYN).
+	Tablet func(TabletInfo) func(typ, code uint16, value int32)
+	Dev    *devfs.FS // where a driver registers its device files (/dev)
 	// MapMMIO maps device memory (a PCI BAR) and returns it.
 	MapMMIO func(pa, n uint64) ([]byte, error)
 	// MapMMIOWC, if set, maps it write-combining (a framebuffer, W21-S04).
@@ -55,6 +56,12 @@ type Env struct {
 	// Framebuffer is the display mode the firmware set (stage2's VBE mode,
 	// checked by the nucleus; W21-S03); Source 0 when there is none.
 	Framebuffer bootinfo.Framebuffer
+}
+
+// TabletInfo is what an absolute pointer says about itself.
+type TabletInfo struct {
+	Name                   string
+	XMin, XMax, YMin, YMax int32
 }
 
 // Driver is one device driver.

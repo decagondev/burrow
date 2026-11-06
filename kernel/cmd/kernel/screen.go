@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"burrow/kernel/driver"
 	"burrow/kernel/drivers/bga"
 	"burrow/kernel/evdev"
 	"burrow/kernel/fbdev"
@@ -116,15 +117,29 @@ func registerFB0(dev *devfs.FS, s *screenOut) error {
 	return dev.Register("fb0", fbdev.New(mode, s.hold), 0o660)
 }
 
+// inputHooks are what the input drivers feed (driver.Env.Scancodes, Mouse
+// and Tablet).
+type inputHooks struct {
+	scancodes func(byte) bool
+	mouse     func(dx, dy, wheel int, buttons uint8)
+	tablet    func(driver.TabletInfo) func(typ, code uint16, value int32)
+}
+
 // registerInput makes the input devices, /dev/input/event0 (the keyboard),
-// event1 (the mouse) and mice (W14-S02), and returns the hooks the PS/2
-// driver feeds (driver.Env.Scancodes and Mouse).
-func registerInput(dev *devfs.FS, boot time.Time) (func(byte) bool, func(dx, dy, wheel int, buttons uint8)) {
+// event1 (the mouse) and mice (W14-S02), and event2 (an absolute pointer,
+// W22-S05) when its driver finds one.
+func registerInput(dev *devfs.FS, boot time.Time) inputHooks {
 	clock := func() time.Duration { return time.Since(boot) }
 	kbd, mice := evdev.New(clock), evdev.NewMice()
 	mouse := evdev.NewMouse(clock, mice)
 	dev.Register("input/event0", kbd, 0o660)
 	dev.Register("input/event1", mouse, 0o660)
 	dev.Register("input/mice", mice, 0o660)
-	return kbd.Feed, mouse.Feed
+	screen := func() (int, int) { m := bga.Current(); return m.Width, m.Height }
+	tablet := func(ti driver.TabletInfo) func(typ, code uint16, value int32) {
+		t := evdev.NewTablet(clock, ti.Name, [2]int32{ti.XMin, ti.XMax}, [2]int32{ti.YMin, ti.YMax}, mice, screen)
+		dev.Register("input/event2", t, 0o660)
+		return t.Feed
+	}
+	return inputHooks{kbd.Feed, mouse.Feed, tablet}
 }
