@@ -155,7 +155,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E17.F02 As a user, I want TCP/IP in the kernel (gVisor's `tcpip`, pinned), so that Burrow speaks IPv4 and IPv6. [W17]
 - [x] E17.F03 As a porter, I want `AF_INET`/`AF_INET6` sockets with Linux semantics, so that wget, Go's `net/http` and servers work unchanged. [W17]
 - [x] E17.F04 As a user, I want names (`/etc/resolv.conf`, `/etc/hosts`) and DNS, so that programs reach hosts by name. [W17]
-- Later: DHCP · virtio-net · a browser (NetSurf, framebuffer or X) · ssh (dropbear) · TLS for C programs (mbedTLS).
+- Later: DHCP (W23) · virtio-net (W23) · a browser, ssh (dropbear) and TLS for C programs (mbedTLS): E21, W24.
 
 ## E18 Foundations for bigger programs
 *Exit: big programs start fast, share memory, and share code.* [W18]
@@ -189,6 +189,16 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E20.F05 As a user, I want DHCP in the kernel (`eth0 dhcp` in `/etc/net.conf`), so that Burrow takes its address from the network. [W23]
 - [x] E20.F06 As a porter, I want named datagram Unix sockets and SysV semaphores, so that `syslogd` and `logger` work (E14.F08). [W23]
 - Later: `/sys` · `AF_PACKET` (`udhcpc`, `tcpdump`) · network offloads and multiqueue · MSI-X · `ptrace` and `/proc/<pid>/mem`.
+
+## E21 Remote access and the web
+*Exit: Burrow is reached and worked from over the network: ssh in and out, TLS for C programs, a graphical browser.* [W24]
+
+- [ ] E21.F01 As a porter, I want TLS for C programs (mbedTLS, a CA bundle; busybox `wget` and `curl` over HTTPS), so that C ports fetch `https://` and check certificates. [W24]
+- [ ] E21.F02 As a user, I want an ssh server (dropbear) with passwords, keys, interactive sessions and `scp`, so that I log in to Burrow from the host. [W24]
+- [ ] E21.F03 As a user, I want an ssh client (`dbclient`) on Burrow, so that I log in from Burrow to other machines. [W24]
+- [ ] E21.F04 As a user, I want a graphical browser (NetSurf on X) that renders HTML, CSS and images and follows links, so that I read the web on the desktop. [W24]
+- [ ] E21.F05 As a user, I want the browser to load `https://` pages and refuse bad certificates, so that it is safe to point at real sites. [W24]
+- Later: OpenSSH and SFTP · ssh port and X forwarding · NetSurf on `/dev/fb0` without X · JavaScript · a CA store kept current.
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [W20, then later]
