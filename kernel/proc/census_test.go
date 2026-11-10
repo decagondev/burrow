@@ -13,10 +13,11 @@ import (
 // x11-linux.sh) has a handler, unless its line names the slice that will
 // add one ("# W15-S02 ...", "# W16-S02 ..."). A named call that already has
 // a handler is an error too: the note is stale and should go.
-func TestCensusQt(t *testing.T)  { checkCensus(t, "census-qt.txt") }
-func TestCensusX11(t *testing.T) { checkCensus(t, "census-x11.txt") }
-func TestCensusNet(t *testing.T) { checkCensus(t, "census-net.txt") } // W24-S01
-func TestCensusSsh(t *testing.T) { checkCensus(t, "census-ssh.txt") } // W24-S02
+func TestCensusQt(t *testing.T)      { checkCensus(t, "census-qt.txt") }
+func TestCensusX11(t *testing.T)     { checkCensus(t, "census-x11.txt") }
+func TestCensusNet(t *testing.T)     { checkCensus(t, "census-net.txt") }     // W24-S01
+func TestCensusSsh(t *testing.T)     { checkCensus(t, "census-ssh.txt") }     // W24-S02
+func TestCensusBrowser(t *testing.T) { checkCensus(t, "census-browser.txt") } // W24-S04
 
 func checkCensus(t *testing.T, file string) {
 	f, err := os.Open("../../tests/regression/" + file)

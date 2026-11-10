@@ -1,0 +1,8 @@
+# Ordered markers for NetSurf on Burrow (W24-S04, tests/smoke/keys/browser.keys
+# run by tests/smoke/browser-smoke.sh). Append-only.
+mounted at /opt/x11
+volume "NETDATA" mounted at /opt/net
+built-in shell
+browser: page drawn
+browser: x stopped
+burrow> poweroff

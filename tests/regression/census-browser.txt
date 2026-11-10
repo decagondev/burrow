@@ -1,0 +1,43 @@
+# System calls of NetSurf 3.11 (the framebuffer front end on libnsfb's X
+# surface, curl over mbedTLS) loading the test pages from a python3
+# http.server and drawing them on the host's Xvfb, then closed by its window's
+# button (W24-S04), under strace -f: name and Linux x86-64 number.
+# tests/regression/census-browser.sh (make browser-census) fails if it starts
+# using a name not listed here; kernel/proc's TestCensusBrowser fails if a
+# listed call has no handler, unless its line names the slice that adds it.
+# The SysV segment calls are xcb's MIT-SHM images (W18-S04 serves them).
+access 21
+arch_prctl 158
+brk 12
+close 3
+connect 42
+eventfd2 290
+exit_group 231
+fcntl 72
+getpeername 52
+getsockname 51
+getsockopt 55
+lseek 8
+madvise 28
+mmap 9
+munmap 11
+open 2
+poll 7
+read 0
+readlink 89
+readv 19
+recvfrom 45
+recvmsg 47
+rt_sigaction 13
+select 23
+sendto 44
+set_tid_address 218
+setsockopt 54
+shmat 30
+shmctl 31
+shmget 29
+shutdown 48
+socket 41
+stat 4
+uname 63
+writev 20

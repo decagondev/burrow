@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W24-S04 NetSurf: the spike and a first page
+
+**Did:** NetSurf 3.11's framebuffer front end on libnsfb's X surface, static for musl, with its own libraries from the netsurf-all bundle, xcb-util and libpng, over W16's X libraries and S01's curl and mbedTLS (`make browser`). The census on the host's Xvfb: 35 calls, all served. On Burrow, `make browser-smoke`: Xfbdev, then NetSurf on a test page from the host, drawn in 0.8 s with its styled box and its PNG, pixels checked.
+
+**Surprise:** the spike had a fallback and did not need it: one session, and the kernel needed nothing. The work was all in the build: the buildsystem ignores `CPPFLAGS`, the host tools want the build machine's libpng, `LIBICONV_PLUG=NO` means GNU libiconv, a static link lost libXau, and a resource path without `${NETSURFRES}` gave a page with no stylesheets that never finished loading, which looked like a fetch bug until the log said `UnacceptableType`.
+
+**Next:** W24-S05: clicks, keys and TLS in the browser.
+
 ## 2026-11-10 — W24-S03 Interactive sessions, scp and dbclient
 
 **Did:** the host's `ssh -tt` on a pseudo-terminal the test owns: two shells at once, each with its own pty and session; `stty size` follows a resize and a `WINCH` trap fires; `^C` stops a foreground `sleep` with 130; `exit 7` comes back to the host. `scp` of 1 MiB both ways, checked by sha256. On the console root logs in to burrow with `dbclient` over loopback, with a key from `dropbearkey -y`, and copies a file with Burrow's own `scp`. `make ssh-bench`: about 1.7 s a login, 0.9 MB/s `scp`.

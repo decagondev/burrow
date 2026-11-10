@@ -1,0 +1,22 @@
+# NetSurf on Burrow (W24-S04, run by tests/smoke/browser-smoke.sh, which
+# puts the host server's port in place of @PORT@): go-dev.img with the X disk
+# and the NETDATA disk. One command line starts Xfbdev, then NetSurf on the
+# test page; it waits until NetSurf's log (-v) shows the page's image
+# fetched, gives it time to draw, says so, waits while the screen is dumped
+# and stops both (while X runs the keyboard is X's, so nothing more can be
+# typed until then). No window manager: NetSurf's 800x600 window is at (0,0).
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; HOME=/tmp /opt/net/bin/netsurf -v -f x -w 800 -h 600 http://host:@PORT@/ > /tmp/ns.log 2>&1 & i=0; while [ $i -lt 120 ] && ! grep -q square.png /tmp/ns.log; do sleep 1; i=$((i+1)); done; sleep 10; echo browser: page'' drawn; sleep 20; kill %2; sleep 2; kill %1; wait; grep -c fetch_curl_setup /tmp/ns.log; echo browser: x'' stopped
+key ret
+wait browser: page drawn
+sleep 3
+screendump build/screen-browser-page.ppm
+wait browser: x stopped
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

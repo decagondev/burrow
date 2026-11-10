@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -298,7 +298,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -717,7 +717,7 @@ net-ports: | $(BUILD)
 net-census: $(BUILD)/busybox
 	tests/regression/census-net.sh $(BUILD)
 NET_DRIVE := -drive file=$(BUILD)/net-data.img,format=raw,if=ide,index=1,media=disk
-$(BUILD)/net-data.img: $(BUILD)/net-root/bin/curl user/net/net.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+$(BUILD)/net-data.img: $(BUILD)/net-root/bin/curl $(wildcard $(BUILD)/net-root/bin/netsurf) user/net/net.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	cp user/net/net.env $(BUILD)/net-root/net.env
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label netdata -size 64 ../$(BUILD)/net-root
 tls-smoke:
@@ -739,6 +739,22 @@ ssh-smoke:
 ssh-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img
 	cp $(BUILD)/root-test.img $(BUILD)/ssh-root.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 420
+# The browser (W24-S04): `make browser` builds NetSurf's framebuffer front
+# end on libnsfb's X surface into build/net-root (scripts/browser.sh,
+# pinned downloads in ~/.cache/burrow-net; needs make x11 net-ports).
+# `make browser-census` takes its system calls on the host's Xvfb;
+# browser-smoke boots go-dev.img with the X and NETDATA disks: NetSurf
+# draws the test page served from the host, pixels checked (skips without
+# make x11 busybox net-ports browser).
+browser: | $(BUILD)
+	scripts/browser.sh $(BUILD)/net-root
+browser-census:
+	tests/regression/census-browser.sh $(BUILD)
+browser-smoke:
+	@if [ -f $(BUILD)/net-root/bin/netsurf ] && [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory browser-smoke-run; \
+	else echo "BROWSER SMOKE SKIP (make x11 busybox net-ports browser)"; fi
+browser-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img $(BUILD)/net-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/browser-smoke.sh $(BUILD) $(BUILD)/go-dev.img browser 300
 # ssh-bench (W24-S03; not in make test): the same boot, with the host timing
 # key logins and a 4 MiB scp each way (printed; budgets come in W24-S06).
 ssh-bench: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img

@@ -1,0 +1,9 @@
+# Pixels of NetSurf on Burrow (W24-S04), dumped by tests/smoke/keys/browser.keys.
+# Append-only. NetSurf's 800x600 window at (0,0) on Xfbdev, showing
+# tests/smoke/browser-pages.py's index page: the styled box (BOX_RGB), the
+# PNG (IMAGE_RGB) and the page's white background on both sides of them.
+size  build/screen-browser-page.ppm 1024 768
+pixel build/screen-browser-page.ppm 140 200 #20a040
+pixel build/screen-browser-page.ppm 48 280 #d03030
+pixel build/screen-browser-page.ppm 600 400 #ffffff
+pixel build/screen-browser-page.ppm 140 290 #ffffff

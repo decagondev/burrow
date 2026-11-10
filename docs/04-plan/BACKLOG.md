@@ -196,7 +196,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [x] E21.F01 As a porter, I want TLS for C programs (mbedTLS, a CA bundle; busybox `wget` and `curl` over HTTPS), so that C ports fetch `https://` and check certificates. [W24]
 - [x] E21.F02 As a user, I want an ssh server (dropbear) with passwords, keys, interactive sessions and `scp`, so that I log in to Burrow from the host. [W24]
 - [x] E21.F03 As a user, I want an ssh client (`dbclient`) on Burrow, so that I log in from Burrow to other machines. [W24]
-- [ ] E21.F04 As a user, I want a graphical browser (NetSurf on X) that renders HTML, CSS and images and follows links, so that I read the web on the desktop. [W24]
+- [~] E21.F04 As a user, I want a graphical browser (NetSurf on X) that renders HTML, CSS and images and follows links, so that I read the web on the desktop. [W24]
 - [ ] E21.F05 As a user, I want the browser to load `https://` pages and refuse bad certificates, so that it is safe to point at real sites. [W24]
 - Later: OpenSSH and SFTP · ssh port and X forwarding · NetSurf on `/dev/fb0` without X · JavaScript · a CA store kept current.
 
