@@ -7,3 +7,15 @@ pixel build/screen-browser-page.ppm 140 200 #20a040
 pixel build/screen-browser-page.ppm 48 280 #d03030
 pixel build/screen-browser-page.ppm 600 400 #ffffff
 pixel build/screen-browser-page.ppm 140 290 #ffffff
+# S05: the link clicked with the tablet: the second page's banner (PAGE2_RGB);
+# a typed URL, the long page scrolled down three pages to its end block
+# (LONG_END_RGB); busybox httpd's page over loopback (LOCAL_RGB); the page
+# over TLS with the test CA (SECURE_RGB).
+pixel build/screen-browser-second.ppm 400 100 #3050c0
+pixel build/screen-browser-scrolled.ppm 400 300 #f08010
+pixel build/screen-browser-local.ppm 400 100 #c0a000
+pixel build/screen-browser-secure.ppm 400 100 #208080
+# S05: the certificate for another name from no known CA: NetSurf's "Privacy
+# error" page instead of the TLS page, its "Back to safety" button blue.
+pixel build/screen-browser-refused.ppm 600 342 #0060df
+pixel build/screen-browser-refused.ppm 400 450 #aaaaaa

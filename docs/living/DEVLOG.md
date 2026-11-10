@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W24-S05 Browsing: clicks, keys and TLS
+
+**Did:** `browser-smoke` browses: the tablet clicks the test page's link, URLs are typed into NetSurf's address bar, PageDown scrolls a long page to its end, Burrow's busybox `httpd` serves a page over loopback, an `https://` page loads with the test CA, and a certificate for another name gets NetSurf's Privacy error page. Each step waits for a pixel of the page it expects.
+
+**Surprise:** nothing in the kernel; one thing in libnsfb: its X surface maps both Control keys to nothing, so the first typed URL arrived as `second.html\xFFuhttp://...` and the server log showed it. End and Backspaces clear the bar instead, and `sendkeys.py`'s `key` takes a count.
+
+**Next:** W24-S06: M24, the demo in one boot, budgets and the guides.
+
 ## 2026-11-10 — W24-S04 NetSurf: the spike and a first page
 
 **Did:** NetSurf 3.11's framebuffer front end on libnsfb's X surface, static for musl, with its own libraries from the netsurf-all bundle, xcb-util and libpng, over W16's X libraries and S01's curl and mbedTLS (`make browser`). The census on the host's Xvfb: 35 calls, all served. On Burrow, `make browser-smoke`: Xfbdev, then NetSurf on a test page from the host, drawn in 0.8 s with its styled box and its PNG, pixels checked.

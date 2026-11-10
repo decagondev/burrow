@@ -7,7 +7,7 @@ The keys file is a small script, one step per line ('#' comments):
     wait <text>    block until <text> appears in the serial log after
                    what the previous wait matched
     type <text>    press each character (letters, digits, space, - . / , = ;)
-    key <name>     press one QEMU key name (ret, backspace, ctrl-u, ...)
+    key <name> [n] press one QEMU key name (ret, backspace, ctrl-u, ...), n times
     screendump <f> save the screen as a PPM (checked by checkscreen.py)
     sleep <s>      pause (for a guest that shows progress only on screen)
     waitpixel <x> <y> <#rrggbb>
@@ -171,7 +171,9 @@ def main():
                     for ch in arg:
                         press(key_name(ch))
                 elif op == 'key':
-                    press(arg)
+                    name, _, times = arg.partition(' ')
+                    for _ in range(int(times or 1)):
+                        press(name)
                 elif op == 'mouse':
                     # QEMU's PS/2 queue holds a few packets of at most 127 each;
                     # motion that does not fit waits until the next input event and

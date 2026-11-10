@@ -1,19 +1,100 @@
-# NetSurf on Burrow (W24-S04, run by tests/smoke/browser-smoke.sh, which
-# puts the host server's port in place of @PORT@): go-dev.img with the X disk
-# and the NETDATA disk. One command line starts Xfbdev, then NetSurf on the
-# test page; it waits until NetSurf's log (-v) shows the page's image
-# fetched, gives it time to draw, says so, waits while the screen is dumped
-# and stops both (while X runs the keyboard is X's, so nothing more can be
-# typed until then). No window manager: NetSurf's 800x600 window is at (0,0).
+# NetSurf on Burrow (W24-S04, S05; run by tests/smoke/browser-smoke.sh,
+# which puts the host servers' ports in place of @PORT@, @TLSPORT@ and
+# @BADPORT@): go-dev.img with the X disk, the NETDATA disk and QEMU's tablet.
+# S05: before X, busybox fetches the test CA and a page for its own httpd
+# (port 8080, loopback). Then one command line starts Xfbdev and NetSurf on
+# the host's page (-v: its log names every fetch) and, when NetSurf is
+# closed, stops the server and reports from the log. While X runs the
+# keyboard is X's, so the steps between drive NetSurf itself: the tablet
+# clicks the link, the address bar takes typed URLs (End and Backspaces
+# clear it: libnsfb's X surface passes no Control key, so no ctrl-u),
+# PageDown scrolls; each step waits for a pixel of the page it expects. No
+# window manager: NetSurf's 800x600 window is at (0,0), its close button at
+# (786,15), its address bar from x 134 to 744.
 wait burrow>
+screen 1024 768
 type run /bin/busybox sh
 key ret
 wait built-in shell
-type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; HOME=/tmp /opt/net/bin/netsurf -v -f x -w 800 -h 600 http://host:@PORT@/ > /tmp/ns.log 2>&1 & i=0; while [ $i -lt 120 ] && ! grep -q square.png /tmp/ns.log; do sleep 1; i=$((i+1)); done; sleep 10; echo browser: page'' drawn; sleep 20; kill %2; sleep 2; kill %1; wait; grep -c fetch_curl_setup /tmp/ns.log; echo browser: x'' stopped
+type wget -q -O /tmp/ca.pem http://host:@PORT@/ca.pem && mkdir -p /tmp/www && wget -q -O /tmp/www/local.html http://host:@PORT@/local.html && httpd -p 8080 -h /tmp/www && echo browser: ready'' to browse
 key ret
+wait browser: ready to browse
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xaccel; (i=0; while [ $i -lt 120 ] && ! grep -q square.png /tmp/ns.log 2>/dev/null; do sleep 1; i=$((i+1)); done; echo browser: page'' drawn) & HOME=/tmp /opt/net/bin/netsurf -v --ca_bundle=/tmp/ca.pem -f x -w 800 -h 600 http://host:@PORT@/ > /tmp/ns.log 2>&1; kill %1; wait; grep -c fetch_curl_setup /tmp/ns.log; grep -q query/ssl /tmp/ns.log && echo browser: bad certificate'' refused; echo browser: x'' stopped
+key ret
+waitpixel 140 200 #20a040
 wait browser: page drawn
-sleep 3
+sleep 2
 screendump build/screen-browser-page.ppm
+# S05: the tablet. TinyX spends its first packets finding the mouse's
+# protocol (as in tablet-x11.keys), then the corner puts X's pointer at (0,0).
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+abs 500 380
+abs 510 390
+sleep 1
+abs 0 0
+sleep 1
+# the link "The second page"
+abs 60 345
+sleep 1
+click left
+waitpixel 400 100 #3050c0
+screendump build/screen-browser-second.ppm
+# a URL typed into the address bar: the long page, then scrolled down
+abs 400 15
+sleep 1
+click left
+key end
+key backspace 40
+type http://host:@PORT@/long.html
+key ret
+waitpixel 400 100 #8030a0
+abs 400 450
+sleep 1
+click left
+key pgdn
+key pgdn
+key pgdn
+waitpixel 400 300 #f08010
+screendump build/screen-browser-scrolled.ppm
+# a page busybox httpd serves inside Burrow, over loopback
+abs 400 15
+sleep 1
+click left
+key end
+key backspace 40
+type http://127.0.0.1:8080/local.html
+key ret
+waitpixel 400 100 #c0a000
+screendump build/screen-browser-local.ppm
+# over TLS, the test CA trusted (--ca_bundle)
+abs 400 15
+sleep 1
+click left
+key end
+key backspace 40
+type https://host:@TLSPORT@/secure.html
+key ret
+waitpixel 400 100 #208080
+screendump build/screen-browser-secure.ppm
+# a certificate for another name, from no known CA: NetSurf refuses it
+abs 400 15
+sleep 1
+click left
+key end
+key backspace 40
+type https://host:@BADPORT@/secure.html
+key ret
+sleep 15
+screendump build/screen-browser-refused.ppm
+abs 786 15
+sleep 1
+click left
+wait browser: bad certificate refused
 wait browser: x stopped
 type exit
 key ret

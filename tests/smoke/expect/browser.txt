@@ -3,6 +3,10 @@
 mounted at /opt/x11
 volume "NETDATA" mounted at /opt/net
 built-in shell
+# S05: the test CA and busybox httpd's page fetched, httpd started
+browser: ready to browse
 browser: page drawn
+# S05: after NetSurf is closed, its log shows the bad certificate's query page
+browser: bad certificate refused
 browser: x stopped
 burrow> poweroff
