@@ -193,7 +193,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E21 Remote access and the web
 *Exit: Burrow is reached and worked from over the network: ssh in and out, TLS for C programs, a graphical browser.* [W24]
 
-- [ ] E21.F01 As a porter, I want TLS for C programs (mbedTLS, a CA bundle; busybox `wget` and `curl` over HTTPS), so that C ports fetch `https://` and check certificates. [W24]
+- [x] E21.F01 As a porter, I want TLS for C programs (mbedTLS, a CA bundle; busybox `wget` and `curl` over HTTPS), so that C ports fetch `https://` and check certificates. [W24]
 - [ ] E21.F02 As a user, I want an ssh server (dropbear) with passwords, keys, interactive sessions and `scp`, so that I log in to Burrow from the host. [W24]
 - [ ] E21.F03 As a user, I want an ssh client (`dbclient`) on Burrow, so that I log in from Burrow to other machines. [W24]
 - [ ] E21.F04 As a user, I want a graphical browser (NetSurf on X) that renders HTML, CSS and images and follows links, so that I read the web on the desktop. [W24]

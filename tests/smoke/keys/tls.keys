@@ -1,0 +1,32 @@
+# TLS from C programs (W24-S01), run by tests/smoke/net-smoke.sh (@PORT@ is
+# the host's http.server, @TLSPORT@ its TLS server with a certificate for
+# "host"): busybox wget over its own TLS, curl over mbedTLS with the test CA
+# fetched first, a 1 MiB file checked, and curl's refusals: a certificate
+# for another name, and one no CA in the bundle signed.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait #
+type wget -q -O /tmp/ca.pem http://host:@PORT@/ca.pem && echo tls: got the'' ca
+key ret
+wait tls: got the ca
+type wget -q -O - https://host:@TLSPORT@/hello.txt | tr a-z A-Z
+key ret
+wait BURROW FETCHED THIS
+type /opt/net/bin/curl -sS --cacert /tmp/ca.pem https://host:@TLSPORT@/hello.txt | sed 's/^/curl: /'
+key ret
+wait curl: burrow fetched
+type /opt/net/bin/curl -sS --cacert /tmp/ca.pem -o /tmp/big.bin https://host:@TLSPORT@/big.bin; echo "@SUM@  /tmp/big.bin" | md5sum -c
+key ret
+wait /tmp/big.bin: OK
+type /opt/net/bin/curl -sS --cacert /tmp/ca.pem https://10.0.2.2:@TLSPORT@/hello.txt || echo tls: another name re''fused
+key ret
+wait tls: another name refused
+type /opt/net/bin/curl -sS https://host:@TLSPORT@/hello.txt || echo tls: unknown ca re''fused
+key ret
+wait tls: unknown ca refused
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret

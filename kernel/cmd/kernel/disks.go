@@ -58,10 +58,12 @@ const rootLabel = "BURROWROOT"
 
 // dataDisks are the labels of the program disks: where each mounts and the
 // file of variables that joins the environment of every program the
-// console runs (the Qt disk, W15-S02; the X disk, W16-S02).
+// console runs (the Qt disk, W15-S02; the X disk, W16-S02; the network
+// ports' disk, W24-S01).
 var dataDisks = map[string]struct{ point, env string }{
 	"QTDATA":  {"opt/qt", "opt/qt/qt.env"},
 	"X11DATA": {"opt/x11", "opt/x11/x11.env"},
+	"NETDATA": {"opt/net", "opt/net/net.env"},
 }
 
 // mountData mounts every data disk (hdb, and since W15-S06 the secondary

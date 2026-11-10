@@ -1,0 +1,11 @@
+# Ordered markers for TLS from C programs (W24-S01, tests/smoke/keys/tls.keys,
+# run by tests/smoke/net-smoke.sh). Append-only.
+volume "NETDATA" mounted at /opt/net
+burrow> run /bin/busybox sh
+tls: got the ca
+BURROW FETCHED THIS FROM THE HOST
+curl: burrow fetched this from the host
+/tmp/big.bin: OK
+tls: another name refused
+tls: unknown ca refused
+burrow> poweroff

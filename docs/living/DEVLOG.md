@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W24-S01 TLS for C programs
+
+**Did:** mbedTLS, curl over it, and a CA bundle, pinned and built static for musl (`scripts/net-ports.sh`) onto a new data disk at `/opt/net`; busybox's `wget` with its own TLS. A census of both on the host, and `make tls-smoke`: both fetch from the host's TLS server, curl checks the test CA and refuses a wrong name and an unknown CA.
+
+**Surprise:** that nothing in the kernel had to change: the census's 37 calls were all served already. busybox's wget runs its TLS in a forked child over a socketpair, which W14's sockets handled unasked. And a `[ -n "$gone" ] && echo` line ended a `set -e` script silently when nothing had gone.
+
+**Next:** W24-S02: dropbear, the host logs in.
+
 ## 2026-11-10 — W23 done: /proc and virtio devices (M23)
 
 **Did:** the wave in seven slices. `/proc` over the process table, with links that read as the caller's (S01); CPU time counted by the nucleus at switches, ticks and ring crossings, `top` and `time` (S02); descriptors, `maps`, mounts, `ttyname`, `df` (S03); virtio-blk, several requests in flight, and a fake device for drivers' tests (S04); virtio-net and a DHCP client (S05); named datagram sockets, SysV semaphores and busybox's syslog (S06); and the milestone, with the run targets on virtio by default (S07). `make proc-smoke` and `make virtio-smoke` pass on four CPUs and on one.

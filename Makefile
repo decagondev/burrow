@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -298,7 +298,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go
 
@@ -702,6 +702,29 @@ proc-smoke:
 	else echo "PROC SMOKE SKIP (make busybox downloads and builds it)"; fi
 proc-smoke-run: $(BUILD)/go-busybox.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/proc.txt 90 tests/smoke/keys/proc.keys
+
+# The network ports (W24-S01): `make net-ports` fetches mbedTLS, curl and a
+# CA bundle once (scripts/net-ports.sh, sha256-pinned, ~/.cache/burrow-net)
+# and builds them static for musl into build/net-root (needs make ports for
+# the cross toolchain): the NETDATA disk, mounted at /opt/net, net.env
+# joining every program's environment. `make net-census` takes curl's and
+# busybox wget's system calls over TLS on the host. tls-smoke: busybox wget
+# (its own TLS) and curl (mbedTLS) fetch from the host's TLS server on
+# go-dev.img; curl checks the test CA, refuses another name and an unknown
+# CA (skips without make busybox ports net-ports).
+net-ports: | $(BUILD)
+	scripts/net-ports.sh $(BUILD)/net-root
+net-census: $(BUILD)/busybox
+	tests/regression/census-net.sh $(BUILD)
+NET_DRIVE := -drive file=$(BUILD)/net-data.img,format=raw,if=ide,index=1,media=disk
+$(BUILD)/net-data.img: $(BUILD)/net-root/bin/curl user/net/net.env $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	cp user/net/net.env $(BUILD)/net-root/net.env
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$@ -label netdata -size 64 ../$(BUILD)/net-root
+tls-smoke:
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/net-root/bin/curl ]; then $(MAKE) --no-print-directory tls-smoke-run; \
+	else echo "TLS SMOKE SKIP (make busybox ports net-ports builds what it needs)"; fi
+tls-smoke-run: $(BUILD)/go-dev.img $(BUILD)/net-data.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(NET_DRIVE)" tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev.img tls 120
 
 # virtio-blk (W23-S04): disk-smoke, dev-smoke and unix-smoke again with
 # their data disks on virtio (vda, vdb), checked against expect files

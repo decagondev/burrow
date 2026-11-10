@@ -15,6 +15,7 @@ import (
 // a handler is an error too: the note is stale and should go.
 func TestCensusQt(t *testing.T)  { checkCensus(t, "census-qt.txt") }
 func TestCensusX11(t *testing.T) { checkCensus(t, "census-x11.txt") }
+func TestCensusNet(t *testing.T) { checkCensus(t, "census-net.txt") } // W24-S01
 
 func checkCensus(t *testing.T, file string) {
 	f, err := os.Open("../../tests/regression/" + file)

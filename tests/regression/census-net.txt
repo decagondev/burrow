@@ -1,0 +1,44 @@
+# System calls of curl 8.11.1 over mbedTLS 3.6.2 and busybox 1.36.1's wget
+# with its own TLS (W24-S01), each fetching over TLS from tls-server.py on
+# the host, under strace -f: name and Linux x86-64 number.
+# tests/regression/census-net.sh (make net-census) fails if they start using
+# a name not listed here; kernel/proc's TestCensusNet fails if a listed call
+# has no handler, unless its line names the slice that adds it (# W24-Sxx).
+# busybox's wget runs TLS in a forked child joined by a socketpair.
+arch_prctl 158
+brk 12
+close 3
+connect 42
+dup2 33
+eventfd2 290
+exit_group 231
+fcntl 72
+fork 57
+geteuid 107
+getgid 104
+getsockname 51
+getsockopt 55
+getuid 102
+ioctl 16
+lseek 8
+mmap 9
+munmap 11
+open 2
+poll 7
+prctl 157
+read 0
+readv 19
+recvfrom 45
+rt_sigaction 13
+rt_sigprocmask 14
+sendto 44
+set_tid_address 218
+setgid 106
+setitimer 38
+setsockopt 54
+setuid 105
+shutdown 48
+socket 41
+socketpair 53
+write 1
+writev 20

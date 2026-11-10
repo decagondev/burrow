@@ -27,6 +27,7 @@ trap 'kill $SERVER $TLSSERVER 2>/dev/null || true' EXIT
 for p in $PORT $TLSPORT; do # both servers listen before Burrow boots (the first TLS fetch once came too early)
   for _ in $(seq 100); do python3 -c "import socket; socket.create_connection(('127.0.0.1', $p))" 2>/dev/null && break; sleep 0.1; done
 done
+cp "$B/net-tls.pem" "$WWW/ca.pem" # W24-S01: the test CA, for curl's --cacert on Burrow
 sed "s/@PORT@/$PORT/g; s/@TLSPORT@/$TLSPORT/g; s/@SUM@/$(md5sum < "$WWW/big.bin" | cut -d' ' -f1)/g" "tests/smoke/keys/$NAME.keys" > "$B/$NAME.keys"
 # W23-S05: the card is NIC_MODEL's (QEMU's default e1000 unless set)
 QEMU_EXTRA="${QEMU_EXTRA:-} -nic user,model=${NIC_MODEL:-e1000}" \

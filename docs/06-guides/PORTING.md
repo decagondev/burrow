@@ -50,6 +50,10 @@ The framebuffer's mode is the firmware's, not a constant: read `xres`, `yres`, `
 
 **The pointer**, when QEMU has its tablet, is `/dev/input/event2`: `EV_ABS` `ABS_X`/`ABS_Y` (ranges from `EVIOCGABS`, 0-32767) and `EV_KEY` buttons, no relative axes. Scale a value to the screen by its share of the range, `(v - min) * size / (max - min + 1)`, as paint does. A toolkit that classifies input by `EVIOCGBIT` sees an absolute pointer; Qt needs to be told (`qt.env`: `QT_QPA_EVDEV_MOUSE_PARAMETERS=/dev/input/event1:/dev/input/event2:abs`). Programs that read the PS/2 stream (`/dev/input/mice`) get the tablet as relative moves already; turn their acceleration off (X: `xaccel`).
 
+## TLS for C ports (W24)
+
+`make net-ports` builds mbedTLS 3.6 static for musl into `build/net-root`, which becomes the `NETDATA` disk at `/opt/net`: link a C port against `/opt/net/lib/libmbedtls.a`, `libmbedx509.a` and `libmbedcrypto.a` (in that order) with `-I/opt/net/include`, on the host with the ports' cross compiler or on Burrow with `tcc`. The CA bundle (Mozilla's, from curl.se) is `/opt/net/etc/ssl/certs/ca-certificates.crt`, and `SSL_CERT_FILE` names it in every program's environment. `curl` on the disk is built against them; busybox's `wget` speaks HTTPS with its own TLS, which checks no certificate.
+
 ## /proc, CPU time and datagram sockets (W23)
 
 `/proc` has what the common tools read: each process's `stat` (52 fields, CPU times included), `statm`, `status`, `cmdline`, `environ`, `comm`, `fd/` and `fdinfo/`, `exe`, `cwd`, `root`, `maps`, `mounts` and `task/<tid>/`, and the system's `self`, `stat`, `uptime`, `loadavg`, `meminfo`, `cpuinfo`, `version`, `filesystems`, `mounts` and `sys/kernel/`. It has no `/sys`, no writable `/proc/sys`, no `<pid>/mem` and no `ptrace`; `/proc/<pid>/fd`, `exe` and `cwd` are readable by the process's own user and root only. `ttyname` (musl reads `/proc/self/fd`), Go's `os.Executable` and `sysconf(_SC_NPROCESSORS_ONLN)` work.
