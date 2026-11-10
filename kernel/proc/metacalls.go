@@ -2,9 +2,9 @@ package proc
 
 // metacalls.go - names and metadata (W13-S05): rename, renameat and
 // renameat2 (RENAME_NOREPLACE), handed to the VFS (inside one mount, as
-// Linux); fsync and fdatasync, which have nothing to wait for (a write is
-// on the disk when write returns: wfile writes the whole file back and FAT
-// flushes each change); and utimensat, accepted when the file exists and
+// Linux); fsync and fdatasync, which write back what a big file open for
+// writing keeps (wfile.Sync, W24-S03; otherwise a write is on the disk when
+// write returns, and FAT flushes each change); and utimensat, accepted when the file exists and
 // changing nothing. Permissions are checked as perm.go says (W19-S04); the
 // owner calls are ownercalls.go. Docs: POSIX_COVERAGE.md.
 
@@ -72,10 +72,15 @@ func sysRenameat2Fn(p *Process, a [6]uint64) (int64, bool) {
 	return ok(p.renameAt(a[0], a[1], a[2], a[3], a[4]))
 }
 
-// fsync, fdatasync: the descriptor must be open; the data is already down.
+// fsync, fdatasync: the descriptor must be open; a file that keeps writes
+// back (wfile) writes them now.
 func sysFsyncFn(p *Process, a [6]uint64) (int64, bool) {
-	if p.fds.get(a[0]) == nil {
+	f := p.fds.get(a[0])
+	if f == nil {
 		return ok(-int64(syscall.EBADF))
+	}
+	if s, isS := f.f.(interface{ Sync() error }); isS {
+		return ok(errno(s.Sync()))
 	}
 	return ok(0)
 }

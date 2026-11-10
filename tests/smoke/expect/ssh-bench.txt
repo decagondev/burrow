@@ -1,0 +1,8 @@
+# Ordered markers for make ssh-bench (W24-S03, tests/smoke/keys/ssh.keys run
+# by tests/smoke/ssh-smoke.sh with SSH_MODE=bench; the numbers are in
+# build/ssh-host.log). Append-only.
+volume "NETDATA" mounted at /opt/net
+ssh: dropbear started
+ssh: bench done
+dropbear_ed25519_host_key
+burrow> poweroff

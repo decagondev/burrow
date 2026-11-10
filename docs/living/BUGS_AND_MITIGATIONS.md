@@ -35,6 +35,16 @@ None (BUG-0023 closed in W21-S03).
 
 ## Closed
 
+### BUG-0031: mkdir of an existing directory said EACCES, not EEXIST
+- Found: 2026-11-10, W24-S03: on the ext2 root, root's `mkdir -p /root/.ssh` said "can't create directory '/': Permission denied".
+- Severity: major (every `mkdir -p` of an absolute path failed: busybox's makes each component in turn, starting with `/`, and goes on only when told `EEXIST`; a user's `mkdir -p` through a directory they cannot write failed the same way).
+- Symptom: `mkdir: can't create directory '/': Permission denied`, as root.
+- Root cause: `mkdirAt` checked write permission on the parent (for `/`, the root itself) before it looked at the name; Linux answers `EEXIST` for a name that exists before any permission check. On the initrd root every `mkdir -p` used so far was relative, or under `/tmp`.
+- Fix: `mkdirAt` (`kernel/proc/pathcalls.go`) answers `EEXIST` when the name exists (not following a final link), then checks permission.
+- Mitigation: none needed beyond the test.
+- Regression: `TestBUG0031MkdirOfExistingNameIsEEXIST` (`kernel/proc`: `/` as root and as a user, `/tmp` as a user; fails without the fix with -13) and `make ssh-smoke`, whose console runs `mkdir -p /root/.ssh`.
+- Lesson: the order of a call's checks is part of its meaning; tools rely on which error comes first.
+
 ### BUG-0030: Nothing under a mount below a missing directory could be reached
 - Found: 2026-11-10, W24-S02: on the ext2 root, `/opt/net/bin/dropbear` was "not found" although the kernel had logged `NETDATA mounted at /opt/net`.
 - Severity: major (every data disk mounted under a directory the root lacks was unreachable on an ext2 root: the net disk, and the X and Qt disks with `make run-unix`; the initrd has `/opt`, which is why it hid).
@@ -401,7 +411,7 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-81 | W23 | Two disk buses, one set of labels: the same label on an IDE and a virtio disk must be refused, not mounted twice | closed (S04: `mountData` remembers each label and logs an error for the second disk that carries it, leaving it unmounted) |
 | PIT-82 | W23 | DHCP and a fixed network: slirp always answers 10.0.2.15, so tests must not mistake the fixed configuration for a lease, and a lease that never comes must time out | closed (S05: the lease has its own marker, `eth0 dhcp ... lease ... from`, that a fixed configuration never prints, and virtio-net-smoke checks it; no answer in four tries of 2 s is `ErrNoLease` and the fixed addresses are used, `TestNoServer`) |
 | PIT-83 | W24 | Ports bring system calls nobody served yet: dropbear and NetSurf are the first big network programs in C | open (S01: `census-net.sh` before the first boot; curl and wget needed nothing new; S02: `census-ssh.sh` found `set_robust_list` and `execveat`) |
-| PIT-84 | W24 | ssh needs every piece of the Unix at once: `crypt`, shadow passwords, `setgroups`/`setgid`/`setuid` in order, a controlling pty, a session leader | open (S02, S03) |
+| PIT-84 | W24 | ssh needs every piece of the Unix at once: `crypt`, shadow passwords, `setgroups`/`setgid`/`setuid` in order, a controlling pty, a session leader | closed (S02: passwords, keys and the ids in order; S03: a pty per session, its slave given to the user, a session leader with job control, window changes) |
 | PIT-85 | W24 | Entropy and keys: `kernel/random` was "not for cryptography"; host keys and TLS need good random numbers | closed (S02: said so: ChaCha8 seeded from RDRAND, which QEMU's CPU has, fit for a test network and no more; host keys are made by `dropbear -R` on the machine, never shipped) |
 | PIT-86 | W24 | TLS on TCG is slow: handshakes do big-number arithmetic under emulation | open (S01: curl's handshakes finish well inside the smoke's waits; budgets measured in S06) |
 | PIT-87 | W24 | NetSurf is big: many libraries, a host tool, a build system of its own | open (S04: a spike with a budget and links2 as the fallback) |

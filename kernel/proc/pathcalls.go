@@ -53,7 +53,8 @@ func (p *Process) openAt(dirfd, nameVA uint64, flags int, mode uint32) int64 {
 	}
 	tf, isTTY := p.ttyByPath(name) // the console terminal (W14-S08) or the controlling one
 	if isPTYPath(name) {           // a pseudo-terminal (W16-S03)
-		if tf, err = p.sys.openPTY(name); err != nil {
+		c := p.Cred()
+		if tf, err = p.sys.openPTY(name, c.UID[idFS], c.GID[idFS]); err != nil {
 			return errno(err)
 		}
 		tf.path, isTTY = name, true
@@ -274,6 +275,9 @@ func (p *Process) mkdirAt(dirfd, nameVA uint64, mode uint32) int64 {
 		return errno(err)
 	case !isW:
 		return -int64(syscall.EROFS)
+	}
+	if _, err := p.statPath(name, false); err == nil {
+		return -int64(syscall.EEXIST) // before permission, as Linux: mkdir -p / (BUG-0031)
 	}
 	c := p.Cred()
 	if err := p.mayCreate(&c, name); err != nil {

@@ -48,12 +48,13 @@ func (f ptmFile) Stat() (fs.FileInfo, error)     { return ttyInfo{}, nil }
 func (f ptmFile) Close() error {
 	f.sys.mu.Lock()
 	delete(f.sys.ptys, f.n)
+	delete(f.sys.ptyAttrs, f.n)
 	f.sys.mu.Unlock()
 	return f.m.Close()
 }
 
 // openPTY is /dev/ptmx (a new pair, the lowest free number) or /dev/pts/N.
-func (s *System) openPTY(name string) (*file, error) {
+func (s *System) openPTY(name string, uid, gid uint32) (*file, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if name == "dev/ptmx" {
@@ -67,6 +68,10 @@ func (s *System) openPTY(name string) (*file, error) {
 		m := tty.NewPair(ptyRows, ptyCols)
 		m.Slave().Signal = func(pgrp, sig int) { s.KillGroup(pgrp, sig) }
 		s.ptys[n] = m
+		if s.ptyAttrs == nil {
+			s.ptyAttrs = map[int]*ptyAttr{}
+		}
+		s.ptyAttrs[n] = &ptyAttr{uid, gid, ptsMode} // the opener's (ptyowner.go)
 		return newFile(ptmFile{m, n, s}, nil), nil
 	}
 	n, err := strconv.Atoi(strings.TrimPrefix(name, ptsPrefix))

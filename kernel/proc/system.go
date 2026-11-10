@@ -36,6 +36,7 @@ type System struct {
 	reported             map[uint64]bool     // unknown syscall numbers already logged
 	tty                  *tty.TTY            // the controlling terminal (SetTerminal), or nil
 	ptys                 map[int]*tty.Master // open pseudo-terminal pairs by number (ptycalls.go)
+	ptyAttrs             map[int]*ptyAttr    // their slaves' owners and modes (ptyowner.go)
 	net                  *stack.Stack        // TCP/IP for inet sockets (W17-S03; nil: none)
 	hostname, domainname string              // uname's names (hostname.go; "" until set)
 	shmNames             shmTab              // /dev/shm (shm.go, W18-S03)

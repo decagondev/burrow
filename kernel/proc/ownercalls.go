@@ -9,7 +9,8 @@ package proc
 // execute is set, even root's. A file system that keeps no owners says
 // EPERM (vfs). Descriptors without a path (pipes, sockets) accept and
 // change nothing. lchown (and fchownat's AT_SYMLINK_NOFOLLOW) changes a
-// link's own owner (W19-S05).
+// link's own owner (W19-S05). A pseudo-terminal's slave keeps its owner and
+// mode beside the pair (ptyowner.go, W24-S03).
 // Docs: POSIX_COVERAGE.md.
 
 import (
@@ -54,7 +55,7 @@ func (p *Process) chmodAt(name string, bits uint32) int64 {
 		return 0
 	}
 	c := p.Cred()
-	info, err := fs.Stat(p.sys.files, name)
+	info, err := p.statPath(name, true)
 	if err != nil {
 		return errno(err)
 	}
@@ -64,6 +65,9 @@ func (p *Process) chmodAt(name string, bits uint32) int64 {
 	mode := unixToMode(bits)
 	if a, _ := vfs.AttrOf(info); !c.root() && !c.inGroup(a.GID) {
 		mode &^= fs.ModeSetgid
+	}
+	if ptyNumber(name) >= 0 { // a pseudo-terminal's slave (W24-S03, ptyowner.go)
+		return errno(p.sys.setPTY(name, 0, 0, mode, true))
 	}
 	o, ok := p.owners()
 	if !ok {
@@ -84,6 +88,9 @@ func (p *Process) chownAt(name string, uid, gid uint32, follow bool) int64 {
 	a, _ := vfs.AttrOf(info)
 	if !c.root() && (!c.owns(info) || uid != fsattr.Keep && uid != a.UID || gid != fsattr.Keep && gid != a.GID && !c.inGroup(gid)) {
 		return -int64(syscall.EPERM)
+	}
+	if ptyNumber(name) >= 0 { // a pseudo-terminal's slave (W24-S03, ptyowner.go)
+		return errno(p.sys.setPTY(name, uid, gid, 0, false))
 	}
 	o, ok := p.owners()
 	if !ok {

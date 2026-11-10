@@ -21,17 +21,27 @@ type WritableFS interface {
 }
 
 // wfile is a regular file opened for writing. The VFS stores whole files,
-// so it keeps the contents here and writes them back after every change
-// (fine for the small files programs write to /tmp; a page cache can come
-// later). Reads see the same buffer (O_RDWR).
+// so it keeps the contents here and writes them back: after every change
+// while the file is small (wfileEagerBytes), and for a bigger one when it
+// has doubled since the last write-back, at the last close and at fsync
+// (W24-S03: an scp of 1 MiB wrote the whole file back for every KiB, O(n^2)
+// on the disk). So another opener of a big file being written may see an
+// older copy until then, and a big file renamed while open with unwritten
+// changes gets them under its old name at close; a page cache can come
+// later. Reads see the same buffer (O_RDWR).
 type wfile struct {
-	mu     sync.Mutex
-	fsys   WritableFS
-	name   string
-	data   []byte
-	off    int64
-	append bool
+	mu      sync.Mutex
+	fsys    WritableFS
+	name    string
+	data    []byte
+	off     int64
+	append  bool
+	dirty   bool  // changed since the last write-back
+	flushed int64 // the size at the last write-back
 }
+
+// wfileEagerBytes is the size up to which every change is written back.
+const wfileEagerBytes = 64 << 10
 
 func (w *wfile) Read(b []byte) (int, error) {
 	w.mu.Lock()
@@ -71,10 +81,34 @@ func (w *wfile) writeAtLocked(b []byte, off int64) (int, error) {
 		w.data = append(w.data, make([]byte, end-int64(len(w.data)))...)
 	}
 	copy(w.data[off:], b)
-	if err := w.fsys.WriteFile(w.name, append([]byte(nil), w.data...)); err != nil {
+	w.dirty = true
+	size := int64(len(w.data))
+	if size > wfileEagerBytes && size < 2*w.flushed {
+		return len(b), nil
+	}
+	if err := w.flushLocked(); err != nil {
 		return 0, err
 	}
 	return len(b), nil
+}
+
+// flushLocked writes the contents back if they changed.
+func (w *wfile) flushLocked() error {
+	if !w.dirty {
+		return nil
+	}
+	if err := w.fsys.WriteFile(w.name, append([]byte(nil), w.data...)); err != nil {
+		return err
+	}
+	w.dirty, w.flushed = false, int64(len(w.data))
+	return nil
+}
+
+// Sync is fsync: what is unwritten goes back now.
+func (w *wfile) Sync() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.flushLocked()
 }
 
 func (w *wfile) Seek(offset int64, whence int) (int64, error) {
@@ -105,7 +139,8 @@ func (w *wfile) Truncate(n int64) error {
 	} else {
 		w.data = append(w.data, make([]byte, n-int64(len(w.data)))...)
 	}
-	return w.fsys.WriteFile(w.name, append([]byte(nil), w.data...))
+	w.dirty = true
+	return w.flushLocked()
 }
 
 // ReadAt serves mmap (W14-S05): a mapped page fills from the file as it is
@@ -126,7 +161,8 @@ func (w *wfile) ReadAt(b []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (w *wfile) Close() error { return nil }
+// Close is the last close of the description: what is unwritten goes back.
+func (w *wfile) Close() error { return w.Sync() }
 
 // Stat is the file system's description of the file (its owner, mode and
 // inode: BUG-0025, busybox's passwd copies them from it), with the size of

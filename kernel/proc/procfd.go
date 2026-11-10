@@ -64,5 +64,5 @@ func (s *System) ptyInfo(name string) (fs.FileInfo, error) {
 	if err != nil || s.ptys[n] == nil {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
 	}
-	return ttyInfo{}, nil
+	return s.ptsInfoLocked(n), nil
 }

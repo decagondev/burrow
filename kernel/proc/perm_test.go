@@ -173,3 +173,23 @@ func TestBUG0025FstatOfAFileOpenForWriting(t *testing.T) {
 		t.Errorf("fstat of a file open for writing: mode %o gid %d size %d (want 600, 42, 6)", mode, gid, size)
 	}
 }
+
+// BUG-0031: mkdir of a name that exists is EEXIST before any permission
+// check, as Linux: busybox's mkdir -p calls mkdir("/") and goes on only on
+// EEXIST, so on the ext2 root `mkdir -p /root/.ssh` failed, even for root.
+func TestBUG0031MkdirOfExistingNameIsEEXIST(t *testing.T) {
+	r, root := permRig(t)
+	const nrMkdir = 83
+	u := r.user(1000)
+	for _, c := range []struct {
+		p    *proc.Process
+		path string
+	}{{root, "/"}, {u, "/"}, {u, "/tmp"}} {
+		if e := r.call(c.p, nrMkdir, r.str(c.p, scratch, c.path), 0o755); e != -int64(syscall.EEXIST) {
+			t.Errorf("mkdir %s = %d, want EEXIST", c.path, e)
+		}
+	}
+	if e := r.call(u, nrMkdir, r.str(u, scratch, "/tmp/new"), 0o755); e != 0 {
+		t.Errorf("mkdir /tmp/new = %d", e)
+	}
+}

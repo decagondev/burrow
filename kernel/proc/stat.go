@@ -103,6 +103,9 @@ func (p *Process) fdStat(fd uint64) ([]byte, int64) {
 		return p.withDev(statBuf("dev/console", consoleInfo{}), "dev/console"), 0
 	}
 	info, err := f.f.Stat()
+	if ptyNumber(f.path) >= 0 { // a slave: as stat of its name says (ptyowner.go)
+		info, err = p.sys.ptyInfo(f.path)
+	}
 	if err != nil {
 		return nil, errno(err)
 	}

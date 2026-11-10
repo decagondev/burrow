@@ -1,6 +1,7 @@
 # The host logs in over ssh (W24-S02, run by tests/smoke/ssh-smoke.sh):
 # root logs in on the console and starts dropbear (-R: host keys made at
-# the first connection, into /etc/dropbear on the ext2 root); the console
+# the first connection, into /etc/dropbear on the ext2 root; -F -E: in the
+# background, its messages kept in /tmp/dropbear.log and printed); the console
 # then waits for the file tests/smoke/ssh.py leaves after its logins, and
 # prints its report.
 wait login: 
@@ -10,12 +11,24 @@ wait Password:
 type root
 key ret
 wait # 
-type /opt/net/bin/dropbear -R -p 22 && echo ssh: dropbear'' started
+type /opt/net/bin/dropbear -R -F -E -p 22 2> /tmp/dropbear.log & echo ssh: dropbear'' started
 key ret
 wait ssh: dropbear started
-type while [ ! -f /tmp/ssh-done ]; do sleep 1; done; cat /tmp/ssh-report; ls /etc/dropbear
+type while [ ! -f /tmp/ssh-done ]; do sleep 1; done; cat /tmp/ssh-report; cat /tmp/dropbear.log; ls /etc/dropbear
 key ret
 wait dropbear_ed25519_host_key
+# W24-S03: root logs in to burrow over loopback with a key of its own
+# (dropbearkey -y gives the public half), then copies a file with scp,
+# which runs dbclient
+type mkdir -p /root/.ssh && dropbearkey -t ed25519 -f /root/.ssh/id_dropbear > /dev/null && dropbearkey -y -f /root/.ssh/id_dropbear | grep ^ssh- >> /home/burrow/.ssh/authorized_keys && echo ssh: key for root ad''ded
+key ret
+wait ssh: key for root added
+type dbclient -y -i /root/.ssh/id_dropbear burrow@127.0.0.1 'echo dbclient: logged in as $(id -un)'
+key ret
+wait dbclient: logged in as burrow
+type scp -i /root/.ssh/id_dropbear /etc/passwd burrow@127.0.0.1:/tmp/passwd.copy && [ "$(sha256sum < /etc/passwd)" = "$(sha256sum < /tmp/passwd.copy)" ] && echo scp: copied over loop''back
+key ret
+wait scp: copied over loopback
 type exit
 key ret
 wait burrow> 

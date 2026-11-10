@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -738,7 +738,13 @@ ssh-smoke:
 	else echo "SSH SMOKE SKIP (make busybox ports net-ports, and an ssh client on the host)"; fi
 ssh-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img
 	cp $(BUILD)/root-test.img $(BUILD)/ssh-root.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 300
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 420
+# ssh-bench (W24-S03; not in make test): the same boot, with the host timing
+# key logins and a 4 MiB scp each way (printed; budgets come in W24-S06).
+ssh-bench: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img
+	cp $(BUILD)/root-test.img $(BUILD)/ssh-root.img
+	SSH_MODE=bench MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 420
+	@grep -a "SSH BENCH" $(BUILD)/ssh-host.log
 
 # virtio-blk (W23-S04): disk-smoke, dev-smoke and unix-smoke again with
 # their data disks on virtio (vda, vdb), checked against expect files

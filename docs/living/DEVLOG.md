@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W24-S03 Interactive sessions, scp and dbclient
+
+**Did:** the host's `ssh -tt` on a pseudo-terminal the test owns: two shells at once, each with its own pty and session; `stty size` follows a resize and a `WINCH` trap fires; `^C` stops a foreground `sleep` with 130; `exit 7` comes back to the host. `scp` of 1 MiB both ways, checked by sha256. On the console root logs in to burrow with `dbclient` over loopback, with a key from `dropbearkey -y`, and copies a file with Burrow's own `scp`. `make ssh-bench`: about 1.7 s a login, 0.9 MB/s `scp`.
+
+**Surprise:** three gaps, each a session's first step. A pty's slave had no owner, so dropbear's `chown` of it to the user ended the session; it now has one, as devpts gives it. An `scp` to ext2 wrote the whole file back for each KiB, O(n^2) on the disk; big files now go back by doublings and at close. And BUG-0031: `mkdir("/")` was `EACCES`, not `EEXIST`, so `mkdir -p` of any absolute path failed, even for root. My own test was wrong once too: a `WINCH` trap in the interactive shell never fires while `sleep` holds the foreground, on Linux as here.
+
+**Next:** W24-S04: the NetSurf spike and a first page.
+
 ## 2026-11-10 — W24-S02 dropbear: the host logs in
 
 **Did:** dropbear, its client, key maker and `scp` on the NETDATA disk; host keys made at first connection into `/etc/dropbear` on the ext2 root. A census of a session on the host, counting only dropbear's own processes; it found `set_robust_list` (musl's fork) and `execveat` (dropbear re-runs itself per connection), both now served with tests. `make ssh-smoke`: the host's OpenSSH logs in by password and by key, and a wrong password is refused. BUG-0030 on the way: nothing under a mount below a directory the ext2 root lacks could be reached.

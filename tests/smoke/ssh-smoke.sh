@@ -13,11 +13,14 @@ set -euo pipefail
 B="$1" IMG="$2" ROOT="$3" TIMEOUT="${4:-300}"
 WORK="${NET_CACHE:-$HOME/.cache/burrow-net}/ssh-smoke"
 P=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-python3 tests/smoke/ssh.py "$P" "$WORK" > "$B/ssh-host.log" 2>&1 &
+MODE="${SSH_MODE:-smoke}"   # bench: make ssh-bench (ssh.py times logins and scp)
+EXPECT=tests/smoke/expect/ssh.txt
+[ "$MODE" = bench ] && EXPECT=tests/smoke/expect/ssh-bench.txt
+python3 tests/smoke/ssh.py "$P" "$WORK" "$MODE" > "$B/ssh-host.log" 2>&1 &
 HOST=$!
 trap 'kill $HOST 2>/dev/null || true' EXIT
 QEMU_EXTRA="-drive file=$ROOT,format=raw,if=ide,index=1,media=disk -drive file=$B/net-data.img,format=raw,if=ide,index=2,media=disk -nic user,model=${NIC_MODEL:-e1000},hostfwd=tcp:127.0.0.1:$P-:22" \
-  tests/smoke/smoke.sh "$IMG" tests/smoke/expect/ssh.txt "$TIMEOUT" tests/smoke/keys/ssh.keys
+  tests/smoke/smoke.sh "$IMG" "$EXPECT" "$TIMEOUT" tests/smoke/keys/ssh.keys
 status=0
 wait $HOST || status=$?
 cat "$B/ssh-host.log"
