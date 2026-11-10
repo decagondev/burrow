@@ -30,8 +30,9 @@ SPECIAL = {  # path: (mode, uid, gid)
     'etc/shadow': (0o100600, 0, 0),
     'bin/busybox': (0o104755, 0, 0),  # set-uid root: su and passwd need it
     'tmp': (0o041777, 0, 0),
+    'etc/dropbear': (0o040700, 0, 0),  # W24-S02: dropbear -R makes its host keys here
 }
-PROFILE = 'export PATH=/bin\n'
+PROFILE = 'export PATH=/bin:/opt/net/bin\n'  # /opt/net: the NETDATA disk's programs (W24)
 
 
 def tool(name):
@@ -64,7 +65,7 @@ def etc_files(etc_src, etc):
 
 
 def tree(root, busybox, etc_src):
-    for d in ['bin', 'etc', 'root', 'home/burrow', 'tmp', 'dev', 'mnt']:
+    for d in ['bin', 'etc', 'etc/dropbear', 'root', 'home/burrow', 'tmp', 'dev', 'mnt']:
         os.makedirs(os.path.join(root, d))
     shutil.copy(busybox, os.path.join(root, 'bin/busybox'))
     applets = subprocess.run([busybox, '--list'], check=True, capture_output=True, text=True).stdout.split()

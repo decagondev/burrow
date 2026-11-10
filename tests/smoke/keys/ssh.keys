@@ -1,0 +1,23 @@
+# The host logs in over ssh (W24-S02, run by tests/smoke/ssh-smoke.sh):
+# root logs in on the console and starts dropbear (-R: host keys made at
+# the first connection, into /etc/dropbear on the ext2 root); the console
+# then waits for the file tests/smoke/ssh.py leaves after its logins, and
+# prints its report.
+wait login: 
+type root
+key ret
+wait Password:
+type root
+key ret
+wait # 
+type /opt/net/bin/dropbear -R -p 22 && echo ssh: dropbear'' started
+key ret
+wait ssh: dropbear started
+type while [ ! -f /tmp/ssh-done ]; do sleep 1; done; cat /tmp/ssh-report; ls /etc/dropbear
+key ret
+wait dropbear_ed25519_host_key
+type exit
+key ret
+wait burrow> 
+type poweroff
+key ret

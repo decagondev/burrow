@@ -1,0 +1,8 @@
+# Ordered markers for the host's ssh logins (W24-S02, tests/smoke/keys/ssh.keys,
+# run by tests/smoke/ssh-smoke.sh). Append-only.
+volume "NETDATA" mounted at /opt/net
+burrow login: root
+ssh: dropbear started
+ssh: the host logged in by password and by key (4 of 4 checks)
+dropbear_ed25519_host_key
+burrow> poweroff

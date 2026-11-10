@@ -10,6 +10,7 @@
 package vfs
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -144,14 +145,17 @@ func (v *VFS) Open(name string) (fs.File, error) {
 	}
 	f, err := m.fsys.Open(rel)
 	if err != nil {
+		if extra := v.below(name); errors.Is(err, fs.ErrNotExist) && len(extra) > 0 {
+			return newMergedDir(virtualDir{path.Base(name)}, extra) // only mounts make it (BUG-0030)
+		}
 		return nil, &fs.PathError{Op: "open", Path: name, Err: unwrap(err)}
 	}
 	if rel == "." && name != "." {
 		f = renamed{f, path.Base(name)} // a mount root is named after its point
 	}
 	if st, err := f.Stat(); err == nil && st.IsDir() {
-		if kids := v.children(name); len(kids) > 0 {
-			return newMergedDir(f, kids)
+		if extra := v.below(name); len(extra) > 0 {
+			return newMergedDir(f, extra)
 		}
 	}
 	return f, nil

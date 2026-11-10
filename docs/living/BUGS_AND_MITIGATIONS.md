@@ -35,6 +35,16 @@ None (BUG-0023 closed in W21-S03).
 
 ## Closed
 
+### BUG-0030: Nothing under a mount below a missing directory could be reached
+- Found: 2026-11-10, W24-S02: on the ext2 root, `/opt/net/bin/dropbear` was "not found" although the kernel had logged `NETDATA mounted at /opt/net`.
+- Severity: major (every data disk mounted under a directory the root lacks was unreachable on an ext2 root: the net disk, and the X and Qt disks with `make run-unix`; the initrd has `/opt`, which is why it hid).
+- Symptom: `-sh: /opt/net/bin/dropbear: not found`; `ls /` showed no `opt`.
+- Root cause: the VFS listed the mount points directly inside a directory, but a directory that existed only because a mount lay below it (`opt` for `opt/net`) could not be opened or stat'ed, so the walker stopped there; and a listing showed only mounts one level down.
+- Fix: `vfs/virtual.go`: `below` gives the entries the mounts under a directory add (a mount point's root, or the directory on the way to a deeper one), and a directory only mounts make opens as a read-only empty one with them; a real directory on the way keeps its own entry. `Open`, listings and `Lstat` use it.
+- Mitigation: none needed beyond the test.
+- Regression: `TestBUG0030MountBelowMissingDir` (`kernel/vfs`; fails without the fix: the walk stops at `opt`) and `make ssh-smoke`, which runs dropbear from `/opt/net` on the ext2 root.
+- Lesson: a test tree that already has every directory hides the case where it does not; the ext2 root is the first tree made from scratch.
+
 ### BUG-0029: A process reading its own stat was sometimes "sleeping"
 - Found: 2026-11-06, W23-S05, in the full `make test`: `SMOKE FAIL [ports]: timed out after 120s`; proctest had printed `proctest: stat-head FAIL` and the keys file waited for `proctest: ok`.
 - Severity: minor (a wrong state letter in `/proc/<pid>/stat` and `status`, and a flaky test; nothing acted on it).
@@ -390,9 +400,9 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-80 | W23 | virtio-blk's chains and memory ordering: data pages the device writes, many requests in flight on four CPUs | closed (S04: each slot owns its descriptors and DMA pages and goes back only after the device returned it (a request lost to a timeout keeps its slot out); descriptors are written before the available index, the used index is read before the status; `TestManyReaders` under `-race`; `virtio-smoke` on four CPUs) |
 | PIT-81 | W23 | Two disk buses, one set of labels: the same label on an IDE and a virtio disk must be refused, not mounted twice | closed (S04: `mountData` remembers each label and logs an error for the second disk that carries it, leaving it unmounted) |
 | PIT-82 | W23 | DHCP and a fixed network: slirp always answers 10.0.2.15, so tests must not mistake the fixed configuration for a lease, and a lease that never comes must time out | closed (S05: the lease has its own marker, `eth0 dhcp ... lease ... from`, that a fixed configuration never prints, and virtio-net-smoke checks it; no answer in four tries of 2 s is `ErrNoLease` and the fixed addresses are used, `TestNoServer`) |
-| PIT-83 | W24 | Ports bring system calls nobody served yet: dropbear and NetSurf are the first big network programs in C | open (S01: `census-net.sh` before the first boot; curl and wget needed nothing new) |
+| PIT-83 | W24 | Ports bring system calls nobody served yet: dropbear and NetSurf are the first big network programs in C | open (S01: `census-net.sh` before the first boot; curl and wget needed nothing new; S02: `census-ssh.sh` found `set_robust_list` and `execveat`) |
 | PIT-84 | W24 | ssh needs every piece of the Unix at once: `crypt`, shadow passwords, `setgroups`/`setgid`/`setuid` in order, a controlling pty, a session leader | open (S02, S03) |
-| PIT-85 | W24 | Entropy and keys: `kernel/random` was "not for cryptography"; host keys and TLS need good random numbers | open (S02: make it fit or say so; host keys made on the machine, never shipped) |
+| PIT-85 | W24 | Entropy and keys: `kernel/random` was "not for cryptography"; host keys and TLS need good random numbers | closed (S02: said so: ChaCha8 seeded from RDRAND, which QEMU's CPU has, fit for a test network and no more; host keys are made by `dropbear -R` on the machine, never shipped) |
 | PIT-86 | W24 | TLS on TCG is slow: handshakes do big-number arithmetic under emulation | open (S01: curl's handshakes finish well inside the smoke's waits; budgets measured in S06) |
 | PIT-87 | W24 | NetSurf is big: many libraries, a host tool, a build system of its own | open (S04: a spike with a budget and links2 as the fallback) |
 | PIT-88 | W24 | Two TLS stacks, one test CA: busybox's own TLS and mbedTLS accept different things | open (S01: tls-server.py's default context suits both; busybox's checks no certificate, so only curl's refusals are tested) |

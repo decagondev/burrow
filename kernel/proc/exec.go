@@ -19,11 +19,17 @@ import (
 // open). Everything that can fail happens before the old image goes; then
 // every other thread ends and the caller becomes the main thread.
 func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
-	p, s := t.p, t.p.sys
-	name, err := p.mem.CString(pathVA, 4096)
+	name, err := t.p.mem.CString(pathVA, 4096)
 	if err != nil {
 		return errno(err)
 	}
+	return t.execName(name, true, argvVA, envpVA)
+}
+
+// execName is execve of name (a user path), following a final link when
+// follow is set (execveat's AT_SYMLINK_NOFOLLOW clears it).
+func (t *Thread) execName(name string, follow bool, argvVA, envpVA uint64) int64 {
+	p, s := t.p, t.p.sys
 	argv, err := p.strings(argvVA)
 	if err != nil {
 		return errno(err)
@@ -32,9 +38,12 @@ func (t *Thread) execve(pathVA, argvVA, envpVA uint64) int64 {
 	if err != nil {
 		return errno(err)
 	}
-	file, err := p.resolvePath(name, true)
+	file, err := p.resolvePath(name, follow)
 	if err != nil {
 		return errno(err)
+	}
+	if info, err := p.statPath(file, false); err == nil && isLink(info) {
+		return -int64(syscall.ELOOP) // AT_SYMLINK_NOFOLLOW on a link
 	}
 	cred := p.Cred()
 	if err := p.permit(&cred, file, mayExec); err != nil { // W19-S04

@@ -1,0 +1,61 @@
+# System calls of dropbear 2025.88 serving sessions (W24-S02): taken by
+# tests/regression/census-ssh.sh (make ssh-census), which runs it on the
+# host as a normal user under strace -f (a key login running a command, and
+# a session on a pseudo-terminal) and counts only dropbear's own processes,
+# not the shells it starts. Name and Linux x86-64 number; the census fails
+# on a name not listed, and kernel/proc's TestCensusSsh on a listed name
+# with no handler. The "as root" lines are what dropbear adds as root on
+# Burrow (dropping to the user's ids, the pty's owner), listed by hand.
+accept 43
+arch_prctl 158
+bind 49
+brk 12
+clock_gettime 228
+close 3
+dup2 33
+execveat 322
+exit_group 231
+fcntl 72
+fork 57
+fstat 5
+getpid 39
+getrandom 318
+getsockname 51
+gettid 186
+ioctl 16
+listen 50
+lseek 8
+mmap 9
+munmap 11
+open 2
+pipe 22
+prctl 157
+prlimit64 302
+read 0
+readlink 89
+rt_sigaction 13
+rt_sigprocmask 14
+rt_sigreturn 15
+select 23
+set_robust_list 273
+set_tid_address 218
+setresgid 119
+setresuid 117
+setsid 112
+setsockopt 54
+socket 41
+stat 4
+wait4 61
+write 1
+writev 20
+chdir 80 # as root
+chmod 90 # as root
+chown 92 # as root
+getegid 108 # as root
+geteuid 107 # as root
+getgid 104 # as root
+getpeername 52 # as root
+getuid 102 # as root
+setgid 106 # as root
+setgroups 116 # as root
+setuid 105 # as root

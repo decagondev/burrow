@@ -32,6 +32,7 @@ type Thread struct {
 	altSP       uint64 // sigaltstack: base and size (size 0: none)
 	altSize     uint64
 	clearTID    uint64 // set_tid_address / CLONE_CHILD_CLEARTID
+	robustList  uint64 // set_robust_list's head (robust.go, W24-S02)
 	exited      bool
 
 	inNr    atomic.Int64 // the system call in flight, -1 for none (dump.go)

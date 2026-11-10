@@ -3,7 +3,6 @@ package vfs
 import (
 	"io"
 	"io/fs"
-	"path"
 	"sort"
 )
 
@@ -36,15 +35,16 @@ type namedInfo struct {
 
 func (i namedInfo) Name() string { return i.name }
 
-// mergedDir lists a directory's own entries plus the mount points inside
-// it (a mount point hides an entry of the same name), in name order.
+// mergedDir lists a directory's own entries plus what the mounts below it
+// add (a mount point hides an entry of the same name; virtual.go), in name
+// order.
 type mergedDir struct {
 	fs.File
 	entries []fs.DirEntry
 	next    int
 }
 
-func newMergedDir(f fs.File, kids []mount) (fs.File, error) {
+func newMergedDir(f fs.File, extra map[string]fs.FileInfo) (fs.File, error) {
 	var own []fs.DirEntry
 	if d, ok := f.(fs.ReadDirFile); ok {
 		var err error
@@ -57,13 +57,11 @@ func newMergedDir(f fs.File, kids []mount) (fs.File, error) {
 	for _, e := range own {
 		byName[e.Name()] = e
 	}
-	for _, k := range kids {
-		st, err := fs.Stat(k.fsys, ".")
-		if err != nil {
-			continue
+	for name, info := range extra {
+		if _, way := info.(dirInfo); way && byName[name] != nil {
+			continue // a real directory on the way to a deeper mount stays itself
 		}
-		name := path.Base(k.point)
-		byName[name] = fs.FileInfoToDirEntry(namedInfo{st, name})
+		byName[name] = fs.FileInfoToDirEntry(info)
 	}
 	entries := make([]fs.DirEntry, 0, len(byName))
 	for _, e := range byName {

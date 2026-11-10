@@ -43,7 +43,7 @@ func (v *VFS) Lstat(name string) (fs.FileInfo, error) {
 	m, rel, ok := v.resolve(name)
 	if rl, isRL := m.fsys.(fs.ReadLinkFS); ok && isRL && rel != "." {
 		info, err := rl.Lstat(rel)
-		if !errors.Is(err, fs.ErrNotExist) || len(v.children(name)) == 0 {
+		if !errors.Is(err, fs.ErrNotExist) || len(v.below(name)) == 0 {
 			return info, wrap("lstat", name, err)
 		}
 	}

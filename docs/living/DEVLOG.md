@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W24-S02 dropbear: the host logs in
+
+**Did:** dropbear, its client, key maker and `scp` on the NETDATA disk; host keys made at first connection into `/etc/dropbear` on the ext2 root. A census of a session on the host, counting only dropbear's own processes; it found `set_robust_list` (musl's fork) and `execveat` (dropbear re-runs itself per connection), both now served with tests. `make ssh-smoke`: the host's OpenSSH logs in by password and by key, and a wrong password is refused. BUG-0030 on the way: nothing under a mount below a directory the ext2 root lacks could be reached.
+
+**Surprise:** BUG-0030 had been there since W16: every data disk sits under `/opt`, and the initrd happens to have `/opt`, so only an ext2 root (W19) could show it, and nothing had run a disk's program there before. And getting a census on WSL took three tries: dropbear checks the modes of every directory up to `/`, `/mnt/c` shows every file as everyone's, and WSL's kernel hangs up a non-root dropbear's pty.
+
+**Next:** W24-S03: interactive sessions, `scp` and `dbclient`.
+
 ## 2026-11-10 — W24-S01 TLS for C programs
 
 **Did:** mbedTLS, curl over it, and a CA bundle, pinned and built static for musl (`scripts/net-ports.sh`) onto a new data disk at `/opt/net`; busybox's `wget` with its own TLS. A census of both on the host, and `make tls-smoke`: both fetch from the host's TLS server, curl checks the test CA and refuses a wrong name and an unknown CA.

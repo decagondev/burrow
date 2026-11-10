@@ -23,6 +23,8 @@ CURL=8.11.1
 CURL_SHA256=c7ca7db48b0909743eaef34250da02c19bc61d4f1dcedd6603f109409536ab56
 CACERT=2024-12-31
 CACERT_SHA256=a3f328c21e39ddd1f2be1cea43ac0dec819eaa20a90425d7da901a11531b3aa5
+DROPBEAR=2025.88
+DROPBEAR_SHA256=783f50ea27b17c16da89578fafdb6decfa44bb8f6590e5698a4e4d3672dc53d4
 MOUNT=/opt/net # where the NETDATA disk is mounted on Burrow
 
 CROSS="$PORTS/cross/x86_64-linux-musl-cross"
@@ -49,8 +51,10 @@ fail() { echo "net-ports: $1 failed; the end of $2:"; tail -30 "$2"; exit 1; }
 fetch "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-$MBEDTLS/mbedtls-$MBEDTLS.tar.bz2" "mbedtls-$MBEDTLS.tar.bz2" "$MBEDTLS_SHA256"
 fetch "https://curl.se/download/curl-$CURL.tar.xz" "curl-$CURL.tar.xz" "$CURL_SHA256"
 fetch "https://curl.se/ca/cacert-$CACERT.pem" "cacert-$CACERT.pem" "$CACERT_SHA256"
+fetch "https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEAR.tar.bz2" "dropbear-$DROPBEAR.tar.bz2" "$DROPBEAR_SHA256"
 unpack "mbedtls-$MBEDTLS.tar.bz2" "mbedtls-$MBEDTLS"
 unpack "curl-$CURL.tar.xz" "curl-$CURL"
+unpack "dropbear-$DROPBEAR.tar.bz2" "dropbear-$DROPBEAR"
 mkdir -p "$OUT/bin" "$OUT/lib" "$OUT/include" "$OUT/etc/ssl/certs" "$CACHE/build" "$CACHE/stamp"
 PREFIX="$CACHE/build/prefix"
 
@@ -79,6 +83,22 @@ if [ ! -f "$CACHE/stamp/curl-$CURL" ]; then
 fi
 "$CROSS/bin/x86_64-linux-musl-strip" -o "$OUT/bin/curl" "$CACHE/build/curl/src/curl"
 echo "net-ports: curl $CURL (mbedTLS) -> $OUT/bin/curl"
+
+# dropbear (W24-S02): the server, its client, key maker and scp as four
+# static programs (a FAT disk holds no links for a multi-call binary); no
+# PAM, no login records, no zlib; options in user/net/localoptions.h.
+if [ ! -f "$CACHE/stamp/dropbear-$DROPBEAR" ] || [ "$ROOT/user/net/localoptions.h" -nt "$CACHE/stamp/dropbear-$DROPBEAR" ]; then
+  log="$CACHE/build/dropbear.log"
+  rm -rf "$CACHE/build/dropbear" && cp -R "$CACHE/src/dropbear-$DROPBEAR" "$CACHE/build/dropbear"
+  cp "$ROOT/user/net/localoptions.h" "$CACHE/build/dropbear/localoptions.h"
+  (cd "$CACHE/build/dropbear" && ./configure --host=x86_64-linux-musl CC="$CC" AR="$AR" --enable-static     --disable-zlib --disable-pam --disable-lastlog --disable-utmp --disable-utmpx --disable-wtmp --disable-wtmpx     --disable-pututline --disable-pututxline > "$log" 2>&1) || fail "dropbear configure" "$log"
+  make -C "$CACHE/build/dropbear" -j"$JOBS" PROGRAMS="dropbear dbclient dropbearkey scp" >> "$log" 2>&1 || fail "dropbear" "$log"
+  touch "$CACHE/stamp/dropbear-$DROPBEAR"
+fi
+for p in dropbear dbclient dropbearkey scp; do
+  "$CROSS/bin/x86_64-linux-musl-strip" -o "$OUT/bin/$p" "$CACHE/build/dropbear/$p"
+done
+echo "net-ports: dropbear $DROPBEAR (dropbear, dbclient, dropbearkey, scp) -> $OUT/bin"
 
 cp "$CACHE/dl/cacert-$CACERT.pem" "$OUT/etc/ssl/certs/ca-certificates.crt"
 cp -R "$PREFIX/include/." "$OUT/include/"
