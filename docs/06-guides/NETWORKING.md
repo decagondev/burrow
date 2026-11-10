@@ -62,6 +62,6 @@ then open `http://localhost:8080/` on the host. Only forwarded ports are reachab
 
 ## virtio-net and DHCP (W23-S05)
 
-Burrow also drives QEMU's virtio-net card (`drivers/virtionet`): `make run-dev NIC=virtio` (and the other run targets, `run-net` included) attach it instead of the e1000, and `eth0` is the same to everything above the driver. It is the faster card under QEMU: `make net-bench` downloads 10 MB at about 12 MB/s on virtio-net against 5 on the e1000.
+Burrow also drives QEMU's virtio-net card (`drivers/virtionet`), and since W23-S07 the run targets (`run-net` included) attach it by default; `NIC=e1000` brings the e1000 back, and `eth0` is the same to everything above the driver. It is the faster card under QEMU: `make net-bench` downloads 10 MB at about 12 MB/s on virtio-net against 5 on the e1000.
 
 Addresses can come from DHCP: put `eth0 dhcp` in `/etc/net.conf` (any `address`, `gateway` and `dns` lines stay as the fallback), or boot with the kargs word `net=dhcp` (`build/go-dev-dhcp.img` has it). The kernel asks before the stack starts, logs `[net] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease 24h0m0s from 10.0.2.2`, renews the lease halfway through over UDP, and `net` on the console shows it. Without an answer in about 8 s it uses the fixed addresses. QEMU's user network always gives 10.0.2.15, so on it DHCP changes nothing but the source of the numbers; `/etc/resolv.conf` is rewritten from the lease only when `/etc` is writable (an ext2 root).

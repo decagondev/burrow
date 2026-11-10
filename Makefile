@@ -77,17 +77,23 @@ RUN_SOUND  = -audiodev $(RUN_AUDIO),id=snd0 -device AC97,audiodev=snd0
 TABLET ?= 1
 TABLET_DEV = -device virtio-tablet-pci
 RUN_TABLET = $(if $(filter 1,$(TABLET)),$(TABLET_DEV))
-# W23-S04: the bus of the data disks. DISK_IF=virtio puts the run targets'
-# data disks (and make virtio-smoke's) on virtio-blk; the boot disk stays
-# IDE, which the BIOS reads. data_drive is $(call data_drive,image,ide-index).
+# W23-S04: the bus of the data disks; the boot disk stays IDE, which the
+# BIOS reads. The smokes' disks follow DISK_IF (ide; make virtio-smoke sets
+# virtio), the run targets' RUN_DISK_IF, virtio since W23-S07 (make
+# disk-bench: 92x IDE's writes, 17x its reads; RUN_DISK_IF=ide for the old
+# bus). data_drive and run_drive are $(call ...,image,ide-index).
 DISK_IF ?= ide
+RUN_DISK_IF ?= virtio
 comma := ,
 ide_drive = -drive file=$(1)$(comma)format=raw$(comma)if=ide$(comma)index=$(2)$(comma)media=disk
 virtio_drive = -drive file=$(1)$(comma)format=raw$(comma)if=virtio
-data_drive = $(if $(filter virtio,$(DISK_IF)),$(call virtio_drive,$(1)),$(call ide_drive,$(1),$(2)))
-# W23-S05: the network card of the run targets: e1000 (QEMU's default), or
-# NIC=virtio for virtio-net. The smokes choose theirs (NIC_MODEL).
-NIC ?= e1000
+drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(call ide_drive,$(1),$(2)))
+data_drive = $(call drive_on,$(1),$(2),$(DISK_IF))
+run_drive = $(call drive_on,$(1),$(2),$(RUN_DISK_IF))
+# W23-S05: the network card of the run targets: virtio-net since W23-S07
+# (make net-bench: 12.3 MB/s against the e1000's 5), or NIC=e1000. The
+# smokes choose theirs (NIC_MODEL, e1000 unless virtio-smoke).
+NIC ?= virtio
 NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
 RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
@@ -446,7 +452,7 @@ x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
 X11_DRIVE_HDC := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=2,media=disk
 run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		$(call data_drive,$(HOME_IMG),1) $(call data_drive,$(BUILD)/x11-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call run_drive,$(HOME_IMG),1) $(call run_drive,$(BUILD)/x11-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 desktop-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom)"; fi
@@ -454,15 +460,15 @@ desktop-smoke:
 # position moves dwm's focus) and an AC'97 recording Doom's menu sounds.
 DESKTOP_WAV := $(BUILD)/desktop-smoke.wav
 DESKTOP_SOUND := -audiodev wav,id=snd0,path=$(DESKTOP_WAV) -device AC97,audiodev=snd0
-desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
+desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img $(call xp,tests/smoke/expect/desktop-1.txt) $(call xp,tests/smoke/expect/desktop-2.txt)
 	rm -f $(BUILD)/home-desktop.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-desktop.img -label burrowhome -size 64 ../workbench
 	rm -f $(DESKTOP_WAV)
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC) $(TABLET_DEV) $(DESKTOP_SOUND)" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-1.txt 360 tests/smoke/keys/desktop-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-desktop.img,1) $(call data_drive,$(BUILD)/x11-data.img,2) $(TABLET_DEV) $(DESKTOP_SOUND)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/desktop-1.txt) 360 tests/smoke/keys/desktop-1.keys
 	python3 tests/smoke/checkwav.py $(DESKTOP_WAV) sounds 3
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-drive file=$(BUILD)/home-desktop.img,format=raw,if=ide,index=1,media=disk $(X11_DRIVE_HDC)" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img tests/smoke/expect/desktop-2.txt 90 tests/smoke/keys/desktop-2.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-desktop.img,1) $(call data_drive,$(BUILD)/x11-data.img,2)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/desktop-2.txt) 90 tests/smoke/keys/desktop-2.keys
 	@if command -v fsck.fat >/dev/null; then fsck.fat -n $(BUILD)/home-desktop.img >/dev/null && echo "DESKTOP HOME PASS (fsck.fat after a desktop session)"; \
 	else echo "DESKTOP HOME SKIP (no fsck.fat)"; fi
 # How fast the desktop is (W16-S05): user/x11/xbench times the server's
@@ -520,7 +526,7 @@ qtpad-smoke: $(BUILD)/go-dev.img $(BUILD)/qt-data.img
 # with the Qt disk at /opt/qt: run /opt/qt/bin/qtpad /home/hello.c
 run-qt: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/qt-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		$(call data_drive,$(HOME_IMG),1) $(call data_drive,$(BUILD)/qt-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call run_drive,$(HOME_IMG),1) $(call run_drive,$(BUILD)/qt-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
 # musl C++ cross toolchain once (scripts/ports.sh, sha256-pinned) and builds
@@ -558,7 +564,7 @@ $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
 run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		$(call data_drive,$(HOME_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call run_drive,$(HOME_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # A multi-user Unix (W19-S06): go-unix.img's kargs say "login", so the
 # kernel runs /bin/login before the console; the root disk (scripts/mkroot.py:
@@ -597,7 +603,7 @@ unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(call xp,tests/smok
 		|| { echo "UNIX ECHO FAIL: a password was echoed"; exit 1; }
 run-unix: $(BUILD)/go-unix.img $(ROOT_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		$(call data_drive,$(ROOT_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
+		$(call run_drive,$(ROOT_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots
@@ -644,7 +650,7 @@ net-bench: $(BUILD)/go-dev.img
 RUN_NET_FWD ?= 8080
 run-net: $(BUILD)/go-dev.img $(HOME_IMG)
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
-		$(call data_drive,$(HOME_IMG),1) \
+		$(call run_drive,$(HOME_IMG),1) \
 		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Two boots on a fresh test home (never $(HOME_IMG)): edit with vi, compile
@@ -738,6 +744,7 @@ disk-bench: $(BUILD)/go-diskbench-hdb.img $(BUILD)/go-diskbench-vda.img
 $(BUILD)/virtio-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
 	@mkdir -p $(dir $@)
 	python3 tests/smoke/virtio-expect.py $< $@
+	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/virtio-expect/$*.screen; fi
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

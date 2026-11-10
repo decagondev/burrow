@@ -405,6 +405,52 @@ flowchart LR
 The virtio transport is meant for more than input: virtio-blk and
 virtio-net would use the same capabilities, negotiation and queues.
 
+### 7.8 /proc and virtio devices (Wave 23)
+
+**/proc** is `kernel/procfs`, an `io/fs.FS` built over a small `Source`
+interface that `proc.System` implements: procfs never imports the process
+code. Each open takes one snapshot (under `s.mu`, then each `p.mu`, then
+the memory's lock, one at a time) and formats it as `proc(5)` says, so
+busybox, musl and Go parse it unchanged. Some links read differently for
+each process: `self`, and `fd/N`, `exe` and `cwd`, which only the
+process's user or root may read. The VFS carries a `Caller` through its
+walk for them (`ResolveAs`, `ReadLinkAs`). A descriptor with a path is
+reopened by following its link; a pipe's or socket's `fd/N` gives the
+caller the same description.
+
+**CPU time** is the nucleus's to count (`nucleus/cputime.c`): at every
+switch, every tick and every crossing between ring 3 and the kernel, the
+running thread's time goes to user, kernel or (for a CPU's idle thread)
+idle. Only the CPU running a thread writes its counters, and they only
+grow, so Go reads them with two nucleus calls and no lock. Go keeps the
+time of threads that end, fixes a process's at exit and adds it to the
+parent that reaps it (`times`, `getrusage`, `wait4`'s `rusage`,
+`/proc/stat`). Time Go spends serving a call is not charged to the caller.
+
+**virtio devices** reuse W22's transport: `drivers/virtiopci` opens a
+device, `drivers/virtioblk` makes block devices of chained requests
+(header, data pages, status) with several in flight, `drivers/virtionet`
+keeps a receive queue full and sends from slots. The disks are mounted by
+label like the IDE ones, the card is `eth0` like the e1000.
+`virtio/virtiotest` plays the device in host tests. **DHCP** takes its
+first lease on raw frames before the stack exists, then renews over the
+stack's own UDP.
+
+```mermaid
+flowchart LR
+    subgraph nucleus
+        ct["cputime.c<br/>switch, tick, ring crossing"]
+    end
+    subgraph go["Go kernel"]
+        sys["proc.System<br/>(procfs.Source)"] --> pfs["kernel/procfs<br/>/proc"]
+        ct -- "nu_thread_times<br/>nu_cpu_times" --> sys
+        vpci["drivers/virtiopci"] --> vblk["virtioblk: vda.."] & vnet["virtionet: eth0"]
+        vblk --> blk["block.Device<br/>mounted by label"]
+        vnet --> dhcp["DHCP (raw frames)"] --> stack["netstack (gVisor)"]
+    end
+    pfs --> tools["ps, top, free, tty,<br/>df, mount, lsof"]
+```
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

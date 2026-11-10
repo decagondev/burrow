@@ -83,3 +83,7 @@ Doom from dmenu then plays its effects. Only one program plays at a time (`/dev/
 - **While X runs it owns the keyboard and the screen;** the serial terminal you started QEMU from still shows the console's output, so messages from programs started by the session appear there.
 - **st sets its title** in dwm's bar from Xlib's locale data on the X disk (`XLOCALEDIR`).
 - **If the server does not start,** `startx` prints the end of `/tmp/x.log`, the server's log.
+
+## virtio by default (W23-S07)
+
+The run targets attach their data disks as virtio-blk (`vda`, `vdb`, ... in the log, mounted by label as before) and their network card as virtio-net: both are much faster under QEMU (`make disk-bench`, `make net-bench`). `RUN_DISK_IF=ide` and `NIC=e1000` bring back the IDE disks and the e1000. The boot disk is IDE either way: the BIOS reads it.

@@ -182,8 +182,8 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E20 /proc and virtio devices
 *Exit: the tools that look inside a Unix work, and disks and the network run on virtio.* [W23]
 
-- [ ] E20.F01 As a user, I want `/proc` (processes, their descriptors, maps and links, memory, CPUs, mounts), so that busybox `ps`, `free`, `tty`, `df` and `mount` and Go's `os.Executable` work unchanged. [W23]
-- [ ] E20.F02 As a user, I want CPU time counted per thread (`times`, `getrusage`, `/proc/stat`), so that `top` and `time` show where the CPUs went. [W23]
+- [x] E20.F01 As a user, I want `/proc` (processes, their descriptors, maps and links, memory, CPUs, mounts), so that busybox `ps`, `free`, `tty`, `df` and `mount` and Go's `os.Executable` work unchanged. [W23]
+- [x] E20.F02 As a user, I want CPU time counted per thread (`times`, `getrusage`, `/proc/stat`), so that `top` and `time` show where the CPUs went. [W23]
 - [x] E20.F03 As a user, I want virtio-blk disks behind `block.Device`, so that the root and home disks use QEMU's paravirtual bus. [W23]
 - [x] E20.F04 As a user, I want a virtio-net card behind `netdev.Device`, so that the network uses QEMU's paravirtual card. [W23]
 - [x] E20.F05 As a user, I want DHCP in the kernel (`eth0 dhcp` in `/etc/net.conf`), so that Burrow takes its address from the network. [W23]

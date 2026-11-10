@@ -71,6 +71,10 @@ wait desktop: focus on first
 type echo desktop: first is $(tty) > /dev/tty1
 key ret
 wait desktop: first is
+# W23-S07: top in the terminal sees the server and the window manager
+type echo desktop: top lists $(top -b -n 1 | grep -o -e '[X]fbdev' -e '[d]wm' | sort -u | tr '\n' ' ') > /dev/tty1
+key ret
+wait desktop: top lists
 key alt-p
 wait xfocus: dmenu
 sleep 1

@@ -48,3 +48,7 @@ make run-qt      # run-dev's window and home disk, plus the Qt disk at /opt/qt
 ```
 
 At `burrow>`, `run /opt/qt/bin/qtpad /home/hello.c` opens the file in a Qt editor drawn straight on the framebuffer: line numbers, C and Lua colouring, DejaVu Sans Mono. **Ctrl+S** saves (to a new file, then renamed over the old one, so a crash never leaves half a file), **Ctrl+Shift+S** saves under another name, **Ctrl+F** finds and **F3** finds the next, **Ctrl+Q** quits (press it twice to leave unsaved changes behind). Click into the QEMU window first so it takes the mouse; Ctrl+Alt+G lets go. Back at the console, `run /bin/busybox sh`, `cd /home` and `tcc -static -o hello hello.c` builds what you saved. The Qt programs, fonts and the environment Qt needs (`qt.env`, added to every program's environment) are on `build/qt-data.img`, rebuilt by `make`; nothing of yours is kept there.
+
+## virtio by default (W23-S07)
+
+The run targets attach their data disks as virtio-blk (`vda`, `vdb`, ... in the log, mounted by label as before) and their network card as virtio-net: both are much faster under QEMU (`make disk-bench`, `make net-bench`). `RUN_DISK_IF=ide` and `NIC=e1000` bring back the IDE disks and the e1000. The boot disk is IDE either way: the BIOS reads it.

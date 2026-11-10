@@ -12,6 +12,8 @@ desktop: two in /home
 desktop: second is /dev/pts/1
 desktop: focus on first
 desktop: first is /dev/pts/0
+# W23-S07: busybox top in st lists the X server and dwm
+desktop: top lists Xfbdev dwm
 xfocus: dmenu
 doom: X window 640x400 at 192,184
  adding /opt/x11/share/doom/freedoom1.wad

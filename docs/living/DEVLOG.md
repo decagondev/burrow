@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-10 — W23 done: /proc and virtio devices (M23)
+
+**Did:** the wave in seven slices. `/proc` over the process table, with links that read as the caller's (S01); CPU time counted by the nucleus at switches, ticks and ring crossings, `top` and `time` (S02); descriptors, `maps`, mounts, `ttyname`, `df` (S03); virtio-blk, several requests in flight, and a fake device for drivers' tests (S04); virtio-net and a DHCP client (S05); named datagram sockets, SysV semaphores and busybox's syslog (S06); and the milestone, with the run targets on virtio by default (S07). `make proc-smoke` and `make virtio-smoke` pass on four CPUs and on one.
+
+**Surprise:** how much the tools leaned on details: `ps`'s header compiled only with an option, `ttyname` stat-checking its answer, `df` finding mounts by `st_dev`, an unnamed datagram sender's address of length 0. Each was cheap once a check on the host's Linux showed it. And BUG-0029: a state guessed from a timer raced the machine's load.
+
+**Learned:** a pure core with a narrow interface keeps paying: procfs over `Source`, the drivers over the virtio transport and its fake device, DHCP over a `Link`. virtio-net came up on its first boot because the host tests had already found what there was to find.
+
+**Next:** UEFI and GOP, towards real hardware.
+
+## 2026-11-10 — W23-S07 M23
+
+**Did:** the run targets boot virtio disks and virtio-net by default (`RUN_DISK_IF`, `NIC`), the smokes keep IDE and the e1000, and `virtio-smoke` covers both buses. `desktop-smoke` passed once on virtio disks and gained `top` in an st (`desktop: top lists Xfbdev dwm`). `smp-bench` 3.8x and 3.9x, `doom-bench` 111.8 fps. ARCHITECTURE.md §7.8, PORTING.md's /proc section.
+
+**Surprise:** that the X desktop needed nothing for its disks to move: mounting by label made the bus invisible.
+
+**Next:** the wave summary above.
+
 ## 2026-11-06 — W23-S06 Named datagram sockets and syslog
 
 **Did:** named datagram Unix sockets: an unconnected datagram socket has a mailbox that any socket sends to by name, `connect` sets a default peer, `recvfrom` names the sender; socket nodes in `/dev`. SysV semaphores with `SEM_UNDO`. busybox `syslogd`, `logger` and `logread`: logger's line in syslogd's file and in its circular buffer. E14.F08, open since W14-S07, closed.
