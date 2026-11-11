@@ -148,6 +148,11 @@ static long nu_syscall_wait(struct syscall_frame *f)   { return uthread_wait((ui
 static long nu_syscall_reply(struct syscall_frame *f)  { return uthread_reply(SYSARG0(f), (long)SYSARG1(f)); }
 static long nu_lattrace(struct syscall_frame *f)       { return uthread_lattrace(SYSARG0(f), SYSARG1(f), (uint64_t *)SYSARG2(f)); }
 static long nu_vdso(struct syscall_frame *f)           { return vdso_info((uint64_t *)SYSARG0(f)); }
+/* W25-S03: answer one request and wait for the next in one crossing. */
+static long nu_syscall_reply_wait(struct syscall_frame *f) {
+    uthread_reply(SYSARG0(f), (long)SYSARG1(f));   /* -ESRCH: it was killed meanwhile; wait on */
+    return uthread_wait((uint64_t *)SYSARG2(f), SYSARG3(f));
+}
 static long nu_uthread_kill(struct syscall_frame *f)   { return uthread_kill(SYSARG0(f)); }
 static long nu_uthread_set_fs(struct syscall_frame *f) { return uthread_set_fs(SYSARG0(f), SYSARG1(f)); }
 static long nu_uthread_regs(struct syscall_frame *f) {
@@ -212,10 +217,12 @@ static const sys_fn g_nu_table[] = {
     [NU_cpu_times - NU_BASE] = nu_cpu_times,
     [NU_lattrace - NU_BASE] = nu_lattrace,
     [NU_vdso - NU_BASE] = nu_vdso,
+    [NU_syscall_reply_wait - NU_BASE] = nu_syscall_reply_wait,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {
     uint64_t nr = f->nr;
+    uthread_lat_go_call(nr);   /* W25-S03: counted only while a user call is traced */
     if (nr < SYS_MAX && g_table[nr]) return g_table[nr](f);
     if (nr >= NU_BASE && nr - NU_BASE < sizeof g_nu_table / sizeof g_nu_table[0] && g_nu_table[nr - NU_BASE])
         return g_nu_table[nr - NU_BASE](f);

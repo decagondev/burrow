@@ -22,6 +22,8 @@ _Static_assert(LAT_STAMPS == sizeof ((struct thread *)0)->lat / sizeof(uint64_t)
 
 static struct spinlock g_lock = SPINLOCK_INIT("uthread");
 static struct lat_stats g_lat;                 /* W25-S01: the traced call's step sums, under g_lock */
+#define LAT_GO_CALLS 512                       /* SYS_MAX: the Go kernel's own calls while tracing (W25-S03) */
+static uint64_t g_lat_go[LAT_GO_CALLS];
 static struct thread *g_head, *g_tail;      /* QUEUED requests, oldest first */
 static struct thread *g_waiter;             /* the dispatcher, blocked in uthread_wait */
 
@@ -243,13 +245,23 @@ long uthread_set_fs(uint64_t tid, uint64_t fs) {
     return t ? 0 : -ESRCH;
 }
 
+/* W25-S03: one of the Go kernel's own calls (the shim's), counted while a
+ * user call is traced: what Go spends its share of a round trip on. */
+void uthread_lat_go_call(uint64_t nr) {
+    if (g_lat.on && nr < LAT_GO_CALLS) __atomic_fetch_add(&g_lat_go[nr], 1, __ATOMIC_RELAXED);
+}
+
 /* nu_lattrace (W25-S01): op 0 traces call nr arg (and clears the sums), op
- * 1 stops, op 2 copies {on, nr, count, skipped, step ns x4} into buf. */
+ * 1 stops, op 2 copies {on, nr, count, skipped, step ns x4} into buf, op 3
+ * (W25-S03) the Go kernel's own calls by number (512 words). */
 long uthread_lattrace(uint64_t op, uint64_t arg, uint64_t *buf) {
     long rc = 0;
     uint64_t fl = spin_lock_irqsave(&g_lock);
     switch (op) {
-    case 0: lat_start(&g_lat, arg); break;
+    case 0:
+        lat_start(&g_lat, arg);
+        for (int i = 0; i < LAT_GO_CALLS; i++) __atomic_store_n(&g_lat_go[i], 0, __ATOMIC_RELAXED);
+        break;
     case 1: lat_stop(&g_lat); break;
     case 2:
         buf[0] = (uint64_t)g_lat.on;
@@ -257,6 +269,9 @@ long uthread_lattrace(uint64_t op, uint64_t arg, uint64_t *buf) {
         buf[2] = g_lat.count;
         buf[3] = g_lat.skipped;
         for (int i = 0; i < LAT_STEPS; i++) buf[4 + i] = time_ticks_to_ns(g_lat.sum[i]);
+        break;
+    case 3:   /* W25-S03: the Go kernel's own calls by number, LAT_GO_CALLS words */
+        for (int i = 0; i < LAT_GO_CALLS; i++) buf[i] = __atomic_load_n(&g_lat_go[i], __ATOMIC_RELAXED);
         break;
     default: rc = -EINVAL;
     }

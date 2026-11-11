@@ -155,14 +155,17 @@ static double ping_futex(void) {
     return us;
 }
 
-/* The nucleus's steps of getpid's round trip (Burrow only). */
-static void trace_getpid(void) {
+/* The nucleus's steps of one call's round trips while fn runs (Burrow
+ * only), printed as "lat: <label>step <name> <us> us" and "lat: <label>trace
+ * <line>": getpid's (label "") and a pipe read's during a ping-pong
+ * ("pipe-"), where the reader waits (W25-S03). */
+static void trace(const char *label, int nr, void (*fn)(void)) {
     int fd = open("/dev/lattrace", O_RDWR);
     if (fd < 0) return;
-    char nr[16], buf[512];
-    snprintf(nr, sizeof nr, "%d\n", (int)SYS_getpid);
-    if (write(fd, nr, strlen(nr)) < 0) { close(fd); return; }
-    do_getpid(TRACED);
+    char word[16], buf[512];
+    snprintf(word, sizeof word, "%d\n", nr);
+    if (write(fd, word, strlen(word)) < 0) { close(fd); return; }
+    fn();
     close(fd);
     fd = open("/dev/lattrace", O_RDWR);
     ssize_t n = fd < 0 ? -1 : read(fd, buf, sizeof buf - 1);
@@ -171,10 +174,15 @@ static void trace_getpid(void) {
     buf[n] = 0;
     for (char *line = strtok(buf, "\n"); line; line = strtok(0, "\n")) {
         char name[32]; double us;
-        if (sscanf(line, "%31s %lf us", name, &us) == 2 && strchr(name, '-')) printf("lat: step %s %.2f us\n", name, us);
-        else printf("lat: trace %s\n", line);
+        size_t len = strlen(line);
+        int is_step = len > 3 && strcmp(line + len - 3, " us") == 0;   /* not "go-call N x per request" */
+        if (is_step && sscanf(line, "%31s %lf us", name, &us) == 2 && strchr(name, '-'))
+            printf("lat: %sstep %s %.2f us\n", label, name, us);
+        else printf("lat: %strace %s\n", label, line);
     }
 }
+static void traced_getpid(void) { do_getpid(TRACED); }
+static void traced_pipes(void) { ping_pipes(); }
 
 int main(void) {
     setvbuf(stdout, 0, _IOLBF, 0);
@@ -186,7 +194,8 @@ int main(void) {
     printf("lat: socketpair %.2f us\n", ping_socketpair());
     printf("lat: tcp %.2f us\n", ping_tcp());
     fflush(stdout);
-    trace_getpid();
+    trace("", SYS_getpid, traced_getpid);
+    trace("pipe-", SYS_read, traced_pipes);
     printf("lat: ok\n");
     return 0;
 }

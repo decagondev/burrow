@@ -214,18 +214,25 @@ func (s *System) register(p *Process, nt uint64) *Thread {
 func (s *System) Serve() error {
 	go s.sampleLoad() // /proc/loadavg and sysinfo's loads (W23-S01)
 	buf := make([]Request, 16)
+	var owed reply // W25-S03: an answer to send with the next wait
 	for {
-		n, err := s.nu.Wait(buf)
+		n, err := s.wait(buf, &owed)
 		if err != nil {
 			return err
 		}
+		started := false
 		for _, r := range buf[:n] {
-			go s.handle(r)
+			if !s.quick(r, &owed) { // W25-S03: calls that never block are answered here
+				go s.handle(r)
+				started = true
+			}
 		}
 		// Let the handlers run before blocking again (BUG-0014): Wait is a
 		// blocking syscall that keeps this M's P, so with one P a handler
 		// queued now would wait for sysmon to take the P back (2 ms).
-		runtime.Gosched()
+		if started {
+			runtime.Gosched()
+		}
 	}
 }
 

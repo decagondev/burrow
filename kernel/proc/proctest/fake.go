@@ -430,6 +430,12 @@ func (f *Fake) Inject(r proc.Request) {
 	f.reqs <- r
 }
 
+// ReplyWait is Reply then Wait, as the nucleus does it in one call.
+func (f *Fake) ReplyWait(tid uint64, result int64, reqs []proc.Request) (int, error) {
+	f.Reply(tid, result)
+	return f.Wait(reqs)
+}
+
 func (f *Fake) Wait(reqs []proc.Request) (int, error) {
 	reqs[0] = <-f.reqs
 	n := 1

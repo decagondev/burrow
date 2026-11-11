@@ -175,12 +175,21 @@ var neverRestarted = map[uint64]bool{7: true, 271: true, 34: true, 35: true, 130
 // finish answers a system call: before the thread returns to ring 3, a
 // pending signal runs its handler (or its default action) first.
 func (t *Thread) finish(res int64, nr uint64) {
+	if t.finishLeavingReply(res, nr) {
+		t.p.sys.nu.Reply(t.nt, res)
+	}
+}
+
+// finishLeavingReply is finish without its plain answer: true when the
+// caller must still send res (no signal ran; the thread lives), which the
+// dispatcher sends with its next wait (W25-S03, quick.go).
+func (t *Thread) finishLeavingReply(res int64, nr uint64) bool {
 	p, s := t.p, t.p.sys
 	p.mu.Lock()
 	gone := t.exited
 	p.mu.Unlock()
 	if gone { // its process ended while the call waited: the nucleus thread is
-		return // gone, a reply would only fail (BUG-0026; ids are never reused)
+		return false // gone, a reply would only fail (BUG-0026; ids are never reused)
 	}
 	sig, act, info := t.takeSignal()
 	if sig == 0 {
@@ -189,13 +198,12 @@ func (t *Thread) finish(res int64, nr uint64) {
 			t.sigMask, t.suspended = t.suspendMask, false
 		}
 		p.mu.Unlock()
-		s.nu.Reply(t.nt, res)
-		return
+		return true
 	}
 	var r Regs
 	if err := s.nu.Regs(t.nt, &r, false); err != nil {
 		s.nu.Reply(t.nt, res)
-		return
+		return false
 	}
 	r.RAX = uint64(res)
 	if res == -int64(syscall.EINTR) && act.flags&saRestart != 0 && !neverRestarted[nr] {
@@ -205,6 +213,7 @@ func (t *Thread) finish(res int64, nr uint64) {
 	if t.deliver(sig, act, info, &r) {
 		s.nu.Reply(t.nt, int64(r.RAX))
 	}
+	return false
 }
 
 // deliver runs sig's handler from registers r (written back to the

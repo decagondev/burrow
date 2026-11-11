@@ -32,7 +32,7 @@ TEST(regions_release_splits_and_trims); TEST(regions_full_table);
 TEST(acpi_qemu_like); TEST(acpi_xsdt_ebda_override); TEST(acpi_bad_checksums); TEST(acpi_error_names);
 TEST(lattrace_sums_the_steps); TEST(lattrace_skips_bad_stamps);
 TEST(fbdesc_vbe_modes); TEST(fbdesc_refusals);
-TEST(go_stack_layout);
+TEST(go_stack_layout); TEST(go_stack_sysinfo_ehdr);
 TEST(go_stack_split_words);
 
 int main(void) {
@@ -71,7 +71,7 @@ int main(void) {
                         RUN(acpi_error_names);
     puts("[fbdesc]");   RUN(fbdesc_vbe_modes); RUN(fbdesc_refusals);
     puts("[lattrace]"); RUN(lattrace_sums_the_steps); RUN(lattrace_skips_bad_stamps);
-    puts("[go_stack]"); RUN(go_stack_layout); RUN(go_stack_split_words);
+    puts("[go_stack]"); RUN(go_stack_layout); RUN(go_stack_split_words); RUN(go_stack_sysinfo_ehdr);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);
     return mt_failures ? 1 : 0;
 }

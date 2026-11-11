@@ -7,7 +7,8 @@
  *   [rsp+8]    argv..., NULL, envp..., NULL, auxv (type, value)..., AT_NULL
  *   higher     strings and the 16 AT_RANDOM bytes
  *
- * No AT_SYSINFO_EHDR: without a vDSO the runtime uses real clock_gettime. */
+ * Since W25-S03 AT_SYSINFO_EHDR names the vDSO when there is one, so the
+ * runtime reads its clocks there instead of through the shim. */
 #ifndef NUCLEUS_GO_STACK_H
 #define NUCLEUS_GO_STACK_H
 #include <stdint.h>
@@ -20,8 +21,10 @@
 #define AT_ENTRY  9
 #define AT_RANDOM 25
 #define AT_EXECFN 31
+#define AT_SYSINFO_EHDR 33
+#define AT_IGNORE 1
 
-struct exec_info { uint64_t phdr, phent, phnum, entry; };
+struct exec_info { uint64_t phdr, phent, phnum, entry, sysinfo_ehdr; };   /* sysinfo_ehdr: the vDSO, 0 = none */
 
 #define STACK_MAX_ARGS 16   /* argv and envp entries each; more are dropped */
 

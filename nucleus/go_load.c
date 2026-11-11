@@ -16,6 +16,8 @@
 #include "kprintf.h"
 #include "lib_string.h"
 #include "panic.h"
+#include "vdso.h"
+#include "burrow/vdso.h"
 
 /* Go's rt0_go assumes 64 KiB of g0 stack BELOW the entry SP (Linux gives
  * 8 MiB); argv/env/auxv sit above it, so give m0 well over that. */
@@ -57,7 +59,7 @@ static void map_go_elf(struct addr_space *as, const uint8_t *img, uint64_t len, 
     enum elf_status st = elf64_inspect(img, len, &info);
     if (st != ELF_OK) panic("go kernel ELF: %s", elf_status_str(st));
     const uint64_t phoff = *(const uint64_t *)(img + 32);           /* e_phoff */
-    *ex = (struct exec_info){ 0, 56, info.phnum, info.entry };
+    *ex = (struct exec_info){ 0, 56, info.phnum, info.entry, 0 };
     for (uint16_t i = 0; i < info.phnum; i++) {
         struct elf64_segment s;
         if ((st = elf64_segment_at(img, len, i, &s)) != ELF_OK) panic("go kernel ELF: %s", elf_status_str(st));
@@ -74,6 +76,22 @@ static void map_go_elf(struct addr_space *as, const uint8_t *img, uint64_t len, 
                 (unsigned long long)(s.vaddr + s.memsz), 'r', s.flags & PF_W ? 'w' : '-', s.flags & PF_X ? 'x' : '-');
     }
     if (!go_text_hi) panic("go kernel ELF has no executable segment");
+}
+
+/* W25-S03: the vDSO for the Go kernel too ([vvar] then the code), so its
+ * runtime reads the clock without a trap into the shim (five of them per
+ * user system call before). Returns the code's address, 0 = no vDSO. */
+static uint64_t map_go_vdso(struct addr_space *as) {
+    uint64_t v[3 + VDSO_MAX_CODE_PAGES], base;
+    if (vdso_info(v) != 0) return 0;
+    uint64_t pages = v[2];
+    if (vm_reserve(as, 0, (1 + pages) * PAGE_4K, &base) != 0) panic("go: no room for the vdso");
+    if (vm_map(as, base, v[0], PAGE_4K, PTE_NX) != PT_OK) panic("go: cannot map the vdso's data");
+    for (uint64_t i = 0; i < pages; i++)
+        if (vm_map(as, base + (1 + i) * PAGE_4K, v[3 + i], PAGE_4K, 0) != PT_OK) panic("go: cannot map the vdso");
+    go_vdso_lo = base + PAGE_4K;
+    go_vdso_hi = base + (1 + pages) * PAGE_4K;
+    return go_vdso_lo;
 }
 
 /* The m0 stack plus an unmapped guard page below it. Returns its top. */
@@ -110,6 +128,7 @@ int go_kernel_start(void) {
     struct addr_space *as = vmm_kernel();
     struct exec_info ex;
     map_go_elf(as, phys_to_virt(mod->phys_start), mod->size_bytes, &ex);
+    ex.sysinfo_ehdr = map_go_vdso(as);   /* W25-S03 */
 
     uint8_t rnd[16];
     for (int i = 0; i < 16; i += 8) { uint64_t t = rdtsc() * 0x9E3779B97F4A7C15ull; memcpy(rnd + i, &t, 8); }

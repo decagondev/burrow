@@ -205,7 +205,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 - [x] E22.F01 As a kernel dev, I want each step of a system call's round trip timed (a latency program on Linux and Burrow, TSC stamps along one request), so that every change says which step it shortened. [W25-S01]
 - [x] E22.F02 As a porter, I want a vDSO (`clock_gettime`, `gettimeofday`, `time`, `getcpu` from a page the kernel keeps current), so that programs read the clock without a system call. [W25-S02]
-- [ ] E22.F03 As a user, I want the dispatcher's path short (answer and wait in one crossing, a goroutine per thread, non-blocking calls answered at once), so that every program's calls are cheaper. [W25-S03]
+- [x] E22.F03 As a user, I want the dispatcher's path short (answer and wait in one crossing, a goroutine per thread, non-blocking calls answered at once), so that every program's calls are cheaper. [W25-S03]
 - [ ] E22.F04 As a user, I want a blocked call woken at once (no tick's wait, no costly select), so that pipes, sockets and ssh are fast and background jobs progress (BUG-0033). [W25-S04]
 - [ ] E22.F05 As a user, I want to run the desktop as myself on the ext2 root (a set-user-id X server, the disks' environment in login sessions), so that the desktop is not root's alone. [W25-S05]
 - Later: per-CPU run queues · an I/O APIC · a tickless timer · KVM numbers beside TCG's.

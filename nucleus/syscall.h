@@ -30,4 +30,5 @@ long nu_syscall_dispatch(struct syscall_frame *f);   /* called by syscall.asm on
 
 /* Go kernel text range, for caller classification (syscall.asm). */
 extern uint64_t go_text_lo, go_text_hi;
+extern uint64_t go_vdso_lo, go_vdso_hi;   /* W25-S03: the Go kernel's vDSO code, a ring-0 caller too */
 #endif

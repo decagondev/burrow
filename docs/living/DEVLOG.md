@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-11 — W25-S03 The dispatcher's path
+
+**Did:** getpid from 103 to 52 us. The trace learned to count the Go kernel's own calls, which showed five clock traps per user call: the Go kernel now has the vDSO too. Calls that never block are answered on the dispatcher, with no goroutine (the Go side 64 to 23 us), and their answers go with the next wait in one nucleus call (`nu_syscall_reply_wait`), which also lets the woken thread run at once (19.6 to 8.1 us).
+
+**Surprise:** the clock traps were real (5.1 per request) but cheap; the hand-off from one goroutine to another was the cost. So the plan's goroutine per thread was not built: it would keep the hand-off. The blocking calls' time is the wait and the wake-up, S04's subject.
+
+**Next:** W25-S04: wake-ups.
+
 ## 2026-11-11 — W25-S02 A vDSO
 
 **Did:** a vDSO, as Linux has: the nucleus keeps a data page with the clock (`include/burrow/vdso.h`, `nucleus/vdso.c`) and carries a 2.9 KB shared object (`user/vdso`), and every process gets both above its stack with `AT_SYSINFO_EHDR`. musl's and Go's clock reads now stay in the program: 85 ns on Burrow against 110-164 us, and `gohello` passes through it. `user/vdsotest` passes on the host's Linux and on Burrow (`make ports-smoke`).

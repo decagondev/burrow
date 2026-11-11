@@ -30,7 +30,9 @@ uint64_t build_initial_stack(uint64_t stack_top, const struct exec_info *ex,
     const uint64_t auxv[][2] = {
         { AT_PAGESZ, 4096 }, { AT_RANDOM, rnd }, { AT_PHDR, ex->phdr },
         { AT_PHENT, ex->phent }, { AT_PHNUM, ex->phnum }, { AT_ENTRY, ex->entry },
-        { AT_EXECFN, a0 }, { AT_NULL, 0 },
+        { AT_EXECFN, a0 },
+        { ex->sysinfo_ehdr ? AT_SYSINFO_EHDR : AT_IGNORE, ex->sysinfo_ehdr },   /* W25-S03 */
+        { AT_NULL, 0 },
     };
     uint64_t nwords = 1 /* argc */ + nargs + 1 + nenv + 1 + sizeof auxv / 8;
     sp = (sp - nwords * 8) & ~0xFull;          /* 16-aligned with argc at sp (SysV) */

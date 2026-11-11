@@ -45,6 +45,8 @@ type Nucleus interface {
 	SetFS(tid, fs uint64) error
 	Reply(tid uint64, result int64) error
 	Wait(reqs []Request) (int, error) // blocks until at least one request
+	// ReplyWait answers tid and waits in one crossing (W25-S03).
+	ReplyWait(tid uint64, result int64, reqs []Request) (int, error)
 
 	// W10: the registers of a thread whose request Go holds (fork, execve,
 	// signals), a thread started from such an image, a thread moved to

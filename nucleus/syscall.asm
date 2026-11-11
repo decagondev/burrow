@@ -48,12 +48,14 @@ extern g_kernel_cr3                 ; shim.c: the kernel PML4, as written to CR3
 extern syscall_bad_caller           ; noreturn, panics
 extern __text_start, __text_end     ; nucleus/linker.ld
 extern trap_resume                  ; trap.asm: restore a struct trap_frame, IRETQ
-global syscall_entry_kernel, syscall_entry_user, go_text_lo, go_text_hi
+global syscall_entry_kernel, syscall_entry_user, go_text_lo, go_text_hi, go_vdso_lo, go_vdso_hi
 
 section .data
 align 8
 go_text_lo: dq 0                    ; set when the Go kernel ELF is mapped (go_load.c)
 go_text_hi: dq 0
+go_vdso_lo: dq 0                    ; the Go kernel's vDSO code (W25-S03): its fallback system calls
+go_vdso_hi: dq 0
 
 section .text
 syscall_entry_kernel:
@@ -67,6 +69,11 @@ syscall_entry_kernel:
     cmp rcx, [go_text_hi]
     jb .ring0_caller
 .not_go:
+    cmp rcx, [go_vdso_lo]
+    jb .not_vdso
+    cmp rcx, [go_vdso_hi]
+    jb .ring0_caller
+.not_vdso:
     push rax                         ; spare a register on the caller's stack
     lea rax, [rel __text_start]
     cmp rcx, rax

@@ -8,7 +8,7 @@ static unsigned char stack[4096] __attribute__((aligned(16)));
 TEST(go_stack_layout) {
     static const char *const envp[] = { "GODEBUG=asyncpreemptoff=1", "GOTRACEBACK=all", 0 };
     static const uint8_t rnd[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-    struct exec_info ex = { 0x7dfffffff040ull, 56, 6, 0x7e000007ed00ull };
+    struct exec_info ex = { 0x7dfffffff040ull, 56, 6, 0x7e000007ed00ull, 0 };
     uint64_t top = (uint64_t)(uintptr_t)(stack + sizeof stack);
     static const char *const argv[] = { "kernel", "panic=boot", 0 };
     uint64_t sp = build_initial_stack(top, &ex, rnd, argv, envp);
@@ -36,6 +36,25 @@ TEST(go_stack_layout) {
         CHECK((uint64_t)(uintptr_t)aux < top);
     }
     CHECK(seen_random && seen_entry && seen_phdr && seen_execfn);
+}
+
+/* W25-S03: AT_SYSINFO_EHDR names the vDSO when there is one, and is
+ * absent (AT_IGNORE in its place) when there is none. */
+static int sysinfo_of(uint64_t vdso) {
+    static const char *const argv[] = { "kernel", 0 }, *const envp[] = { 0 };
+    static const uint8_t rnd[16] = { 0 };
+    struct exec_info ex = { 0x7dfffffff040ull, 56, 6, 0x7e000007ed00ull, vdso };
+    uint64_t top = (uint64_t)(uintptr_t)(stack + sizeof stack);
+    uint64_t *w = (uint64_t *)(uintptr_t)build_initial_stack(top, &ex, rnd, argv, envp);
+    uint64_t *aux = &w[1 + 1 + 1 + 1];   /* argc, argv[0], NULL, (no envp) NULL */
+    for (; aux[0] != AT_NULL; aux += 2)
+        if (aux[0] == AT_SYSINFO_EHDR) return aux[1] == vdso ? 1 : -1;
+    return 0;
+}
+
+TEST(go_stack_sysinfo_ehdr) {
+    CHECK(sysinfo_of(0x7d0000001000ull) == 1);
+    CHECK(sysinfo_of(0) == 0);
 }
 
 TEST(go_stack_split_words) {

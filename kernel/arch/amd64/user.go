@@ -32,6 +32,8 @@ const (
 	nrUThreadFrom   = 0x1026
 	nrUThreadSpace  = 0x1027
 	nrUThreadIntr   = 0x1028
+
+	nrSyscallReplyWait = 0x102D // W25-S03
 )
 
 // Nucleus is the real proc.Nucleus.
@@ -55,11 +57,14 @@ func raw(nr uintptr, a ...uintptr) (uintptr, error) {
 	return r, nil
 }
 
-// blocking is for calls that wait (the runtime moves the P elsewhere).
+// blocking is for calls that wait (the runtime moves the P elsewhere); its
+// buffers stay on the heap for the call, as raw's (BUG-0034).
+//
+//go:uintptrescapes
 func blocking(nr uintptr, a ...uintptr) (uintptr, error) {
-	var args [3]uintptr
+	var args [6]uintptr
 	copy(args[:], a)
-	r, _, errno := syscall.Syscall(nr, args[0], args[1], args[2])
+	r, _, errno := syscall.Syscall6(nr, args[0], args[1], args[2], args[3], args[4], args[5])
 	if errno != 0 {
 		return 0, errno
 	}
@@ -139,6 +144,12 @@ func (Nucleus) Reply(tid uint64, result int64) error {
 // 64-byte layout: tid, nr, args[6]).
 func (Nucleus) Wait(reqs []proc.Request) (int, error) {
 	r, err := blocking(nrSyscallWait, uintptr(unsafe.Pointer(&reqs[0])), uintptr(len(reqs)))
+	return int(r), err
+}
+
+// ReplyWait answers tid, then waits as Wait does (nu_syscall_reply_wait, W25-S03).
+func (Nucleus) ReplyWait(tid uint64, result int64, reqs []proc.Request) (int, error) {
+	r, err := blocking(nrSyscallReplyWait, uintptr(tid), uintptr(result), uintptr(unsafe.Pointer(&reqs[0])), uintptr(len(reqs)))
 	return int(r), err
 }
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,8 +28,12 @@ type Stats struct {
 	On             bool
 	Nr             uint64
 	Count, Skipped uint64
-	Steps          [4]time.Duration // summed over Count requests
+	Steps          [4]time.Duration  // summed over Count requests
+	GoCalls        map[uint64]uint64 // W25-S03: the Go kernel's own calls by number while tracing
 }
+
+// topCalls is how many of the Go kernel's most frequent calls Format lists.
+const topCalls = 6
 
 // Tracer is the nucleus's side (arch/amd64.LatTracer; a fake in tests).
 type Tracer interface {
@@ -102,5 +107,33 @@ func Format(s Stats) string {
 		}
 		fmt.Fprintf(&b, "%s %.2f us\n", name, avg)
 	}
+	formatGoCalls(&b, s)
 	return b.String()
+}
+
+// formatGoCalls lists the Go kernel's own calls per traced request: the
+// total, then the most frequent by number (W25-S03).
+func formatGoCalls(b *strings.Builder, s Stats) {
+	if s.Count == 0 || len(s.GoCalls) == 0 {
+		return
+	}
+	nrs := make([]uint64, 0, len(s.GoCalls))
+	var total uint64
+	for nr, n := range s.GoCalls {
+		nrs = append(nrs, nr)
+		total += n
+	}
+	sort.Slice(nrs, func(i, j int) bool {
+		if s.GoCalls[nrs[i]] != s.GoCalls[nrs[j]] {
+			return s.GoCalls[nrs[i]] > s.GoCalls[nrs[j]]
+		}
+		return nrs[i] < nrs[j]
+	})
+	fmt.Fprintf(b, "go-calls %.2f per request\n", float64(total)/float64(s.Count))
+	for i, nr := range nrs {
+		if i == topCalls {
+			break
+		}
+		fmt.Fprintf(b, "go-call %d %.2f per request\n", nr, float64(s.GoCalls[nr])/float64(s.Count))
+	}
 }
