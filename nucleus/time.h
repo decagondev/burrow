@@ -18,6 +18,7 @@ void     time_set_realtime_ns(uint64_t unix_ns);
 uint64_t time_realtime_ns(void);
 uint64_t time_ticks(void);             /* the BSP's LAPIC timer interrupts so far */
 uint64_t time_tsc_hz(void);
+uint64_t time_ticks_to_ns(uint64_t tsc_ticks);   /* a TSC interval in nanoseconds */
 void     time_busy_wait_ns(uint64_t ns);
 /* Called on every timer tick of every CPU, in IRQ context, after EOI (sched.c hooks in). */
 void     time_set_tick_hook(void (*hook)(void));

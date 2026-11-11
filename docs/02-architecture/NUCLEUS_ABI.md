@@ -32,5 +32,6 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x1028 | `nu_uthread_interrupt` | tid | 0; a thread running in ring 3 stops at its next pass through the kernel and posts an interrupt request (nr `0xFFFF0100`, args: rip) so Go can deliver a signal | W10 |
 | 0x1029 | `nu_thread_times` | tid, buf | 16; buf = {user, kernel} nanoseconds the thread has run (ring 3; the nucleus or the Go kernel), charged at every switch, tick and ring crossing, so never more than a tick behind; -ESRCH for no such thread | W23 |
 | 0x102A | `nu_cpu_times` | buf, max | the number of online CPUs written (at most max): 32 bytes each, {user, kernel, idle, switches}; idle is the CPU's idle thread's time | W23 |
+| 0x102B | `nu_lattrace` | op, nr, buf | 0, or -EINVAL for another op; op 0 traces user system call nr (its requests stamped with the TSC at the gate, taken by Go, answered, running again, on the way out) and clears the sums; op 1 stops; op 2 writes 64 bytes to buf: {on, nr, count, skipped, then the four steps' summed nanoseconds} (`/dev/lattrace`) | W25 |
 
 Rules: every new call gets a row here **before** code, a Go wrapper in `kernel/arch/amd64/nucleus.go`, and a nucleus self-test. Numbers are never reused.

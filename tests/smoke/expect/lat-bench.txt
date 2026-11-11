@@ -1,0 +1,17 @@
+# Ordered markers for make lat-bench (W25-S01, tests/smoke/keys/lat-bench.keys);
+# the numbers are checked by tests/smoke/lat-budgets.py. Append-only.
+burrow> run /bin/lat
+lat: getpid
+lat: clock
+lat: pipe
+lat: futex
+lat: socketpair
+lat: tcp
+# BUG-0034: the sums the nucleus wrote reach Go (not a stale stack copy)
+lat: trace nr 39 on 1 count 1000 skipped 0
+lat: step gate-taken
+lat: step taken-replied
+lat: step replied-resumed
+lat: step resumed-out
+lat: ok
+burrow> poweroff

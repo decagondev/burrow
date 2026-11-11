@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-benchktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench lat-bench lat-linux ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -308,7 +308,7 @@ UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c \
-	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c
+	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c nucleus/lattrace.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
@@ -642,6 +642,15 @@ mem-bench: $(BUILD)/go.img
 fb-bench: $(BUILD)/go.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/fb-bench.txt 120 tests/smoke/keys/fb-bench.keys
 	@grep -a 'fbbench:' $(BUILD)/smoke-fb-bench.log
+# What a round trip costs (W25-S01, not in make test): user/lat on go.img
+# (getpid, a clock read, pipe, futex, socketpair and loopback TCP
+# ping-pongs; through /dev/lattrace the nucleus's steps of getpid's) against
+# tests/smoke/lat-budgets.py; lat-linux runs the same program on the host.
+lat-bench: $(BUILD)/go.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/lat-bench.txt 180 tests/smoke/keys/lat-bench.keys
+	python3 tests/smoke/lat-budgets.py $(BUILD)/smoke-lat-bench.log
+lat-linux: $(BUILD)/user/lat
+	$(BUILD)/user/lat
 # Four CPUs against one (W20-S08, not in make test): cpubench (C, pthreads)
 # and gocpubench (Go) on go.img booted on one CPU, then on four;
 # tests/smoke/smp-budgets.py wants each at least 2.5 times faster on four.

@@ -37,6 +37,7 @@ long uthread_regs(uint64_t tid, struct uregs *buf, int write);
 long uthread_create_from(uint64_t as, const struct uregs *buf);
 long uthread_set_space(uint64_t tid, uint64_t as);
 long uthread_interrupt(uint64_t tid);          /* uthread.c */
+long uthread_lattrace(uint64_t op, uint64_t arg, uint64_t *buf);   /* W25-S01: nu_lattrace */
 /* For uregs.c: the thread with this id if Go holds its request (lock held). */
 struct thread;
 struct thread *uthread_held(uint64_t tid, uint64_t *flags);

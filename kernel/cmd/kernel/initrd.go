@@ -6,11 +6,13 @@ import (
 	"io"
 	"io/fs"
 
+	"burrow/kernel/arch/amd64"
 	"burrow/kernel/bootinfo"
 	"burrow/kernel/fs/devfs"
 	"burrow/kernel/fs/memfs"
 	"burrow/kernel/fs/tarfs"
 	"burrow/kernel/klog"
+	"burrow/kernel/lattrace"
 	"burrow/kernel/random"
 	"burrow/kernel/vfs"
 )
@@ -26,7 +28,8 @@ func (k *kernel) mountFiles(console io.Writer) *devfs.FS {
 	dev.Register("console", devfs.WriteOnly{Writer: console}, 0o620)
 	dev.Register("random", random.Kernel, 0o666) // W14-S03: not for cryptography
 	dev.Register("urandom", random.Kernel, 0o666)
-	for _, name := range []string{"tty", "tty0", "tty1"} { // listed here; proc opens the terminal (W14-S08)
+	dev.Register("lattrace", lattrace.New(amd64.LatTracer{}), 0o666) // W25-S01: the round trip's steps
+	for _, name := range []string{"tty", "tty0", "tty1"} {           // listed here; proc opens the terminal (W14-S08)
 		dev.Register(name, devfs.WriteOnly{Writer: console}, 0o620)
 	}
 	k.fs.Mount(".", mountInitrd(k.modules, k.log.With("initrd")), "tarfs")

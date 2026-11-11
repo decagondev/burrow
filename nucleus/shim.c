@@ -145,6 +145,7 @@ static long nu_uthread_create(struct syscall_frame *f) {
 }
 static long nu_syscall_wait(struct syscall_frame *f)   { return uthread_wait((uint64_t *)SYSARG0(f), SYSARG1(f)); }
 static long nu_syscall_reply(struct syscall_frame *f)  { return uthread_reply(SYSARG0(f), (long)SYSARG1(f)); }
+static long nu_lattrace(struct syscall_frame *f)       { return uthread_lattrace(SYSARG0(f), SYSARG1(f), (uint64_t *)SYSARG2(f)); }
 static long nu_uthread_kill(struct syscall_frame *f)   { return uthread_kill(SYSARG0(f)); }
 static long nu_uthread_set_fs(struct syscall_frame *f) { return uthread_set_fs(SYSARG0(f), SYSARG1(f)); }
 static long nu_uthread_regs(struct syscall_frame *f) {
@@ -207,6 +208,7 @@ static const sys_fn g_nu_table[] = {
     [NU_uthread_interrupt - NU_BASE] = nu_uthread_interrupt,
     [NU_thread_times - NU_BASE] = nu_thread_times,
     [NU_cpu_times - NU_BASE] = nu_cpu_times,
+    [NU_lattrace - NU_BASE] = nu_lattrace,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {

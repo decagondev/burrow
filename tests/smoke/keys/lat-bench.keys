@@ -1,0 +1,9 @@
+# make lat-bench (W25-S01): user/lat on go.img's console, its round trips
+# and, through /dev/lattrace, the nucleus's steps of getpid's; then off.
+wait burrow>
+type run /bin/lat
+key ret
+wait lat: ok
+wait burrow>
+type poweroff
+key ret

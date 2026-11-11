@@ -39,6 +39,12 @@ type Nucleus struct{}
 
 var _ proc.Nucleus = Nucleus{}
 
+// raw makes nucleus call nr. Callers pass buffers as
+// uintptr(unsafe.Pointer(&x[0])), so uintptrescapes moves x to the heap and
+// keeps it there for the call (BUG-0034): a stack array could move when the
+// goroutine's stack grew, and the nucleus would write the old copy.
+//
+//go:uintptrescapes
 func raw(nr uintptr, a ...uintptr) (uintptr, error) {
 	var args [6]uintptr
 	copy(args[:], a)

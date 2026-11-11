@@ -41,6 +41,16 @@ flowchart LR
 
 ## Closed
 
+### BUG-0034: A nucleus call could fill a stale copy of a Go stack buffer
+- Found: 2026-11-11, W25-S01: `/dev/lattrace` read back all zeros on one boot in three, although the nucleus had summed a thousand requests.
+- Severity: major (latent since W9: every nucleus call that fills a buffer on a Go goroutine's stack, `nu_thread_times`, `nu_cpu_times`, `nu_mem_info`, `nu_as_map_batch`'s entries, could read or write a copy the stack had left; it showed only when the stack grew at the wrong moment).
+- Symptom: `lat: trace nr 0 on 0 count 0` after a traced run.
+- Root cause: the callers pass `uintptr(unsafe.Pointer(&buf[0]))` to `raw(nr, a ...uintptr)`, which calls `syscall.RawSyscall6`. Go keeps such a pointer's object in place only when the conversion is written in the system call's own argument list, or when the callee is marked `//go:uintptrescapes`; through `raw`, `buf` stayed on the stack, and when the stack grew in the call it was copied, so the nucleus wrote the old copy and the caller read the new, empty one.
+- Fix: `//go:uintptrescapes` on `raw` (`kernel/arch/amd64/user.go`): every buffer passed through it is on the heap for the call.
+- Mitigation: none needed beyond the tests.
+- Regression: `TestBUG0034RawKeepsBuffersOnTheHeap` (`kernel/arch/amd64`: the directive is there) and `make lat-bench`, whose expect file wants `lat: trace nr 39 on 1 count 1000` (five boots of five since the fix, two of three before).
+- Lesson: an unsafe pointer turned into an integer is the compiler's business only where it can see it; a helper between the conversion and the system call needs the directive that says so.
+
 ### BUG-0032: readlink of a directory only mounts make said ENOENT
 - Found: 2026-11-11, W24-S06: NetSurf on go-unix.img (an ext2 root) found none of its resources in `/opt/net/share/netsurf` (`resource:default.css failed: UnacceptableType`), where on go-dev.img it found them.
 - Severity: major (musl's `realpath`, which reads the link of every component, failed for every path under `/opt` on an ext2 root: every data disk's files).
@@ -432,6 +442,11 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-86 | W24 | TLS on TCG is slow: handshakes do big-number arithmetic under emulation | open (S01: curl's handshakes finish well inside the smoke's waits; budgets measured in S06) |
 | PIT-87 | W24 | NetSurf is big: many libraries, a host tool, a build system of its own | closed (S04: the spike built it in one session, links2 not needed; `scripts/browser.sh` and `browser-netsurf.sh`, each library with NetSurf's buildsystem, the host tools' zlib and libpng built too) |
 | PIT-88 | W24 | Two TLS stacks, one test CA: busybox's own TLS and mbedTLS accept different things | closed (S01: tls-server.py's default context suits both; busybox's checks no certificate, so only curl's refusals are tested; S05: NetSurf, through curl and mbedTLS, takes the test CA by `--ca_bundle` and refuses a certificate for another name with its Privacy error page) |
+| PIT-89 | W25 | TCG's numbers are noisy: QEMU without KVM varies with the host's load | open (S01: seven boots, getpid 101-155 us; medians of seven batches, budgets with room) |
+| PIT-90 | W25 | A vDSO's clock must be the kernel's: no step backwards across CPUs, no torn read across `settimeofday` | open (S02) |
+| PIT-91 | W25 | A fast path skips work the slow path did: signals at return, interrupt stops, CPU time, kills of queued threads | open (S03, S04) |
+| PIT-92 | W25 | A goroutine per thread can leak or deadlock: it must end with its thread on every path | open (S03) |
+| PIT-93 | W25 | The dispatcher on the only P (BUG-0014): with one CPU a blocked dispatcher stalls every handler | open (S03: `syslat` and `lat-bench` with `SMP=1`) |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
 | PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |

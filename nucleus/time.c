@@ -93,4 +93,8 @@ void time_busy_wait_ns(uint64_t ns) {
 
 uint64_t time_ticks(void)  { return g_ticks; }
 uint64_t time_tsc_hz(void) { return g_tsc_hz; }
+uint64_t time_ticks_to_ns(uint64_t tsc_ticks) {   /* W25-S01: a TSC interval in ns */
+    unsigned __int128 p = (unsigned __int128)tsc_ticks * g_ns_mult;
+    return (uint64_t)(p >> 32);
+}
 void time_set_tick_hook(void (*hook)(void)) { g_tick_hook = hook; }

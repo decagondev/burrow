@@ -11,13 +11,17 @@
 #include "errno.h"
 #include "lib_string.h"
 #include "cputime.h"
+#include "lattrace.h"
+#include "time.h"
 
 enum { REQ_NONE, REQ_QUEUED, REQ_TAKEN, REQ_DONE };
+_Static_assert(LAT_STAMPS == sizeof ((struct thread *)0)->lat / sizeof(uint64_t), "struct thread's stamps");
 
 #define RFLAGS_IF_ON   (1ull << 9)
 #define RFLAGS_FIXED   (1ull << 1)
 
 static struct spinlock g_lock = SPINLOCK_INIT("uthread");
+static struct lat_stats g_lat;                 /* W25-S01: the traced call's step sums, under g_lock */
 static struct thread *g_head, *g_tail;      /* QUEUED requests, oldest first */
 static struct thread *g_waiter;             /* the dispatcher, blocked in uthread_wait */
 
@@ -90,6 +94,7 @@ static long post_and_wait(struct trap_frame *f, uint64_t nr, const uint64_t args
         thread_block_unlock(0, &g_lock);
         spin_lock_irqsave(&g_lock);              /* IF is already off: flags unused */
     }
+    if (me->lat[LAT_GATE]) me->lat[LAT_RESUMED] = rdtsc();
     if (me->killed) { unlink_req(me); spin_unlock_irqrestore(&g_lock, fl); die(); }
     me->req_state = REQ_NONE;
     me->uframe = 0;
@@ -98,11 +103,27 @@ static long post_and_wait(struct trap_frame *f, uint64_t nr, const uint64_t args
     return r;
 }
 
+/* W25-S01: a traced request's last stamp, on its way back to ring 3. */
+static void lat_out(struct thread *me) {
+    uint64_t out = rdtsc();
+    uint64_t fl = spin_lock_irqsave(&g_lock);
+    if (g_lat.on) lat_record(&g_lat, me->lat, out);
+    spin_unlock_irqrestore(&g_lock, fl);
+    me->lat[LAT_GATE] = 0;
+}
+
 void nu_user_syscall(struct trap_frame *f) {
-    cputime_enter_kernel(thread_current());   /* W23-S02 */
+    struct thread *me = thread_current();
+    cputime_enter_kernel(me);   /* W23-S02 */
+    me->lat[LAT_GATE] = 0;
+    if (g_lat.on && lat_wanted(&g_lat, f->rax)) {   /* W25-S01: stamped only while traced */
+        me->lat[LAT_TAKEN] = me->lat[LAT_REPLIED] = me->lat[LAT_RESUMED] = 0;
+        me->lat[LAT_GATE] = rdtsc();
+    }
     const uint64_t args[6] = { f->rdi, f->rsi, f->rdx, f->r10, f->r8, f->r9 };
     f->rax = (uint64_t)post_and_wait(f, f->rax, args);
     uthread_return_to_user(f);
+    if (me->lat[LAT_GATE]) lat_out(me);
 }
 
 void uthread_fault(struct trap_frame *f, uint64_t cr2) {
@@ -151,6 +172,7 @@ long uthread_wait(uint64_t *buf, uint64_t max) {
         if (!g_head) g_tail = 0;
         t->req_next = 0;
         t->req_state = REQ_TAKEN;
+        if (t->lat[LAT_GATE]) t->lat[LAT_TAKEN] = rdtsc();
         memcpy(buf + n * UREQ_WORDS, t->req, sizeof t->req);
         n++;
     }
@@ -163,6 +185,7 @@ long uthread_reply(uint64_t tid, long result) {
     struct thread *t = find_user(tid);
     long rc = -ESRCH;
     if (t && t->req_state == REQ_TAKEN) {
+        if (t->lat[LAT_GATE]) t->lat[LAT_REPLIED] = rdtsc();
         t->req_result = result;
         t->req_state = REQ_DONE;
         thread_wake(t);
@@ -218,4 +241,25 @@ long uthread_set_fs(uint64_t tid, uint64_t fs) {
     if (t) thread_set_fs_base(t, fs);
     spin_unlock_irqrestore(&g_lock, fl);
     return t ? 0 : -ESRCH;
+}
+
+/* nu_lattrace (W25-S01): op 0 traces call nr arg (and clears the sums), op
+ * 1 stops, op 2 copies {on, nr, count, skipped, step ns x4} into buf. */
+long uthread_lattrace(uint64_t op, uint64_t arg, uint64_t *buf) {
+    long rc = 0;
+    uint64_t fl = spin_lock_irqsave(&g_lock);
+    switch (op) {
+    case 0: lat_start(&g_lat, arg); break;
+    case 1: lat_stop(&g_lat); break;
+    case 2:
+        buf[0] = (uint64_t)g_lat.on;
+        buf[1] = g_lat.nr;
+        buf[2] = g_lat.count;
+        buf[3] = g_lat.skipped;
+        for (int i = 0; i < LAT_STEPS; i++) buf[4 + i] = time_ticks_to_ns(g_lat.sum[i]);
+        break;
+    default: rc = -EINVAL;
+    }
+    spin_unlock_irqrestore(&g_lock, fl);
+    return rc;
 }

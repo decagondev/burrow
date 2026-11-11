@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-11 — W25-S01 Measure the round trip
+
+**Did:** `user/lat.c` times getpid, a clock read and pipe, futex, socketpair and loopback TCP ping-pongs, on the host's Linux (`make lat-linux`) and on Burrow (`make lat-bench`, budgets in `tests/smoke/lat-budgets.py`). The nucleus stamps a traced request at five points with the TSC (`nucleus/lattrace.c`, `nu_lattrace`), and `/dev/lattrace` shows the steps. The baseline: getpid 103 us on a quiet boot, of which 68-70 is Go's (taking the request to answering it), 14.5 the gate to Go, 16-17 the wake back; a clock read is a whole round trip; ping-pongs 350-600 us; loopback TCP 2 ms.
+
+**Surprise:** BUG-0034: the trace read back zeros one boot in three. A Go stack array handed to a nucleus call could be moved by a growing stack before the nucleus wrote it, because the pointer passed through `raw` as an integer; `//go:uintptrescapes` on `raw` keeps such buffers on the heap. It was latent in every buffer-filling nucleus call since W9. And TCG's numbers vary by half from boot to boot, so the budgets leave room.
+
+**Next:** W25-S02: a vDSO, so a clock read is no round trip at all.
+
 ## 2026-11-11 — W24 done: ssh, TLS and a browser (M24)
 
 **Did:** the wave in six slices. TLS for C programs: mbedTLS, curl and a CA bundle on a disk of their own, busybox `wget` over HTTPS (S01); dropbear, the host logging in by password and key (S02); interactive sessions, `scp` and `dbclient` (S03); NetSurf on X, built in one spike (S04) and browsed with the tablet, the keyboard and TLS (S05); the demo, budgets and guides (S06). `make tls-smoke`, `ssh-smoke` and `browser-smoke` are in `make test`, green on four CPUs and on one.

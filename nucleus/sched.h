@@ -43,6 +43,7 @@ struct thread {
     struct thread *req_next;    /* request queue link */
     struct trap_frame *uframe;  /* its user registers while it waits for Go (W10) */
     int      interrupt;         /* nu_uthread_interrupt: stop at the next kernel exit */
+    uint64_t lat[4];            /* round-trip stamps while traced (lattrace.h, W25-S01); lat[0] = 0: not traced */
     int      pin_cpu;           /* CPU index it may run on, -1 = any (sched_priv.h) */
     int      is_idle;           /* a CPU's idle thread: never picked by the queue */
     uint32_t cpu;               /* CPU index it last ran on */
