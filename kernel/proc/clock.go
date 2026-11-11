@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"syscall"
 	"time"
+	_ "unsafe" // go:linkname
 )
 
 const (
@@ -24,16 +25,23 @@ const (
 
 var bootTime = time.Now()
 
+// nanotime is the runtime's monotonic clock: on Burrow the nucleus's, from
+// its time_init, which is also what the vDSO counts (W25-S02), so a
+// program reads the same clock with and without a system call.
+//
+//go:linkname nanotime runtime.nanotime
+func nanotime() int64
+
 func validClock(id uint64) bool { return id <= clockTAI && id != clockSGICycle }
 
 // clockNow is clock id's reading: since the epoch for the realtime clocks,
-// since boot for the rest.
+// since the nucleus's clock started (boot) for the rest.
 func clockNow(id uint64) time.Duration {
 	switch id {
 	case clockRealtime, clockRealtimeCoarse, clockRealtimeAlarm, clockTAI:
 		return time.Duration(time.Now().UnixNano())
 	}
-	return time.Since(bootTime)
+	return time.Duration(nanotime())
 }
 
 // putTime writes {seconds, d's remainder in unit} at va (a timespec or timeval).

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-11 — W25-S02 A vDSO
+
+**Did:** a vDSO, as Linux has: the nucleus keeps a data page with the clock (`include/burrow/vdso.h`, `nucleus/vdso.c`) and carries a 2.9 KB shared object (`user/vdso`), and every process gets both above its stack with `AT_SYSINFO_EHDR`. musl's and Go's clock reads now stay in the program: 85 ns on Burrow against 110-164 us, and `gohello` passes through it. `user/vdsotest` passes on the host's Linux and on Burrow (`make ports-smoke`).
+
+**Surprise:** the two paths did not read the same monotonic clock: the system call counted from when `kernel/proc` started, the nucleus from its own `time_init`. Now both are the nucleus's. And the image needed no loader at all: one segment from offset 0, RIP-relative data one page below, no relocations, which the Makefile now checks.
+
+**Next:** W25-S03: the dispatcher's path, where two thirds of a round trip go.
+
 ## 2026-11-11 — W25-S01 Measure the round trip
 
 **Did:** `user/lat.c` times getpid, a clock read and pipe, futex, socketpair and loopback TCP ping-pongs, on the host's Linux (`make lat-linux`) and on Burrow (`make lat-bench`, budgets in `tests/smoke/lat-budgets.py`). The nucleus stamps a traced request at five points with the TSC (`nucleus/lattrace.c`, `nu_lattrace`), and `/dev/lattrace` shows the steps. The baseline: getpid 103 us on a quiet boot, of which 68-70 is Go's (taking the request to answering it), 14.5 the gate to Go, 16-17 the wake back; a clock read is a whole round trip; ping-pongs 350-600 us; loopback TCP 2 ms.

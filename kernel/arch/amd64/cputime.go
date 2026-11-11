@@ -17,8 +17,23 @@ import (
 const (
 	nrThreadTimes = 0x1029
 	nrCPUTimes    = 0x102A
-	maxCPUs       = 16 // SMP_MAX_CPUS
+	nrVdso        = 0x102C // W25-S02
+	maxCPUs       = 16     // SMP_MAX_CPUS
+	maxVdsoPages  = 4      // VDSO_MAX_CODE_PAGES
 )
+
+// Vdso is where the nucleus keeps the vDSO (nu_vdso, W25-S02).
+func (Nucleus) Vdso() (proc.Vdso, error) {
+	var b [3 + maxVdsoPages]uint64
+	if _, err := raw(nrVdso, uintptr(unsafe.Pointer(&b[0]))); err != nil {
+		return proc.Vdso{}, err
+	}
+	n := b[2]
+	if n > maxVdsoPages {
+		n = maxVdsoPages
+	}
+	return proc.Vdso{DataPA: b[0], CodePA: append([]uint64(nil), b[3:3+n]...)}, nil
+}
 
 func (Nucleus) ThreadTimes(tid uint64) (user, sys time.Duration, err error) {
 	var t [2]uint64

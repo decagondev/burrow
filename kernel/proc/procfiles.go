@@ -126,11 +126,13 @@ func (m *Mem) pageRuns(exe string, brkStart uint64) []procfs.Map {
 	var out []procfs.Map
 	for i := 0; i < len(vas); {
 		j, pg := i, m.pages[vas[i]]
-		for j+1 < len(vas) && vas[j+1] == vas[j]+PageSize && m.pages[vas[j+1]].device == pg.device {
+		for j+1 < len(vas) && vas[j+1] == vas[j]+PageSize && m.pages[vas[j+1]].device == pg.device && vas[j+1] != VdsoBase {
 			j++
 		}
 		e := procfs.Map{Start: vas[i], End: vas[j] + PageSize, Perms: perms(pg.prot, false, pg.device)}
 		switch {
+		case pg.device && vdsoName(vas[i]) != "": // W25-S02: private, as Linux shows them
+			e.Name, e.Perms = vdsoName(vas[i]), perms(pg.prot, false, false)
 		case pg.device:
 			e.Name = "/dev/fb0"
 		case vas[i] >= StackTop-StackSize && vas[j] < StackTop:

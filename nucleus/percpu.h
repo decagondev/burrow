@@ -13,6 +13,7 @@
 #define PERCPU_SELF_OFF  32u
 #define MSR_GS_BASE        0xC0000101u
 #define MSR_KERNEL_GS_BASE 0xC0000102u
+#define MSR_TSC_AUX        0xC0000103u   /* rdtscp's ECX: the CPU index, for the vDSO's getcpu (W25-S02) */
 
 struct thread;
 
@@ -58,5 +59,6 @@ static inline void percpu_bind(uint32_t index) {
     c->index = index;
     wrmsr(MSR_GS_BASE, (uint64_t)(uintptr_t)c);
     wrmsr(MSR_KERNEL_GS_BASE, 0);   /* what ring 3 gets at its first swapgs */
+    wrmsr(MSR_TSC_AUX, index);
 }
 #endif

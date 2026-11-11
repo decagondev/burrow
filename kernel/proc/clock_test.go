@@ -4,6 +4,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 // The realtime clocks are wall time (the host's here, the RTC's on
@@ -20,9 +21,15 @@ func TestClocks(t *testing.T) {
 			t.Errorf("clock %d: %d s, want about %d", id, sec, now)
 		}
 	}
+	// W25-S02: CLOCK_MONOTONIC is the runtime's own monotonic clock (on
+	// Burrow the nucleus's, which the vDSO reads too), so it lies between
+	// two readings of the machine's clock taken around the call.
+	before := hostMonotonic(t)
 	r.call(p, 228, 1, scratch)
-	if sec := le.Uint64(read(p, scratch, 8)); sec > 3600 {
-		t.Errorf("CLOCK_MONOTONIC = %d s: not counting from boot", sec)
+	after := hostMonotonic(t)
+	mono := time.Duration(le.Uint64(read(p, scratch, 8)))*time.Second + time.Duration(le.Uint64(read(p, scratch+8, 8)))
+	if mono < before || mono > after {
+		t.Errorf("CLOCK_MONOTONIC = %v, not between the machine's %v and %v", mono, before, after)
 	}
 	if e := r.call(p, 228, 10, scratch); e != -int64(syscall.EINVAL) {
 		t.Errorf("clock 10 = %d, want EINVAL", e)
@@ -62,4 +69,13 @@ func TestFutexRealtimeDeadline(t *testing.T) {
 	if el := time.Since(start); e != -int64(syscall.ETIMEDOUT) || el < 20*time.Millisecond || el > 2*time.Second {
 		t.Errorf("realtime deadline: %d after %v", e, el)
 	}
+}
+
+// hostMonotonic is the machine's CLOCK_MONOTONIC, read with the system call.
+func hostMonotonic(t *testing.T) time.Duration {
+	var ts syscall.Timespec
+	if _, _, e := syscall.Syscall(syscall.SYS_CLOCK_GETTIME, 1, uintptr(unsafe.Pointer(&ts)), 0); e != 0 {
+		t.Fatalf("clock_gettime: %v", e)
+	}
+	return time.Duration(ts.Nano())
 }

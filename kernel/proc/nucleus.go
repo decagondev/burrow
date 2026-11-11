@@ -57,6 +57,9 @@ type Nucleus interface {
 	// W23-S02: CPU time, a thread's and every online CPU's.
 	ThreadTimes(tid uint64) (user, sys time.Duration, err error)
 	CPUTimes() []CPUTime
+
+	// W25-S02: the vDSO's frames (nu_vdso); a zero Vdso when there is none.
+	Vdso() (Vdso, error)
 }
 
 // Regs is a user thread's register image (NUCLEUS_ABI nu_uthread_regs).

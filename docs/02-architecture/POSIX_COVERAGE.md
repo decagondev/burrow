@@ -102,9 +102,9 @@ Status: **done** = Linux semantics for what programs use; **partial** = works, w
 | 217 | `getdents64` | done | W10 | includes `.` and `..`; `d_ino` made up |
 | 218 | `set_tid_address` | done | W12 | the word is cleared and futex-woken when the thread exits |
 | 221 | `fadvise64` | stub | W16 | nothing to tune: 0 for any file, `-ESPIPE` for pipes and sockets, `-EINVAL` for unknown advice |
-| 228 | `clock_gettime` | done | W9 | since W14 `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` are wall time from the CMOS clock (`drivers/rtc`, read once at boot, taken as UTC); every other clock counts from boot; `-EINVAL` for 10 and above 11 |
+| 228 | `clock_gettime` | done | W9 | since W14 `CLOCK_REALTIME`, `_COARSE`, `_ALARM` and `CLOCK_TAI` are wall time from the CMOS clock (`drivers/rtc`, read once at boot, taken as UTC); every other clock counts from boot (since W25-S02 the nucleus's monotonic clock, the one the vDSO reads); `-EINVAL` for 10 and above 11; since W25-S02 programs read `CLOCK_REALTIME`, `_MONOTONIC`, `_MONOTONIC_RAW`, `_BOOTTIME` and the coarse clocks through the vDSO without a call |
 | 229 | `clock_getres` | done | W14 | 1 ns for every clock |
-| 96, 201 | `gettimeofday` `time` | done | W14 | wall time; the timezone `gettimeofday` reports is UTC |
+| 96, 201 | `gettimeofday` `time` | done | W14 | wall time; the timezone `gettimeofday` reports is UTC; through the vDSO since W25-S02 (and `getcpu`, from `IA32_TSC_AUX`; the `getcpu` system call is not served) |
 | 164, 227 | `settimeofday` `clock_settime` | done | W14 | `-EPERM`: nobody sets the clock |
 | 231 | `exit_group` | done | W9 |  |
 | 232, 281 | `epoll_wait` `epoll_pwait` | partial | W12 | level- and edge-triggered, `EPOLLONESHOT`, `EPOLLRDHUP`; the signal mask of `epoll_pwait` is ignored; never restarted |

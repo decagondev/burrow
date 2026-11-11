@@ -32,6 +32,10 @@ Burrow runs **static Linux x86-64 programs unchanged** ([ADR-0006](../03-decisio
 - **On Burrow:** `tcc -static` with the musl headers and `libc.a` under `/usr` (`make ports`). Use `-static`: Burrow has no dynamic loader. `tcc -run` is not available in a static `tcc`.
 - **When a ported binary crashes, run the same binary on Linux first.** A crash at the same address on both is the program's (or its toolchain's) bug; TinyCC 0.9.27 was such a case. Burrow aims to fail exactly where Linux fails.
 
+## The vDSO (W25)
+
+Every process has a vDSO, as on Linux (`AT_SYSINFO_EHDR`, `[vdso]` in `/proc/self/maps`): `clock_gettime` for the realtime, monotonic and boot-time clocks, `gettimeofday`, `time` and `getcpu` run in the program, at about 85 ns on TCG instead of a 110 us round trip. musl and Go use it without being asked; a port that calls `syscall(SYS_clock_gettime, ...)` itself still gets the system call, which reads the same clock. `user/vdsotest` checks the two agree.
+
 ## Things that bite
 
 - **Implement the contract, not the call.** The Go runtime needs `MADV_DONTNEED` to zero (BUG-0009), lazy `mmap` reservations, signals on the alternate stack, and `FUTEX_WAIT` to fail with `EAGAIN` when the word changed. A call that returns 0 but does not do what Linux does fails later and far away.

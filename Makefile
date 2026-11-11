@@ -136,7 +136,22 @@ $(BUILD)/nucleus/common_%.o: common/%.c $(COMMON_H) | $(BUILD)/nucleus
 	$(CC_TARGET) $(NUCLEUS_CFLAGS) -c $< -o $@
 
 $(BUILD)/nucleus/%_asm.o: nucleus/%.asm $(wildcard nucleus/*.inc) | $(BUILD)/nucleus
-	$(NASM) -f elf64 -I nucleus/ $< -o $@
+	$(NASM) -f elf64 -I nucleus/ $(NASM_DEFS) $< -o $@
+
+# The vDSO (W25-S02): user/vdso built as a small shared object with Linux's
+# version names (vdso.lds), position independent with no relocations (the
+# image runs wherever it is mapped), carried in the nucleus by
+# vdso_image.asm and mapped into every process by the Go kernel.
+VDSO_SO := $(BUILD)/vdso/vdso.so
+$(VDSO_SO): user/vdso/vdso.c user/vdso/vdso.lds include/burrow/vdso.h
+	@mkdir -p $(dir $@)
+	$(CC_TARGET) -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fPIC -fno-stack-protector \
+		-fno-asynchronous-unwind-tables -fno-builtin -Iinclude -nostdlib -shared \
+		-Wl,-T,user/vdso/vdso.lds -Wl,--hash-style=both -Wl,-soname,linux-vdso.so.1 \
+		-Wl,--build-id=none -Wl,-z,noexecstack -o $@ user/vdso/vdso.c
+	@if readelf -rW $@ | grep -q 'R_X86_64'; then echo "vdso: $@ has relocations"; readelf -rW $@; exit 1; fi
+$(BUILD)/nucleus/vdso_image_asm.o: $(VDSO_SO)
+$(BUILD)/nucleus/vdso_image_asm.o: NASM_DEFS := -DVDSO_SO='"$(VDSO_SO)"'
 
 $(BUILD)/nucleus.elf: $(NUCLEUS_OBJ) nucleus/linker.ld
 	$(LD_TARGET) $(NUCLEUS_LDFLAGS) $(NUCLEUS_OBJ) -o $@
@@ -393,7 +408,7 @@ mem-smoke: $(BUILD)/go.img $(BUILD)/data.img
 desk-smoke: $(BUILD)/go.img $(BUILD)/data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DATA_DRIVE)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/desk.txt 120 tests/smoke/keys/desk.keys
 
-ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest $(BUILD)/user/waitstress $(BUILD)/user/spawntest $(BUILD)/user/proctest
+ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/user/socktest $(BUILD)/user/socknames $(BUILD)/user/ptytest $(BUILD)/user/nettest $(BUILD)/user/forkbench $(BUILD)/user/shmtest $(BUILD)/user/dynhello $(BUILD)/user/credtest $(BUILD)/user/permtest $(BUILD)/user/linktest $(BUILD)/user/waitstress $(BUILD)/user/spawntest $(BUILD)/user/proctest $(BUILD)/user/vdsotest
 	$(BUILD)/user/startup > $(BUILD)/startup-linux.log  # W14-S03: Linux answers alike
 	$(BUILD)/user/socktest > $(BUILD)/socktest-linux.log  # W14-S06
 	$(BUILD)/user/socknames > $(BUILD)/socknames-linux.log  # W14-S07
@@ -406,6 +421,7 @@ ports-smoke: $(BUILD)/go.img $(BUILD)/data.img $(BUILD)/user/startup $(BUILD)/us
 	$(BUILD)/user/waitstress 100 > $(BUILD)/waitstress-linux.log  # W20-S01
 	$(BUILD)/user/spawntest > $(BUILD)/spawntest-linux.log  # BUG-0028: the host's Linux agrees
 	$(BUILD)/user/proctest a b > $(BUILD)/proctest-linux.log  # W23-S01: /proc reads alike
+	$(BUILD)/user/vdsotest > $(BUILD)/vdsotest-linux.log  # W25-S02: the host's vDSO passes too
 	@# W19-S03, S04: credtest and permtest need root on Linux (and a disk without nosuid for --exec)
 	@if [ "$$(id -u)" = 0 ]; then $(BUILD)/user/credtest --exec > $(BUILD)/credtest-linux.log; \
 		$(BUILD)/user/permtest /tmp/permtest-linux > $(BUILD)/permtest-linux.log; \

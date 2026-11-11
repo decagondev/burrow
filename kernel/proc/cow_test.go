@@ -236,7 +236,7 @@ func TestBUG0028VforkCloneStartsOnItsStack(t *testing.T) {
 		t.Errorf("child starts with RSP %#x, want the given stack %#x", got, uint64(stack))
 	}
 	parentRSP := r.nu.Snapshot(p.TID()).RSP
-	r.call(p, 57) // fork
+	r.call(p, 57)                                                        // fork
 	if got := r.nu.Snapshot(r.newestThread(kid)).RSP; got != parentRSP { // the thread after the first child
 		t.Errorf("fork's child RSP %#x, want the parent's %#x", got, parentRSP)
 	}

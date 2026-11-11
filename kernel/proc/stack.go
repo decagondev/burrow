@@ -13,20 +13,21 @@ const (
 
 // auxv types (Linux include/uapi/linux/auxvec.h)
 const (
-	atNull   = 0
-	atPhdr   = 3
-	atPhent  = 4
-	atPhnum  = 5
-	atPagesz = 6
-	atBase   = 7 // the interpreter's load address (W18-S05; 0 for a static program)
-	atEntry  = 9
-	atUID    = 11
-	atEUID   = 12
-	atGID    = 13
-	atEGID   = 14
-	atSecure = 23
-	atRandom = 25
-	atExecfn = 31
+	atNull        = 0
+	atPhdr        = 3
+	atPhent       = 4
+	atPhnum       = 5
+	atPagesz      = 6
+	atBase        = 7 // the interpreter's load address (W18-S05; 0 for a static program)
+	atEntry       = 9
+	atUID         = 11
+	atEUID        = 12
+	atGID         = 13
+	atEGID        = 14
+	atSecure      = 23
+	atRandom      = 25
+	atExecfn      = 31
+	atSysinfoEhdr = 33 // the vDSO (W25-S02)
 )
 
 // BuildStack writes the Linux entry stack below StackTop into m and returns
@@ -41,6 +42,7 @@ const (
 type AuxIDs struct {
 	UID, EUID, GID, EGID uint32
 	Secure               bool
+	Sysinfo              uint64 // the vDSO's address (AT_SYSINFO_EHDR, W25-S02); 0 = none
 }
 
 func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte, id AuxIDs) (uint64, error) {
@@ -84,8 +86,12 @@ func BuildStack(m *Mem, img Image, argv, envp []string, random [16]byte, id AuxI
 		atPhdr, img.Phdr, atPhent, img.Phent, atPhnum, img.Phnum, atPagesz, PageSize,
 		atBase, img.Base, atEntry, img.Entry, atRandom, rnd, atExecfn, av[0],
 		atUID, uint64(id.UID), atEUID, uint64(id.EUID), atGID, uint64(id.GID), atEGID, uint64(id.EGID),
-		atSecure, secure, atNull, 0,
+		atSecure, secure,
 	}
+	if id.Sysinfo != 0 {
+		aux = append(aux, atSysinfoEhdr, id.Sysinfo)
+	}
+	aux = append(aux, atNull, 0)
 	words := []uint64{uint64(len(av))}
 	words = append(append(words, av...), 0)
 	words = append(append(words, ev...), 0)

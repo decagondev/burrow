@@ -6,6 +6,7 @@
  * failure") and return -ENOSYS: after a Go upgrade, boot and read the log.
  * Numbers and errno values are Linux's, so musl user programs (W9) reuse
  * the table. */
+#include "vdso.h"
 #include "pat.h"
 #include "acpi.h"
 #include "shim.h"
@@ -146,6 +147,7 @@ static long nu_uthread_create(struct syscall_frame *f) {
 static long nu_syscall_wait(struct syscall_frame *f)   { return uthread_wait((uint64_t *)SYSARG0(f), SYSARG1(f)); }
 static long nu_syscall_reply(struct syscall_frame *f)  { return uthread_reply(SYSARG0(f), (long)SYSARG1(f)); }
 static long nu_lattrace(struct syscall_frame *f)       { return uthread_lattrace(SYSARG0(f), SYSARG1(f), (uint64_t *)SYSARG2(f)); }
+static long nu_vdso(struct syscall_frame *f)           { return vdso_info((uint64_t *)SYSARG0(f)); }
 static long nu_uthread_kill(struct syscall_frame *f)   { return uthread_kill(SYSARG0(f)); }
 static long nu_uthread_set_fs(struct syscall_frame *f) { return uthread_set_fs(SYSARG0(f), SYSARG1(f)); }
 static long nu_uthread_regs(struct syscall_frame *f) {
@@ -209,6 +211,7 @@ static const sys_fn g_nu_table[] = {
     [NU_thread_times - NU_BASE] = nu_thread_times,
     [NU_cpu_times - NU_BASE] = nu_cpu_times,
     [NU_lattrace - NU_BASE] = nu_lattrace,
+    [NU_vdso - NU_BASE] = nu_vdso,
 };
 
 long nu_syscall_dispatch(struct syscall_frame *f) {

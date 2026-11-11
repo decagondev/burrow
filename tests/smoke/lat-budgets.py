@@ -22,7 +22,7 @@ import sys
 
 BUDGETS_US = {          # most microseconds per operation (W25-S01's baseline)
     "getpid": 200,
-    "clock": 220,
+    "clock": 2,       # W25-S02: the vDSO (0.08 us measured; 110-164 before)
     "pipe": 600,
     "futex": 280,
     "socketpair": 900,

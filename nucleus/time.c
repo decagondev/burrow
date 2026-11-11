@@ -1,6 +1,7 @@
 /* time.c - see time.h. PIT: 1.193182 MHz input clock; channel 2's gate and
  * output are wired to port 0x61 bits 0 and 5, so it can be polled without
  * an interrupt (the classic Linux pit_calibrate_tsc trick). */
+#include "vdso.h"
 #include "time.h"
 #include "apic.h"
 #include "trap.h"
@@ -61,6 +62,7 @@ void time_init(void) {
     if (g_tsc_hz < 1000000) panic("TSC calibration failed (%llu Hz)", (unsigned long long)g_tsc_hz);
     g_ns_mult = (1000000000ull << 32) / g_tsc_hz;
     g_tsc0 = rdtsc();
+    vdso_update(g_tsc0, g_ns_mult, g_realtime_base_ns);   /* W25-S02: the clock for every process */
 
     uint32_t per_ms = calibrate_lapic();
     if (per_ms == 0) panic("LAPIC timer calibration failed");
@@ -83,7 +85,10 @@ uint64_t time_monotonic_ns(void) {
     return (uint64_t)(p >> 32);
 }
 
-void time_set_realtime_ns(uint64_t unix_ns) { g_realtime_base_ns = unix_ns - time_monotonic_ns(); }
+void time_set_realtime_ns(uint64_t unix_ns) {
+    g_realtime_base_ns = unix_ns - time_monotonic_ns();
+    vdso_update(g_tsc0, g_ns_mult, g_realtime_base_ns);
+}
 uint64_t time_realtime_ns(void) { return g_realtime_base_ns + time_monotonic_ns(); }
 
 void time_busy_wait_ns(uint64_t ns) {

@@ -11,7 +11,7 @@ BURROW:NUCLEUS:OK
 [boot] INFO: module kernel:
 [boot] INFO: module nucleus:
 # W23-S01: /bin/proctest is one more file, and /proc one more name in /
-[initrd] INFO: tarfs: 58 files, 5 directories
+[initrd] INFO: tarfs: 59 files, 5 directories
 BURROW:GO:OK goroutine says 42
 [go-selftest] sleep ok
 [go-selftest] language ok

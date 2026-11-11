@@ -8,6 +8,7 @@
  *
  * Must never return.
  */
+#include "vdso.h"
 #include <stdint.h>
 #include <burrow/boot_info.h>
 #include "io.h"
@@ -71,6 +72,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     acpi_init();
     pic_disable();
     lapic_init();
+    vdso_init();   /* W25-S02: before time_init publishes the clock in it */
     time_init();
     fpu_init();
     sched_init();

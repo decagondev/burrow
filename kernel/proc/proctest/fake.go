@@ -310,6 +310,12 @@ func (f *Fake) CPUTimes() []proc.CPUTime {
 	return []proc.CPUTime{{User: time.Second, Sys: time.Second, Idle: time.Second, Switches: 10}}
 }
 
+// VdsoFrames is what Vdso reports (W25-S02); the zero value is no vDSO,
+// so programs get none unless a test sets it.
+var VdsoFrames proc.Vdso
+
+func (f *Fake) Vdso() (proc.Vdso, error) { return VdsoFrames, nil }
+
 // Interrupt behaves like the nucleus: a thread computing in ring 3 stops at
 // once and posts an interrupt request; a thread waiting for an answer
 // stops right after that answer.

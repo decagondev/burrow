@@ -242,4 +242,15 @@ proctest: maps ok
 proctest: stdin is /dev/tty1
 proctest: ttyname ok
 proctest: ok
+# W25-S02: the vDSO, mapped above the stack, answers like the system calls
+burrow> run /bin/vdsotest
+vdsotest: vdso at 0x7fffffff1000
+vdsotest: realtime ok
+vdsotest: monotonic ok
+vdsotest: boottime ok
+vdsotest: gettimeofday ok
+vdsotest: time ok
+vdsotest: getcpu ok
+vdsotest: monotonic across threads ok
+vdsotest: ok
 burrow> poweroff

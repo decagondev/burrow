@@ -23,6 +23,7 @@ import (
 // goroutine (a slow read or a wait4 never holds up another process).
 type System struct {
 	nu      Nucleus
+	vdso    Vdso // the vDSO's frames (W25-S02)
 	files   fs.FS
 	console io.Writer
 	log     *klog.Logger
@@ -57,6 +58,9 @@ func NewSystem(nu Nucleus, files fs.FS, console io.Writer, log *klog.Logger) *Sy
 	s := &System{nu: nu, files: files, console: console, log: log,
 		byTID: map[uint64]*Thread{}, gone: map[uint64]bool{}, byPID: map[int]*Process{}, nextPID: 1, reported: map[uint64]bool{},
 		futexes: map[futexKey][]*futexWaiter{}}
+	if v, err := nu.Vdso(); err == nil {
+		s.vdso = v // W25-S02: mapped into every program (vdso.go)
+	}
 	s.init = s.newProcess("init", nil, &fdTable{fds: map[int]fd{}})
 	s.init.PGID, s.init.SID = 1, 1
 	s.init.argv = []string{"init"}
@@ -130,6 +134,9 @@ func (s *System) prepare(file string, prog io.ReaderAt, argv, envp []string, id 
 	}
 	if err == nil {
 		err = mem.MapAnon(StackTop-StackSize, StackSize, ProtWrite)
+	}
+	if err == nil {
+		id.Sysinfo, err = s.mapVdso(mem) // W25-S02: AT_SYSINFO_EHDR
 	}
 	var sp uint64
 	if err == nil {
