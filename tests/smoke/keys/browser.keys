@@ -19,7 +19,7 @@ wait built-in shell
 type wget -q -O /tmp/ca.pem http://host:@PORT@/ca.pem && mkdir -p /tmp/www && wget -q -O /tmp/www/local.html http://host:@PORT@/local.html && httpd -p 8080 -h /tmp/www && echo browser: ready'' to browse
 key ret
 wait browser: ready to browse
-type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xaccel; (i=0; while [ $i -lt 120 ] && ! grep -q square.png /tmp/ns.log 2>/dev/null; do sleep 1; i=$((i+1)); done; echo browser: page'' drawn) & HOME=/tmp /opt/net/bin/netsurf -v --ca_bundle=/tmp/ca.pem -f x -w 800 -h 600 http://host:@PORT@/ > /tmp/ns.log 2>&1; kill %1; wait; grep -c fetch_curl_setup /tmp/ns.log; grep -q query/ssl /tmp/ns.log && echo browser: bad certificate'' refused; echo browser: x'' stopped
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xaccel; (i=0; while [ $i -lt 120 ] && ! grep -q square.png /tmp/ns.log 2>/dev/null; do sleep 1; i=$((i+1)); done; echo browser: page'' drawn) & HOME=/tmp /opt/net/bin/netsurf -v --ca_bundle=/tmp/ca.pem -f x -w 800 -h 600 http://host:@PORT@/ > /tmp/ns.log 2>&1; kill %1; wait; grep -c fetch_curl_setup /tmp/ns.log; echo browser: first page laid out at $(grep html_box_convert_done /tmp/ns.log | head -1 | cut -d' ' -f1); grep -q query/ssl /tmp/ns.log && echo browser: bad certificate'' refused; echo browser: x'' stopped
 key ret
 waitpixel 140 200 #20a040
 wait browser: page drawn

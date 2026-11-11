@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-11 — W24 done: ssh, TLS and a browser (M24)
+
+**Did:** the wave in six slices. TLS for C programs: mbedTLS, curl and a CA bundle on a disk of their own, busybox `wget` over HTTPS (S01); dropbear, the host logging in by password and key (S02); interactive sessions, `scp` and `dbclient` (S03); NetSurf on X, built in one spike (S04) and browsed with the tablet, the keyboard and TLS (S05); the demo, budgets and guides (S06). `make tls-smoke`, `ssh-smoke` and `browser-smoke` are in `make test`, green on four CPUs and on one.
+
+**Surprise:** the kernel needed little, and all of it was found before a boot or on the first: two calls for dropbear, owned terminals, `mkdir`'s order of checks, faster write-back of big files, and three bugs in one idea, the directory that only mounts make (BUG-0030 walking it, BUG-0032 reading its link; BUG-0031 nearby). The ports' own builds took more time than the kernel did.
+
+**Learned:** take the census first and the ports come up quickly; drive the real clients (the host's OpenSSH, its Python servers) and the tests mean what users do. The milestone's numbers ask the next question: `scp` at 1 MB/s where TCP does 5.5, because a blocking call costs too much (R-09).
+
+**Next:** the cost of a wake-up in the dispatcher (R-09), BUG-0033, or UEFI and GOP towards real hardware.
+
+## 2026-11-11 — W24-S06 M24
+
+**Did:** `make run-unix` attaches the net and X disks and forwards host port 2222 to Burrow's ssh; `desktop-smoke`'s first boot starts dropbear before `startx`, and the host logs in while the desktop runs and sees Xfbdev and dwm in `ps`. Budgets: `ssh-bench` (login 1.2 s against 3; `scp` 1.0 and 1.1 MB/s against 0.8), `browser-bench` (first page 3.5 s against 6); `syslat` within its limit, `doom-bench` 104.4 fps. The guides: ARCHITECTURE.md §7.9, NETWORKING.md, UNIX.md, DESKTOP.md, PORTING.md. `tls-smoke`, `ssh-smoke`, `browser-smoke` and `desktop-smoke` green with `SMP=1`.
+
+**Surprise:** `scp`'s speed is not the cipher (both stream alike, Burrow hashes 14 MB/s) nor dropbear's window; the plan's 1 MB/s budget sat on the measurement, so the budget went to 0.8 and the reason to RISKS. Trying the demo by hand found BUG-0032 (NetSurf found no resources under `/opt` on an ext2 root: `realpath` read `/opt`'s link) and BUG-0033 (still open: NetSurf as a console background job draws nothing while the shell sleeps). And TinyX will not start for a user unless it is set-user-id root, which a FAT disk cannot say: the desktop on go-unix.img runs as root.
+
+**Next:** the wave summary above.
+
 ## 2026-11-10 — W24-S05 Browsing: clicks, keys and TLS
 
 **Did:** `browser-smoke` browses: the tablet clicks the test page's link, URLs are typed into NetSurf's address bar, PageDown scrolls a long page to its end, Burrow's busybox `httpd` serves a page over loopback, an `https://` page loads with the test CA, and a certificate for another name gets NetSurf's Privacy error page. Each step waits for a pixel of the page it expects.

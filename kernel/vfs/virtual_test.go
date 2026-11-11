@@ -1,6 +1,7 @@
 package vfs
 
 import (
+	"errors"
 	"io/fs"
 	"testing"
 	"testing/fstest"
@@ -45,5 +46,24 @@ func TestBUG0030MountBelowMissingDir(t *testing.T) {
 	}
 	if err := fstest.TestFS(v, "etc/x", "opt/net/bin/prog", "deep/a/b/f"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestBUG0032ReadLinkOfDirOnlyMountsMake: readlink of /opt there is EINVAL
+// (a directory, not a link), as for any directory. It was ENOENT, from the
+// root file system that has no opt, so musl's realpath, which reads each
+// component's link, failed for every path under /opt/net (NetSurf found
+// none of its resources on an ext2 root).
+func TestBUG0032ReadLinkOfDirOnlyMountsMake(t *testing.T) {
+	v := New()
+	v.Mount(".", fstest.MapFS{"etc/x": {Data: []byte("x")}}, "ext2")
+	v.Mount("opt/net", fstest.MapFS{"bin/prog": {Data: []byte("p")}}, "fat32")
+	for _, name := range []string{"opt", "opt/net", "etc"} {
+		if _, err := v.ReadLink(name); !errors.Is(err, fs.ErrInvalid) {
+			t.Errorf("readlink %s = %v, want ErrInvalid (not a link)", name, err)
+		}
+	}
+	if _, err := v.ReadLink("nothere"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("readlink nothere = %v, want ErrNotExist", err)
 	}
 }

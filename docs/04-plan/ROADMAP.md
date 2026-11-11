@@ -28,7 +28,7 @@
 | M21 | A firmware framebuffer | stage2 sets a VBE mode; the console, `/dev/fb0` programs, Doom and X draw at 1280x1024 with a padded pitch from boot_info; the framebuffer is write-combining; DISPI still serves images that ask for no mode (done: `make fb-smoke`, `make vbe-smoke`) | W21 |
 | M22 | Sound and an absolute pointer | Doom's sound effects through AC'97, recorded and checked; `tone`'s 440 Hz measured; the pointer in X, Qt and paint where the host's is, with no grab (done: `make sound-smoke`, `make tablet-smoke`, `desktop-smoke` with both) | W22 |
 | M23 | /proc and virtio devices | busybox `ps`, `top`, `free`, `tty`, `df` and `mount` work and `top` sees CPU time; the root and home disks on virtio-blk, the network on virtio-net with DHCP; `logger` reaches `syslogd` (done: `make proc-smoke`, `make virtio-smoke`) | W23 |
-| M24 | ssh, TLS and a browser | the host logs in to Burrow over ssh (password, key, interactive, `scp`), `dbclient` logs in over loopback; `wget` and `curl` fetch over TLS and refuse a bad certificate; NetSurf renders pages in X, follows a link, loads `https://` (planned: `make tls-smoke`, `make ssh-smoke`, `make browser-smoke`) | W24 |
+| M24 | ssh, TLS and a browser | the host logs in to Burrow over ssh (password, key, interactive, `scp`), `dbclient` logs in over loopback; `wget` and `curl` fetch over TLS and refuse a bad certificate; NetSurf renders pages in X, follows a link, loads `https://` (done: `make tls-smoke`, `make ssh-smoke`, `make browser-smoke`) | W24 |
 
 ```mermaid
 flowchart TB

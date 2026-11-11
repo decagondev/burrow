@@ -12,3 +12,4 @@ Score = Likelihood x Impact (1-3 each). Review at every wave exit.
 | R-06 | Real-hardware differences (BIOS quirks) | 2 | 1 | 2 | QEMU first; Bochs as second emulator; UEFI path later | first hardware test |
 | R-07 | Syscall-ring latency makes Doom slow | 1 | 2 | 2 | measured in W11: `make doom-bench` = 100-104 fps (timedemo demo1, QEMU TCG); retired unless the bench drops | FPS < 20 |
 | R-08 | Learning fatigue on long debugging sessions | 2 | 2 | 4 | 30-120 min slices; DEVLOG; celebrate milestones | three sessions without a commit |
+| R-09 | A blocking call's round trip through Burrow's dispatcher limits ssh: `scp` at about 1 MB/s on TCG where TCP moves 5.5 (W24-S06) | 2 | 1 | 2 | measured: not the cipher, not dropbear's window; next: a pipe and socket ping-pong to time a wake-up, then shorten the path | `ssh-bench` under its budget (0.8 MB/s) |

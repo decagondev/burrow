@@ -6,10 +6,12 @@ package vfs
 // under a directory add to it: each mount point directly inside (its root,
 // named after the point) and, for a mount further down, the directory on
 // the way to it. A directory that exists only that way opens as a
-// read-only, empty one with those entries. Never invents anything where no
-// mount lies below. Docs: docs/living/BUGS_AND_MITIGATIONS.md (BUG-0030).
+// read-only, empty one with those entries, and readlink of it says it is
+// not a link (BUG-0032). Never invents anything where no mount lies below.
+// Docs: docs/living/BUGS_AND_MITIGATIONS.md (BUG-0030, BUG-0032).
 
 import (
+	"errors"
 	"io/fs"
 	"strings"
 	"time"
@@ -41,6 +43,17 @@ func (v *VFS) below(dir string) map[string]fs.FileInfo {
 		}
 	}
 	return out
+}
+
+// notLinkBelow is readlink's error for name: a name the file system holding
+// it lacks but mounts below make a directory is not a link, EINVAL as for
+// any directory, not ENOENT (BUG-0032: musl's realpath reads every
+// component's link).
+func (v *VFS) notLinkBelow(op, name string, err error) error {
+	if errors.Is(err, fs.ErrNotExist) && len(v.below(name)) > 0 {
+		return &fs.PathError{Op: op, Path: name, Err: fs.ErrInvalid}
+	}
+	return wrap(op, name, err)
 }
 
 // dirInfo describes a directory that only mounts make.

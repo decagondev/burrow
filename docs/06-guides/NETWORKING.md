@@ -54,7 +54,7 @@ then open `http://localhost:8080/` on the host. Only forwarded ports are reachab
 - **Sockets:** `AF_INET` and `AF_INET6`, TCP (`SOCK_STREAM`) and UDP (`SOCK_DGRAM`), raw ICMP for `ping`; blocking and non-blocking, `poll`, `select` and epoll; `connect` with `EINPROGRESS` and `SO_ERROR`; the common options (`SO_REUSEADDR`, `SO_KEEPALIVE`, the buffer sizes, `TCP_NODELAY`, the keepalive timers, `IPV6_V6ONLY`). Errors are Linux's numbers.
 - **Names:** `/etc/hosts`, `/etc/resolv.conf`, `/etc/services`, `/etc/protocols`; musl and Go read them as on Linux. `sethostname` changes what `uname -n` says.
 - **Speed** (QEMU without KVM; `make net-bench`): about 5.5 MB/s for a 10 MB download from the host, and a dozen short connections a second to busybox httpd, which forks for each; loopback TCP moves about 35 MB/s between two processes.
-- **Not yet:** DHCP, virtio-net, packet sockets and raw sockets beyond ICMP, `SIOC*` interface ioctls (so no `ifconfig`; use the console's `net`), TLS for C programs, a firewall. Copy-on-write fork (E18) would speed up forking servers.
+- **Not yet:** packet sockets and raw sockets beyond ICMP, `SIOC*` interface ioctls (so no `ifconfig`; use the console's `net`), a firewall. (DHCP and virtio-net came in W23, TLS for C programs in W24: the sections below.)
 
 ## How it is tested
 
@@ -65,3 +65,21 @@ then open `http://localhost:8080/` on the host. Only forwarded ports are reachab
 Burrow also drives QEMU's virtio-net card (`drivers/virtionet`), and since W23-S07 the run targets (`run-net` included) attach it by default; `NIC=e1000` brings the e1000 back, and `eth0` is the same to everything above the driver. It is the faster card under QEMU: `make net-bench` downloads 10 MB at about 12 MB/s on virtio-net against 5 on the e1000.
 
 Addresses can come from DHCP: put `eth0 dhcp` in `/etc/net.conf` (any `address`, `gateway` and `dns` lines stay as the fallback), or boot with the kargs word `net=dhcp` (`build/go-dev-dhcp.img` has it). The kernel asks before the stack starts, logs `[net] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease 24h0m0s from 10.0.2.2`, renews the lease halfway through over UDP, and `net` on the console shows it. Without an answer in about 8 s it uses the fixed addresses. QEMU's user network always gives 10.0.2.15, so on it DHCP changes nothing but the source of the numbers; `/etc/resolv.conf` is rewritten from the lease only when `/etc` is writable (an ext2 root).
+
+## ssh, scp and HTTPS (W24)
+
+`make net-ports` builds the NETDATA disk, mounted at `/opt/net`: `curl` with mbedTLS, Mozilla's CA bundle at `/opt/net/etc/ssl/certs/ca-certificates.crt` (`SSL_CERT_FILE` and `CURL_CA_BUNDLE` name it for every program), and dropbear's `dropbear`, `dbclient`, `dropbearkey` and `scp`. `make browser` adds NetSurf (see DESKTOP.md).
+
+```text
+curl https://host:8443/                    checks the certificate against the bundle (or --cacert FILE)
+wget https://example.org/                  busybox's own TLS: it fetches, but checks no certificate
+/opt/net/bin/dropbear -R                   the ssh server, host keys made at the first connection
+/opt/net/bin/dbclient burrow@127.0.0.1     Burrow's ssh client (-i KEY, -y accepts a new host key)
+scp -i KEY file burrow@127.0.0.1:/tmp/     Burrow's scp, which runs dbclient
+```
+
+From the host, `make run-unix` forwards port 2222 (`RUN_SSH_FWD`) to Burrow's 22: start dropbear as root, then `ssh -p 2222 burrow@localhost` and `scp -O -P 2222 file burrow@localhost:` (`-O`: dropbear has no SFTP). Host keys and logins are UNIX.md's subject.
+
+**Speed** (QEMU TCG; `make ssh-bench`): a key login in about 1.2-1.7 s, `scp` at about 1 MB/s each way. That is not the cipher (chacha20-poly1305 and aes128-ctr are alike, and Burrow hashes 14 MB/s) nor dropbear's window: it is what each of dropbear's blocking calls costs in Burrow (RISKS.md R-09).
+
+**Tests:** `make tls-smoke` (busybox `wget` and `curl` over TLS from the host, `curl` refusing a wrong name and an unknown CA), `make ssh-smoke` (the host's OpenSSH logs in by password and key, two interactive shells, `scp` both ways, `dbclient` over loopback), `make browser-smoke` (NetSurf over HTTP, HTTPS and loopback); the censuses `make net-census`, `ssh-census`, `browser-census`.

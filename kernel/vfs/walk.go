@@ -61,11 +61,11 @@ func (v *VFS) ReadLinkAs(name string, c Caller) (string, error) {
 	m, rel, ok := v.resolve(name)
 	if cl, isCL := m.fsys.(CallerLinks); ok && isCL && rel != "." {
 		target, err := cl.ReadLinkAs(rel, c)
-		return target, wrap("readlink", name, err)
+		return target, v.notLinkBelow("readlink", name, err)
 	}
 	if rl, isRL := m.fsys.(fs.ReadLinkFS); ok && isRL && rel != "." {
 		target, err := rl.ReadLink(rel)
-		return target, wrap("readlink", name, err)
+		return target, v.notLinkBelow("readlink", name, err)
 	}
 	if _, err := fs.Stat(v, name); err != nil {
 		return "", err

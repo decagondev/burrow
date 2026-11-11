@@ -31,9 +31,25 @@ flowchart LR
 
 ## Open
 
-None (BUG-0023 closed in W21-S03).
+### BUG-0033: NetSurf started in the background from the console draws nothing while the shell sleeps
+- Found: 2026-11-11, W24-S06, trying the M24 demo by hand.
+- Severity: minor (the ways a desktop starts programs work: `startx`'s session, a terminal on it, NetSurf in the foreground; `browser-smoke` and `desktop-smoke` are green).
+- Symptom: at the console, `Xfbdev :0 & sleep 6; netsurf ... & sleep 25` shows X's root and no NetSurf window, although NetSurf's log says the page was drawn; ten seconds in, X itself had not painted its root yet. The same line with NetSurf in the foreground, or with a loop of `sleep 1` in the foreground instead of one long sleep, draws the page (go-dev.img and go-unix.img alike).
+- Root cause: not found yet. The difference is which process group holds the console terminal's foreground while X and NetSurf run as background jobs; the next step is a dump (Alt+SysRq) during the long sleep, to see what X and NetSurf wait in.
+- Mitigation: start NetSurf from the desktop's session or a terminal on it, or in the foreground (DESKTOP.md).
+- Regression: to write with the fix: the failing line as a smoke step.
 
 ## Closed
+
+### BUG-0032: readlink of a directory only mounts make said ENOENT
+- Found: 2026-11-11, W24-S06: NetSurf on go-unix.img (an ext2 root) found none of its resources in `/opt/net/share/netsurf` (`resource:default.css failed: UnacceptableType`), where on go-dev.img it found them.
+- Severity: major (musl's `realpath`, which reads the link of every component, failed for every path under `/opt` on an ext2 root: every data disk's files).
+- Symptom: `realpath("/opt/net/share/netsurf/default.css")` failed, so NetSurf's resource path matched nothing.
+- Root cause: BUG-0030's fix made `/opt` a directory for walks, listings and `lstat`, but `readlink` still asked the root's file system, which has no `opt`, and passed on its `ENOENT`; for a directory it must be `EINVAL`, not a link.
+- Fix: `VFS.ReadLinkAs` turns a missing name that mounts below make a directory into `EINVAL` (`notLinkBelow`, `kernel/vfs/virtual.go`).
+- Mitigation: none needed beyond the test.
+- Regression: `TestBUG0032ReadLinkOfDirOnlyMountsMake` (`kernel/vfs`; fails without the fix with "file does not exist").
+- Lesson: a fix for "a name that only mounts make" must cover every call that looks at a name: walk, open, list, stat, and readlink too.
 
 ### BUG-0031: mkdir of an existing directory said EACCES, not EEXIST
 - Found: 2026-11-10, W24-S03: on the ext2 root, root's `mkdir -p /root/.ssh` said "can't create directory '/': Permission denied".

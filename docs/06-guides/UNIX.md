@@ -54,10 +54,22 @@ The root disk is an ordinary ext2 image (with QEMU stopped): `debugfs -R "cat /e
 - No journal: after a crash, run `e2fsck -fy burrow-root.img` before the next boot.
 - Record locks (`fcntl F_SETLK`) are granted and not kept; nothing on Burrow contends for one yet.
 - A program running from the disk must not be rewritten or deleted while it runs (no `ETXTBSY` yet): it reads its pages from the disk as it goes.
-- Terminals are not owned by whoever logs in, and `/dev/shm` is not checked; there is no `/proc`, so tools that look there (`ps`, `w`) are not built.
+- `/dev/shm` is not checked (since W24 a pseudo-terminal belongs to whoever opened it, and ssh gives it to the user); there is no `/proc`, so tools that look there (`ps`, `w`) are not built.
 
 ## Processes and logs (W23)
 
 busybox's process tools read `/proc`: `ps`, `top` (CPU time is counted by the nucleus), `free`, `uptime`, `pidof`, `pgrep`, `pkill`, `killall`, `tty`, `df`, `mount` (it lists; mounting is not served), `fuser` and `lsof`. A process's `/proc/<pid>/fd`, `exe`, `cwd` and `maps` are readable by its own user and root only.
 
 `syslogd` takes the messages programs send to `/dev/log` (`logger`, or `syslog(3)`): `syslogd -O /tmp/messages` writes them to a file (the initrd has no writable `/var`; an ext2 root does), and `syslogd -C16` keeps them in a 16 KiB circular buffer in shared memory, which `logread` prints (`logread -f` follows it).
+
+## Logging in over ssh (W24)
+
+With the NETDATA disk attached (`make net-ports`; `make run-unix` attaches it and forwards host port 2222 to 22), root starts the server:
+
+```text
+# /opt/net/bin/dropbear -R          host keys made at the first connection, into /etc/dropbear (0700)
+```
+
+then from the host `ssh -p 2222 burrow@localhost` (burrow's password, or a key). Keys go in `~/.ssh/authorized_keys`, which with `~/.ssh` and every directory above must be writable only by its owner: dropbear refuses a file anyone else could change. Each session gets a pseudo-terminal of its own, given to the user (`/dev/pts/N`, mode 0620), a login shell with the user's ids, `PATH=/bin:/opt/net/bin`, window changes (`stty size`) and `^C`; `exit` returns the shell's status to the host. `ps` shows every user's processes, the console's and the desktop's included. Host keys are made on the machine and never shipped; a fresh root disk makes new ones, so the host's ssh will warn that the key changed.
+
+The desktop on this image runs as root: TinyX's `Xfbdev` must be set-user-id root to run for a user, and the X disk is FAT, which keeps no set-id bits. A login session does not get `x11.env`'s variables, so set `DISPLAY=:0` for X programs started from it.

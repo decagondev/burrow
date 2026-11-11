@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-benchktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -454,18 +454,21 @@ run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
 	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
 		$(call run_drive,$(HOME_IMG),1) $(call run_drive,$(BUILD)/x11-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 desktop-smoke:
-	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
-		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom)"; fi
+	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ] && \
+		[ -f $(BUILD)/net-root/bin/dropbear ] && command -v ssh >/dev/null; then \
+		$(MAKE) --no-print-directory desktop-smoke-run; else echo "DESKTOP SMOKE SKIP (make x11 busybox ports doom net-ports, and an ssh client)"; fi
 # W22-S06 (M22): the first boot with the tablet (a click by absolute
 # position moves dwm's focus) and an AC'97 recording Doom's menu sounds.
+# W24-S06 (M24): and the NETDATA disk on hdd with QEMU's user network: the
+# host logs in over ssh while the desktop runs (tests/smoke/desktop-ssh.sh).
 DESKTOP_WAV := $(BUILD)/desktop-smoke.wav
 DESKTOP_SOUND := -audiodev wav,id=snd0,path=$(DESKTOP_WAV) -device AC97,audiodev=snd0
-desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img $(call xp,tests/smoke/expect/desktop-1.txt) $(call xp,tests/smoke/expect/desktop-2.txt)
+desktop-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img $(BUILD)/net-data.img $(call xp,tests/smoke/expect/desktop-1.txt) $(call xp,tests/smoke/expect/desktop-2.txt)
 	rm -f $(BUILD)/home-desktop.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-desktop.img -label burrowhome -size 64 ../workbench
 	rm -f $(DESKTOP_WAV)
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-desktop.img,1) $(call data_drive,$(BUILD)/x11-data.img,2) $(TABLET_DEV) $(DESKTOP_SOUND)" \
-		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/desktop-1.txt) 360 tests/smoke/keys/desktop-1.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-desktop.img,1) $(call data_drive,$(BUILD)/x11-data.img,2) $(call data_drive,$(BUILD)/net-data.img,3) $(TABLET_DEV) $(DESKTOP_SOUND)" \
+		tests/smoke/desktop-ssh.sh $(BUILD) $(call xp,tests/smoke/expect/desktop-1.txt) tests/smoke/keys/desktop-1.keys 420
 	python3 tests/smoke/checkwav.py $(DESKTOP_WAV) sounds 3
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/home-desktop.img,1) $(call data_drive,$(BUILD)/x11-data.img,2)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev.img $(call xp,tests/smoke/expect/desktop-2.txt) 90 tests/smoke/keys/desktop-2.keys
@@ -601,9 +604,18 @@ unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(call xp,tests/smok
 	@! grep -aqE 'alicepw|Password: (burrow|root)' $(BUILD)/smoke-unix-1.log $(BUILD)/smoke-unix-2.log \
 		&& echo "UNIX ECHO PASS (no password reached the screen)" \
 		|| { echo "UNIX ECHO FAIL: a password was echoed"; exit 1; }
-run-unix: $(BUILD)/go-unix.img $(ROOT_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(QEMU_COMMON)) -m $(GO_MEM) \
-		$(call run_drive,$(ROOT_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
+# W24-S06 (M24): with the NETDATA disk (/opt/net) and the X disk
+# (/opt/x11) when they are built, and host port $(RUN_SSH_FWD) forwarded to
+# Burrow's 22: as root, /opt/net/bin/dropbear -R, then from the host
+# ssh -p $(RUN_SSH_FWD) burrow@localhost (docs/06-guides/UNIX.md).
+RUN_SSH_FWD ?= 2222
+UNIX_NET_IMG := $(if $(wildcard $(BUILD)/net-root/bin/curl),$(BUILD)/net-data.img)
+UNIX_X11_IMG := $(if $(wildcard $(BUILD)/x11-root/bin/Xfbdev),$(BUILD)/x11-data.img)
+run-unix: $(BUILD)/go-unix.img $(ROOT_IMG) $(UNIX_NET_IMG) $(UNIX_X11_IMG)
+	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
+		$(call run_drive,$(ROOT_IMG),1) $(if $(UNIX_NET_IMG),$(call run_drive,$(UNIX_NET_IMG),2)) \
+		$(if $(UNIX_X11_IMG),$(call run_drive,$(UNIX_X11_IMG),3)) \
+		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_SSH_FWD)-:22 -serial mon:stdio -display $(DEV_DISPLAY)
 
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots
@@ -756,11 +768,17 @@ browser-smoke:
 browser-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img $(BUILD)/net-data.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/browser-smoke.sh $(BUILD) $(BUILD)/go-dev.img browser 300
 # ssh-bench (W24-S03; not in make test): the same boot, with the host timing
-# key logins and a 4 MiB scp each way (printed; budgets come in W24-S06).
+# key logins and a 4 MiB scp each way, then per cipher a stream alone;
+# budgets in tests/smoke/ssh-budgets.py (W24-S06).
 ssh-bench: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img
 	cp $(BUILD)/root-test.img $(BUILD)/ssh-root.img
 	SSH_MODE=bench MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 420
 	@grep -a "SSH BENCH" $(BUILD)/ssh-host.log
+	python3 tests/smoke/ssh-budgets.py $(BUILD)/ssh-host.log
+# browser-bench (W24-S06; not in make test): browser-smoke's boot, then
+# NetSurf's first page against tests/smoke/browser-budgets.py.
+browser-bench: browser-smoke-run
+	python3 tests/smoke/browser-budgets.py $(BUILD)/smoke-browser.log
 
 # virtio-blk (W23-S04): disk-smoke, dev-smoke and unix-smoke again with
 # their data disks on virtio (vda, vdb), checked against expect files

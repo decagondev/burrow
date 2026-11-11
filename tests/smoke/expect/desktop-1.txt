@@ -2,12 +2,16 @@
 # The pixels are checked by desktop-1.screen.
 [fat] INFO: hdb: FAT32 volume "BURROWHOME" mounted at /home (read-write)
 [fat] INFO: hdc: FAT32 volume "X11DATA" mounted at /opt/x11 (read-write)
+# W24-S06 (M24): dropbear started before the desktop (the NETDATA disk on hdd)
+desktop: dropbear started
 startx: /home/.xinitrc
 xfocus: dwm
 xfocus: st-256color
 written with vi on the desktop
 xfocus: st-256color #2
 desktop: two in /home
+# W24-S06: the host logged in over ssh while the desktop ran
+desktop: the host over ssh sees Xfbdev and dwm
 # W23-S03: each st's shell names its terminal (musl's ttyname over /proc/self/fd)
 desktop: second is /dev/pts/1
 desktop: focus on first

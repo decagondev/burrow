@@ -451,6 +451,40 @@ flowchart LR
     pfs --> tools["ps, top, free, tty,<br/>df, mount, lsof"]
 ```
 
+### 7.9 Remote access and the web (Wave 24)
+
+Wave 24 added no kernel layer: it ported programs and fixed what they
+found. **TLS** is mbedTLS, a static library on the NETDATA disk
+(`/opt/net`) with Mozilla's CA bundle; `curl` and NetSurf use it through
+libcurl, busybox `wget` uses its own TLS. **ssh** is dropbear: the server
+checks `/etc/shadow` and `authorized_keys`, gives each session a
+pseudo-terminal and the user's ids, and runs itself again for each
+connection (`execveat`); `dbclient` and `scp` are its client side. The
+**browser** is NetSurf's framebuffer front end drawing through libnsfb's
+X surface into an X window (MIT-SHM images), fetching with libcurl.
+
+Each port's system calls were taken on the host first (`census-net.sh`,
+`census-ssh.sh`, `census-browser.sh`) and checked against `kernel/proc`'s
+table (`TestCensus*`). What the ports found: `set_robust_list` and
+`execveat` (dropbear), owners for pseudo-terminal slaves (a session's
+`chown`), write-back of big files by doublings (`scp`, `wfile`), `mkdir`'s
+`EEXIST` before permission (BUG-0031), and directories that only mounts
+make, which must be walked (BUG-0030) and read as "not a link" (BUG-0032).
+
+```mermaid
+flowchart LR
+    host["host: OpenSSH, browser test servers"] -- "hostfwd :22" --> db["dropbear<br/>(/opt/net/bin)"]
+    db --> pty["/dev/ptmx, /dev/pts/N<br/>(owner set by chown)"] --> sh["login shell"]
+    subgraph burrow["Burrow (user space on the NETDATA disk)"]
+        db
+        ns["NetSurf<br/>libnsfb X surface"] --> x["Xfbdev (/opt/x11)"]
+        ns --> curl["libcurl + mbedTLS<br/>CA bundle"]
+        wget["busybox wget<br/>(own TLS)"]
+    end
+    curl -- "HTTP, HTTPS" --> host
+    wget -- "HTTPS" --> host
+```
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

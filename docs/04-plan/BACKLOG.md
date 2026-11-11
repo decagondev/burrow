@@ -191,7 +191,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - Later: `/sys` · `AF_PACKET` (`udhcpc`, `tcpdump`) · network offloads and multiqueue · MSI-X · `ptrace` and `/proc/<pid>/mem`.
 
 ## E21 Remote access and the web
-*Exit: Burrow is reached and worked from over the network: ssh in and out, TLS for C programs, a graphical browser.* [W24]
+*Exit: Burrow is reached and worked from over the network: ssh in and out, TLS for C programs, a graphical browser.* [W24, done: M24]
 
 - [x] E21.F01 As a porter, I want TLS for C programs (mbedTLS, a CA bundle; busybox `wget` and `curl` over HTTPS), so that C ports fetch `https://` and check certificates. [W24]
 - [x] E21.F02 As a user, I want an ssh server (dropbear) with passwords, keys, interactive sessions and `scp`, so that I log in to Burrow from the host. [W24]

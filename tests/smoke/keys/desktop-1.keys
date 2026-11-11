@@ -14,6 +14,13 @@ screen 1024 768
 type run /bin/busybox sh
 key ret
 wait built-in shell
+# W24-S06 (M24): run by tests/smoke/desktop-ssh.sh, which serves the host's
+# public key (@PORT@): root's authorized_keys go on the home disk (dropbear
+# -D; /tmp is everyone's, which it refuses), a host key in /tmp, then
+# dropbear; the host logs in while the desktop runs (after /tmp/ssh-go).
+type mkdir -p /home/.ssh && wget -q -O /home/.ssh/authorized_keys http://host:@PORT@/key.pub && /opt/net/bin/dropbearkey -t ed25519 -f /tmp/hk > /dev/null 2>&1 && /opt/net/bin/dropbear -r /tmp/hk -D /home/.ssh -p 22 && echo desktop: dropbear'' started
+key ret
+wait desktop: dropbear started
 type X=/opt/x11/bin/xfocus; for w in dwm st-256color '-n 2 st-256color' dmenu; do $X -w -t 300 $w & done; startx; echo desktop: console back
 key ret
 wait startx: /home/.xinitrc
@@ -58,6 +65,10 @@ sleep 1
 type echo desktop: two in $(pwd) > /dev/tty1
 key ret
 wait desktop: two in /home
+# W24-S06: the host's ssh login (tests/smoke/desktop-ssh.py) waits for this
+type touch /tmp/ssh-go
+key ret
+wait desktop: the host over ssh sees Xfbdev and dwm
 type echo desktop: second is $(tty) > /dev/tty1
 key ret
 wait desktop: second is

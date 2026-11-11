@@ -87,3 +87,16 @@ Doom from dmenu then plays its effects. Only one program plays at a time (`/dev/
 ## virtio by default (W23-S07)
 
 The run targets attach their data disks as virtio-blk (`vda`, `vdb`, ... in the log, mounted by label as before) and their network card as virtio-net: both are much faster under QEMU (`make disk-bench`, `make net-bench`). `RUN_DISK_IF=ide` and `NIC=e1000` bring back the IDE disks and the e1000. The boot disk is IDE either way: the BIOS reads it.
+
+## A browser: NetSurf (W24)
+
+`make browser` builds NetSurf onto the NETDATA disk; with that disk attached, run it from a terminal on the desktop:
+
+```text
+/opt/net/bin/netsurf http://host:8000/ &          a page from the host (10.0.2.2)
+/opt/net/bin/netsurf --ca_bundle=/tmp/ca.pem https://host:8443/
+```
+
+It is NetSurf's framebuffer front end in an X window of its own size (`-w 800 -h 600`), with its toolbar, address bar and status line, and NetSurf's own bitmap font (no FreeType yet). It shows HTML and CSS, PNG, GIF, BMP and SVG; JavaScript, JPEG and WebP are off. HTTPS checks certificates against the CA bundle (or `--ca_bundle`), and a bad one gets its "Privacy error" page. Click links with the pointer; type a URL in the address bar after clearing it with End and Backspace: Ctrl does not reach NetSurf through libnsfb's X surface, so Ctrl+U does nothing. PageDown and PageUp scroll.
+
+`make browser-smoke` drives all of that and checks the pixels; `make browser-bench` budgets the first page (laid out about 3.5 s after NetSurf starts, on TCG). Run it from a terminal or from `startx`'s session: started from the console as a background job while the shell sleeps in the foreground, it draws nothing (BUG-0033).

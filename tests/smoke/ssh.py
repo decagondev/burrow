@@ -27,6 +27,7 @@ WAIT_S = 300    # Burrow boots and logs root in on the console first
 CALL_S = 120    # one ssh session (key exchange on TCG is slow)
 BENCH_LOGINS = 3
 BENCH_BYTES = 4 << 20
+BENCH_CIPHERS = ("chacha20-poly1305@openssh.com", "aes128-ctr")  # what dropbear offers
 
 
 def wait_port(port):
@@ -85,9 +86,17 @@ class Host:
         args = ["ssh", "-tt", "-p", str(self.port)] + self._common() + self._keyonly() + ["%s@127.0.0.1" % user]
         return Term(args, env=dict(os.environ, TERM="vt100"))
 
-    def scp(self, src, dst):
+    def scp(self, src, dst, extra=()):
         """scp's original protocol (-O): dropbear has no SFTP."""
-        return self._run(["scp", "-O", "-q", "-P", str(self.port)] + self._common() + self._keyonly() + [src, dst])
+        return self._run(["scp", "-O", "-q", "-P", str(self.port)] + list(extra) + self._common() + self._keyonly() + [src, dst])
+
+    def stream(self, path, cipher):
+        """Seconds to send path's bytes into cat > /dev/null with cipher."""
+        args = ["ssh", "-p", str(self.port), "-c", cipher] + self._common() + self._keyonly() + ["burrow@127.0.0.1", "cat > /dev/null"]
+        start = time.time()
+        with open(path, "rb") as f:
+            subprocess.run(args, stdin=f, capture_output=True, timeout=CALL_S)
+        return time.time() - start
 
 
 def setup(h, check):
@@ -118,6 +127,8 @@ def bench(h):
     mb = BENCH_BYTES / 1e6
     print("SSH BENCH login %.2f s (mean of %d), scp %d MiB up %.2f MB/s (status %d), down %.2f MB/s (status %d)"
           % (login_s, BENCH_LOGINS, BENCH_BYTES >> 20, mb / up_s, st_up, mb / down_s, st_down))
+    for cipher in BENCH_CIPHERS:  # the stream alone, by cipher: what the cipher costs on TCG
+        print("SSH BENCH stream %s %.2f MB/s" % (cipher, mb / h.stream(up, cipher)))
     return "ssh: bench done"
 
 
