@@ -17,7 +17,7 @@ wait /tmp/big.bin: OK
 type ping -c 2 10.0.2.2
 key ret
 wait packet loss
-type wget -q -O - http://host:1/ || echo net: refused as expected
+type wget -q -O - http://host:1/ || echo net: refused as expe''cted
 key ret
 wait net: refused as expected
 # W17-S06: gofetch (Go's net/http and crypto/tls): plain, then TLS refused
@@ -25,7 +25,7 @@ wait net: refused as expected
 type /bin/gofetch -stats http://host:@PORT@/hello.txt
 key ret
 wait bytes in
-type /bin/gofetch https://host:@TLSPORT@/hello.txt || echo net: certificate refused
+type /bin/gofetch https://host:@TLSPORT@/hello.txt || echo net: certificate refu''sed
 key ret
 wait net: certificate refused
 type /bin/gofetch -k https://host:@TLSPORT@/hello.txt | tr a-z A-Z

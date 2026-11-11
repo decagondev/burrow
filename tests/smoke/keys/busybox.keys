@@ -52,9 +52,10 @@ type run /bin/busybox date
 key ret
 wait 2030
 wait burrow>
+# BUG-0033: the console echoes the name; only the listing has the mode
 type run /bin/busybox ls -l /tmp/v.txt
 key ret
-wait v.txt
+wait -rw
 wait burrow>
 type poweroff
 key ret

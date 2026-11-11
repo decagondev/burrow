@@ -196,6 +196,7 @@ int main(void) {
     fflush(stdout);
     trace("", SYS_getpid, traced_getpid);
     trace("pipe-", SYS_read, traced_pipes);
+    trace("pipew-", SYS_write, traced_pipes);   /* W25-S04: the call that wakes the reader */
     printf("lat: ok\n");
     return 0;
 }

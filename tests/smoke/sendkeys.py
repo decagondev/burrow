@@ -30,6 +30,9 @@ import socket
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import keyslint  # noqa: E402 (beside this file)
+
 KEY_DELAY_S = 0.02            # between keys: the guest drains the 8042 per IRQ
 BUTTONS = {'left': 1, 'right': 2, 'middle': 4}   # QEMU's mouse_button mask
 MOUSE_STEP = 400              # pixels per axis per mouse_move: what QEMU's queue holds
@@ -142,6 +145,10 @@ class QMP:
 
 def main():
     mon, log, keys = sys.argv[1:4]
+    with open(keys) as f:   # BUG-0033: a wait its own typed line's echo satisfies runs early
+        for no, want, typed_no in keyslint.problems(f.readlines()):
+            raise SystemExit(f'sendkeys: {keys}:{no}: wait {want!r} is in the line typed at line {typed_no} '
+                             '(its echo would satisfy it: split the marker, see keyslint.py)')
     deadline = time.time() + float(sys.argv[4] if len(sys.argv) > 4 else 30)
     s = connect(mon, deadline)
     qmp_path = sys.argv[5] if len(sys.argv) > 5 else None

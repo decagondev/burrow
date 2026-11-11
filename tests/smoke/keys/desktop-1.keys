@@ -69,6 +69,7 @@ wait desktop: two in /home
 type touch /tmp/ssh-go
 key ret
 wait desktop: the host over ssh sees Xfbdev and dwm
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type echo desktop: second is $(tty) > /dev/tty1
 key ret
 wait desktop: second is
@@ -79,10 +80,12 @@ sleep 1
 type echo desktop: focus on ${ONE:-the second} > /dev/tty1
 key ret
 wait desktop: focus on first
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type echo desktop: first is $(tty) > /dev/tty1
 key ret
 wait desktop: first is
 # W23-S07: top in the terminal sees the server and the window manager
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type echo desktop: top lists $(top -b -n 1 | grep -o -e '[X]fbdev' -e '[d]wm' | sort -u | tr '\n' ' ') > /dev/tty1
 key ret
 wait desktop: top lists

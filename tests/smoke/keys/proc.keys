@@ -45,7 +45,7 @@ key ret
 wait type proc
 type syslogd -O /tmp/messages; logger -t smoke first'' message; sleep 1; grep -c 'smoke: first message' /tmp/messages
 key ret
-type killall syslogd; sleep 1; syslogd -C16; logger -t smoke second'' message; sleep 1; logread | grep -o 'smoke: second message'
+type killall syslogd; sleep 1; syslogd -C16; logger -t smoke second'' message; sleep 1; logread | grep -o 'smoke: second messag[e]'
 key ret
 wait smoke: second message
 type killall syslogd

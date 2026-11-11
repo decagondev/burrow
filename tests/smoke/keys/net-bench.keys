@@ -12,7 +12,7 @@ wait MB/s)
 type httpd -f -vv -p 8080 -h /etc & echo net: httpd up
 key ret
 wait url:/bench-done
-type kill $!; wait; echo net: bench done
+type kill $!; wait; echo net: bench do''ne
 key ret
 wait net: bench done
 type exit

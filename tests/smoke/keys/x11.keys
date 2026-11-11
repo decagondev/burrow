@@ -37,11 +37,12 @@ screendump build/screen-x11-after.ppm
 # writes is shown on the console after st and the server have gone. With no
 # window manager, keys go to the window under the pointer, so nothing may be
 # typed before st's window is up: xfocus waits for it (and focuses it).
-type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xfocus st-256color & /opt/x11/bin/st -e /bin/busybox sh -c 'echo st: shell up > /dev/tty1; exec /bin/busybox sh'; kill %1; wait; cat /tmp/st.txt
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xfocus st-256color & /opt/x11/bin/st -e /bin/busybox sh -c 'printf "st: shell %s\n" up > /dev/tty1; exec /bin/busybox sh'; kill %1; wait; cat /tmp/st.txt
 key ret
 wait st: shell up
 wait xfocus: st-256color
 sleep 2
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type echo st says $((6*7)) > /tmp/st.txt; ls /opt/x11/bin; echo st: typed > /dev/tty1
 key ret
 wait st: typed
@@ -63,12 +64,14 @@ sleep 1
 key alt-shift-ret
 wait xfocus: st-256color
 sleep 1
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type W=one; echo dwm: one > /dev/tty1
 key ret
 wait dwm: one
 key alt-shift-ret
 wait xfocus: st-256color #2
 sleep 1
+# keyslint: typed into X (st echoes it; the marker reaches the console by /dev/tty1)
 type W=two; echo dwm: two > /dev/tty1
 key ret
 wait dwm: two

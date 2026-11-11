@@ -31,15 +31,19 @@ flowchart LR
 
 ## Open
 
-### BUG-0033: NetSurf started in the background from the console draws nothing while the shell sleeps
-- Found: 2026-11-11, W24-S06, trying the M24 demo by hand.
-- Severity: minor (the ways a desktop starts programs work: `startx`'s session, a terminal on it, NetSurf in the foreground; `browser-smoke` and `desktop-smoke` are green).
-- Symptom: at the console, `Xfbdev :0 & sleep 6; netsurf ... & sleep 25` shows X's root and no NetSurf window, although NetSurf's log says the page was drawn; ten seconds in, X itself had not painted its root yet. The same line with NetSurf in the foreground, or with a loop of `sleep 1` in the foreground instead of one long sleep, draws the page (go-dev.img and go-unix.img alike).
-- Root cause: not found yet. The difference is which process group holds the console terminal's foreground while X and NetSurf run as background jobs; the next step is a dump (Alt+SysRq) during the long sleep, to see what X and NetSurf wait in.
-- Mitigation: start NetSurf from the desktop's session or a terminal on it, or in the foreground (DESKTOP.md).
-- Regression: to write with the fix: the failing line as a smoke step.
+None (BUG-0033 closed in W25-S04: a test error, not a kernel bug).
 
 ## Closed
+
+### BUG-0033: A keys file's wait was satisfied by the echo of its own command (not a kernel bug)
+- Found: 2026-11-11, W24-S06, trying the M24 demo by hand; explained 2026-11-11, W25-S04.
+- Severity: minor in itself (no smoke was failing), but it hid weak checks: six existing keys files had the same mistake, so a wait (and the ordered expect line after it) could pass on the echo of the command instead of its output.
+- Symptom: at the console, `Xfbdev :0 & sleep 6; netsurf ... & sleep 25; echo demo: up''; ...` showed X's root and no NetSurf window in the screen dump taken "after demo: up"; ten seconds in, X had not painted its root; whether it happened depended on the line's length, which looked like a wake-up bug in background jobs.
+- Root cause: the keys file waited for `demo: up` after typing a line containing `echo demo: up''`: the `''` was after the marker, so the echo held `demo: up` whole whenever the console's 80-column wrap did not split it, and the wait matched the echo at once. The screen was dumped three seconds after Enter, before NetSurf had started. Dumps taken during the sleep, or with the marker split by the wrap, always showed the page; NetSurf and X were fine on every build tried (W24-S06, W25-S02, W25-S03).
+- Fix: `tests/smoke/keyslint.py` refuses a wait that the line typed just before it contains (unless a `# keyslint: typed into X` comment says the line went to an X window); `sendkeys.py` checks its own keys file before it starts, and `make keys-lint` (in `make test-unit`) checks them all. The six it found were fixed by splitting the marker (`do''ne`, `refu''sed`, `messag[e]`, a `printf` for st's) or waiting on output only (`-rw` for `ls -l`).
+- Mitigation: split markers in the middle, never after them.
+- Regression: `make keys-lint` (every keys file clean, and `tests/regression/bug0033.keys`, the misleading demo, refused).
+- Lesson: a measurement that varies with an irrelevant change (a variable's name, a line's length) points at the measuring before the measured; the dump ("NetSurf is gone") was read through the same wrong lens until a run took two dumps.
 
 ### BUG-0034: A nucleus call could fill a stale copy of a Go stack buffer
 - Found: 2026-11-11, W25-S01: `/dev/lattrace` read back all zeros on one boot in three, although the nucleus had summed a thousand requests.
@@ -444,7 +448,7 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-88 | W24 | Two TLS stacks, one test CA: busybox's own TLS and mbedTLS accept different things | closed (S01: tls-server.py's default context suits both; busybox's checks no certificate, so only curl's refusals are tested; S05: NetSurf, through curl and mbedTLS, takes the test CA by `--ca_bundle` and refuses a certificate for another name with its Privacy error page) |
 | PIT-89 | W25 | TCG's numbers are noisy: QEMU without KVM varies with the host's load | open (S01: seven boots, getpid 101-155 us; medians of seven batches, budgets with room) |
 | PIT-90 | W25 | A vDSO's clock must be the kernel's: no step backwards across CPUs, no torn read across `settimeofday` | closed (S02: the page holds the nucleus's own arithmetic; the system call's monotonic clock became the nucleus's too; `vdsotest` checks each clock between two system-call readings and four threads on four CPUs never see it step back; a sequence count around every write) |
-| PIT-91 | W25 | A fast path skips work the slow path did: signals at return, interrupt stops, CPU time, kills of queued threads | open (S03: the quick path runs `enter`/`leave` and `finish`'s signal checks, declines faults, interrupt stops, unknown threads and threads with a signal ready; the nucleus's reply to a thread killed meanwhile is dropped; S04 next) |
+| PIT-91 | W25 | A fast path skips work the slow path did: signals at return, interrupt stops, CPU time, kills of queued threads | closed (S03: the quick path runs `enter`/`leave` and `finish`'s signal checks, declines faults, interrupt stops, unknown threads and threads with a signal ready; the nucleus's reply to a thread killed meanwhile is dropped; S04 kept no fast path for blocking calls) |
 | PIT-92 | W25 | A goroutine per thread can leak or deadlock: it must end with its thread on every path | closed (S03: not built; the hand-off it would keep is what the quick path removed) |
 | PIT-93 | W25 | The dispatcher on the only P (BUG-0014): with one CPU a blocked dispatcher stalls every handler | open (S03: reply-and-wait is a blocking call, so the P is handed off as for Wait; `Gosched` kept whenever handlers were started; `syslat`, `lat-bench` and the suite with `SMP=1`) |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |

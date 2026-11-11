@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench lat-bench lat-linux ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -315,7 +315,16 @@ debug: $(BUILD)/disk.img
 # ---- tests ------------------------------------------------------------------
 test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke poweroff-smoke ktest regress
 
-test-unit: test-c test-go
+test-unit: test-c test-go keys-lint
+
+# BUG-0033 (W25-S04): no keys file's wait may be satisfied by the echo of the
+# line typed just before it (tests/smoke/keyslint.py; sendkeys.py checks its
+# own file too); the line that misled W24-S06 must be refused.
+keys-lint:
+	python3 tests/smoke/keyslint.py tests/smoke/keys/*.keys
+	@if python3 tests/smoke/keyslint.py tests/regression/bug0033.keys > /dev/null; then \
+		echo "KEYS LINT FAIL: BUG-0033's keys were not refused"; exit 1; fi
+	@echo "KEYS LINT PASS (every wait is clear of its typed line's echo; BUG-0033's keys refused)"
 
 # Host-testable sources: everything in common/ except serial.c (port I/O),
 # plus the pure modules of the loader and the nucleus.

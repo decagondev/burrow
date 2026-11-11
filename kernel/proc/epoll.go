@@ -13,7 +13,6 @@ package proc
 import (
 	"encoding/binary"
 	"io/fs"
-	"reflect"
 	"sort"
 	"sync"
 	"syscall"
@@ -165,14 +164,7 @@ func (t *Thread) epollWait(epfd, va uint64, max int, timeoutMs int32) int64 {
 			}
 			return int64(len(out) / epollEventSize)
 		}
-		cases := []reflect.SelectCase{
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.cancel())},
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(deadline)},
-		}
-		for _, ch := range waits {
-			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)})
-		}
-		switch chosen, _, _ := reflect.Select(cases); chosen {
+		switch waitAny(t.cancel(), deadline, waits) { // W25-S04: a plain select for a few files
 		case 0:
 			return -int64(syscall.EINTR)
 		case 1:

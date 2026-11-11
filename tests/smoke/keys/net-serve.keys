@@ -17,7 +17,7 @@ wait url:/phase2-done
 type kill $!; wait; /bin/goserve -addr :8081 -dir /home &
 key ret
 wait goserve: GET /phase3-done 404
-type kill $!; wait; echo net: servers done
+type kill $!; wait; echo net: servers do''ne
 key ret
 wait net: servers done
 type exit

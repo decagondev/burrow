@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-11 — W25-S04 Wake-ups
+
+**Did:** BUG-0033 explained and closed: not the kernel. The keys file waited for `demo: up` after typing `echo demo: up''`, and the echo matched whenever the console's wrap kept the marker whole, so the screen was dumped before NetSurf started. `tests/smoke/keyslint.py` now refuses such a wait (in `sendkeys.py` and `make keys-lint`) and found six weak waits in existing smokes, now fixed. The wake-up path measured: the nucleus hands over promptly; Go's hand-off is the cost. `poll`, `select` and `epoll` wait with a plain `select` for a few files (`waitAny`). `scp` 1.25 MB/s, NetSurf's first page 2.71 s.
+
+**Surprise:** how convincing the false bug was: deterministic three times out of three, sensitive to one variable on the command line, with a dump that seemed to show NetSurf gone. Two dumps in one run, during and after the sleep, ended it. And answering pipe writes on the dispatcher made the writer faster and the ping-pong slower: the reader it woke waited on the dispatcher's parked P.
+
+**Next:** W25-S05: the desktop as a user.
+
 ## 2026-11-11 — W25-S03 The dispatcher's path
 
 **Did:** getpid from 103 to 52 us. The trace learned to count the Go kernel's own calls, which showed five clock traps per user call: the Go kernel now has the vDSO too. Calls that never block are answered on the dispatcher, with no goroutine (the Go side 64 to 23 us), and their answers go with the next wait in one nucleus call (`nu_syscall_reply_wait`), which also lets the woken thread run at once (19.6 to 8.1 us).

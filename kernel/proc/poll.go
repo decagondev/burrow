@@ -7,7 +7,6 @@ package proc
 
 import (
 	"encoding/binary"
-	"reflect"
 	"syscall"
 	"time"
 )
@@ -92,17 +91,10 @@ func (t *Thread) wait(buf []byte, timeout time.Duration) int64 {
 		if ready > 0 || timeout == 0 {
 			return int64(ready)
 		}
-		cases := []reflect.SelectCase{
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.cancel())},
-			{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(deadline)},
-		}
-		for _, ch := range waits {
-			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)})
-		}
 		for _, w := range waiters {
 			w.WaitInput(1)
 		}
-		chosen, _, _ := reflect.Select(cases)
+		chosen := waitAny(t.cancel(), deadline, waits) // W25-S04: a plain select for a few files
 		for _, w := range waiters {
 			w.WaitInput(-1)
 		}

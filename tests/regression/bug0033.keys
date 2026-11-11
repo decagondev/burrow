@@ -1,0 +1,12 @@
+# BUG-0033's demo line (W24-S06): the wait below matched the echo of the line
+# typed before it, so the screen was dumped 25 s early. keyslint.py must refuse
+# it (make keys-lint). Never run: a sample for the lint.
+wait burrow>
+type run /bin/busybox sh
+key ret
+wait built-in shell
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; DISPLAY=:0 HOME=/tmp /opt/net/bin/netsurf -v -f x -w 800 -h 600 about:welcome > /tmp/ns.log 2>&1 & sleep 25; echo demo: up''; sleep 15; kill %2; sleep 2; kill %1; wait; echo demo: done''
+key ret
+wait demo: up
+sleep 3
+screendump build/screen-demo.ppm
