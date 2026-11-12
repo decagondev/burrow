@@ -17,8 +17,8 @@ Docs: docs/04-plan/waves/WAVE-24-ssh-browser.md (S06).
 import re
 import sys
 
-LOGIN_S = 3.0   # most seconds for a key login running true
-SCP_MBS = 0.8   # least MB/s for 4 MiB scp'd either way
+LOGIN_S = 2.5   # most seconds for a key login running true (W25-S06: 1.23 measured)
+SCP_MBS = 1.0   # least MB/s for 4 MiB scp'd either way (W25-S06: 1.15-1.27 measured; 0.8 in W24-S06)
 
 log = open(sys.argv[1], errors='replace').read()
 m = re.search(r'SSH BENCH login ([0-9.]+) s .* up ([0-9.]+) MB/s \(status 0\), down ([0-9.]+) MB/s \(status 0\)', log)

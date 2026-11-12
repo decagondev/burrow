@@ -201,7 +201,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - Later: OpenSSH and SFTP · ssh port and X forwarding · NetSurf on `/dev/fb0` without X · JavaScript · a CA store kept current.
 
 ## E22 Cheaper round trips
-*Exit: a system call and a wake-up cost a fraction of what they did in W24, measured step by step; clock reads need no call.* [W25]
+*Exit: a system call and a wake-up cost a fraction of what they did in W24, measured step by step; clock reads need no call.* [W25, done: M25 (the blocking paths not twice as fast: R-09)]
 
 - [x] E22.F01 As a kernel dev, I want each step of a system call's round trip timed (a latency program on Linux and Burrow, TSC stamps along one request), so that every change says which step it shortened. [W25-S01]
 - [x] E22.F02 As a porter, I want a vDSO (`clock_gettime`, `gettimeofday`, `time`, `getcpu` from a page the kernel keeps current), so that programs read the clock without a system call. [W25-S02]

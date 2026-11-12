@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-12 — W25 done: cheaper round trips (M25)
+
+**Did:** the wave in six slices. The round trip measured step by step: `user/lat.c` on Burrow and Linux, TSC stamps along a request behind `/dev/lattrace` (S01); a vDSO for the clocks (S02); the Go kernel given the vDSO too, calls that cannot block answered on the dispatcher, an answer sent with the next wait (S03); `poll`'s wait without `reflect.Select`, and BUG-0033 explained as a test error, closed with a lint that found six more weak waits (S04); burrow running the desktop on the ext2 root (S05); budgets from the measurements, ARCHITECTURE.md §7.10 and ADR-0012 (S06). `make unix-desktop-smoke` and `make keys-lint` are in `make test`, green on four CPUs and on one.
+
+**Surprise:** where the time went. The handler was nothing; the Go kernel's own clock reads (five traps per user call) and the hand-off between goroutines were nearly everything. And the one "kernel bug" the wave set out to fix was a test that read its own echo.
+
+**Learned:** measure each step before changing one: two of the plan's changes (a goroutine per thread, answering writes on the dispatcher) were measured, would not have helped or made things worse, and were not kept. The milestone was half reached: `getpid` halved and clocks free, but the blocking paths, which ssh lives on, are where they were (R-09).
+
+**Next:** UEFI and GOP towards real hardware, or a dispatcher that hands off its P while it waits (R-09).
+
+## 2026-11-12 — W25-S06 M25
+
+**Did:** the benches on one day: getpid 74-94 us, clock 0.10-0.14, the ping-pongs as at S01, `scp` 1.15/1.22 MB/s, NetSurf 2.82 s, `net-bench`, `smp-bench`, `doom-bench` (113.7-121.5 fps) and `syslat` within theirs. Budgets tightened (getpid 130, clock 1, socketpair 800; `scp` 1.0 MB/s, login 2.5 s; first page 4.5 s). ARCHITECTURE.md §7.10, ADR-0012, RISKS R-09 re-scored, the wave closed.
+
+**Surprise:** getpid read 74-94 us on this day where S03 and S04 saw 48-54; the steps show all three parts slower in proportion, so it is the host, not a change, and the budget keeps room for it.
+
+**Next:** see the wave entry above.
+
 ## 2026-11-12 — W25-S05 The desktop as a user
 
 **Did:** the ext2 root gets a set-user-id root copy of TinyX's server (`scripts/mkroot.py --xserver`, `/usr/bin/Xfbdev`, 4755) that `startx` prefers, and `/etc/profile` gives login shells the X and net disks' environment files. burrow logs in, starts dropbear through `su`, runs `startx` with st, NetSurf and dwm; `make unix-desktop-smoke` (in `make test`) has the host check over ssh that the three are burrow's and the server root's, then end the session.

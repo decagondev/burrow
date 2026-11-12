@@ -15,7 +15,7 @@ Docs: docs/04-plan/waves/WAVE-24-ssh-browser.md (S06).
 import re
 import sys
 
-FIRST_PAGE_S = 6.0  # most seconds from NetSurf's start to the page laid out
+FIRST_PAGE_S = 4.5  # most seconds from NetSurf's start to the page laid out (W25-S06: 2.71-2.82 measured; 6 in W24-S06)
 
 log = open(sys.argv[1], errors='replace').read()
 m = re.search(r'browser: first page laid out at \(([0-9.]+)\)', log)

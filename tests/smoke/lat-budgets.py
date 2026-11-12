@@ -15,17 +15,24 @@ host's load (PIT-89), so the budgets leave room. Its steps for getpid, on
 the quiet boots: gate to taken 14.5, taken to replied (Go) 68-70, replied
 to resumed 16-17, out 1.4. The wave's later slices only tighten them; M25
 wants each ping-pong and getpid at least twice as fast as the quiet boots.
+W25-S06 tightened them from what the wave measured (three boots on
+2026-11-12, after S01-S05): getpid 74-94 us (48-54 on S03's and S04's
+quieter boots), a clock read 0.10-0.14, pipe 400-524, futex 181-213,
+socketpair 402-581, tcp 2168-2840. getpid's budget is not twice as strict
+as S01's (100 would leave no room for TCG's noise) and the ping-pongs did
+not get faster: every blocking call still pays a goroutine hand-off
+(RISKS.md R-09).
 Docs: docs/04-plan/waves/WAVE-25-speed.md.
 """
 import re
 import sys
 
-BUDGETS_US = {          # most microseconds per operation (W25-S01's baseline)
-    "getpid": 200,
-    "clock": 2,       # W25-S02: the vDSO (0.08 us measured; 110-164 before)
+BUDGETS_US = {          # most microseconds per operation (W25-S06: from the wave's numbers)
+    "getpid": 130,    # 200 in S01; 48-94 measured since S03
+    "clock": 1,       # W25-S02: the vDSO (0.08-0.14 us measured; 110-164 before)
     "pipe": 600,
     "futex": 280,
-    "socketpair": 900,
+    "socketpair": 800,  # 900 in S01; 402-581 measured
     "tcp": 3500,
 }
 

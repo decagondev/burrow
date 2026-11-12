@@ -485,6 +485,59 @@ flowchart LR
     wget -- "HTTPS" --> host
 ```
 
+### 7.10 The round trip, measured and shortened (Wave 25)
+
+A user system call is still the request of §7.3; W25 measured it step by
+step and shortened what did not need to be there (ADR-0012). The nucleus
+stamps one traced request with the TSC at the gate, when Go takes it, when
+Go answers, when the thread runs again and on its way out
+(`nucleus/lattrace.c`, read through `/dev/lattrace`); `user/lat.c` times
+whole round trips on Burrow and on the host's Linux (`make lat-bench`,
+`make lat-linux`). Three changes came of it:
+
+- **Clock reads are not calls.** A vDSO (`[vvar]`, a data page the nucleus
+  keeps with a sequence count, and `[vdso]`, code from `user/vdso/vdso.c`)
+  is mapped into every process and into the Go kernel itself, named by
+  `AT_SYSINFO_EHDR`; musl and Go find it on their own.
+- **Calls that cannot block are answered on the dispatcher**
+  (`kernel/proc/quick.go`), with no goroutine, unless a signal is ready.
+- **An answer travels with the next wait** (`nu_syscall_reply_wait`): one
+  crossing hands the CPU to the answered thread and blocks the dispatcher.
+
+```mermaid
+sequenceDiagram
+    participant P as user thread (ring 3)
+    participant N as nucleus (gate, queue)
+    participant D as Go dispatcher
+    participant H as handler goroutine
+    P->>N: SYSCALL (stamp: gate)
+    N->>D: nu_syscall_wait returns the batch (stamp: taken)
+    alt cannot block (getpid, the id getters, sched_yield)
+        D->>N: nu_syscall_reply_wait: answer + next wait (stamp: replied)
+    else may block (read, write, poll, futex, ...)
+        D->>H: go handle(req), Gosched
+        H->>N: nu_syscall_reply (stamp: replied)
+    end
+    N-->>P: thread runs again (stamp: resumed), IRETQ (stamp: out)
+    Note over P: clock_gettime, gettimeofday, time, getcpu never trap: the vDSO
+```
+
+| On QEMU TCG, four CPUs | W24's end (S01) | W25's end |
+|---|---|---|
+| `getpid` | 101-155 us | 48-94 us |
+| getpid's Go side (taken to replied) | 68-70 us | 23-43 us |
+| a clock read | 110-164 us | 0.08-0.14 us |
+| the Go kernel's own calls per user call | 5.1 | 0.14 |
+| pipe / futex / socketpair ping-pong | 351-437 / 116-211 / 379-602 us | 400-524 / 181-213 / 402-581 us |
+| loopback TCP ping-pong | 1933-2713 us | 2168-2840 us |
+| `scp` 4 MiB | 1.0-1.1 MB/s | 1.15-1.27 MB/s |
+| NetSurf's first page | 3.52 s | 2.71-2.82 s |
+
+What is left is a blocking call's hand-off between goroutines (a pipe
+write: 118 us from taken to answered), which answering on the dispatcher
+does not fix: the goroutines such a call wakes wait for the dispatcher's P
+while it waits in the nucleus (W25-S04; RISKS.md R-09).
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |
