@@ -215,7 +215,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 
 - [x] E23.F01 As a user, I want a Burrow disk that UEFI firmware boots (a GPT disk with an EFI system partition and a loader the firmware runs), so that machines without a BIOS can start it. [W26-S01]
 - [x] E23.F02 As a kernel dev, I want the memory map and the ACPI tables from the firmware, and the payloads read from the boot partition with their CRCs, so that the nucleus gets the same `boot_info` on both paths. [W26-S02]
-- [ ] E23.F03 As a kernel dev, I want the loader to leave the firmware's boot services and start the nucleus on any CPU count, so that everything above the loader is unchanged. [W26-S03]
+- [x] E23.F03 As a kernel dev, I want the loader to leave the firmware's boot services and start the nucleus on any CPU count, so that everything above the loader is unchanged. [W26-S03]
 - [ ] E23.F04 As a user, I want the screen GOP sets, at the size the image asks for, so that the console, Doom and X draw under UEFI. [W26-S04]
 - [ ] E23.F05 As a user, I want the demos on UEFI and an image to write to a USB stick, with a guide to what a real PC still lacks, so that I can try Burrow outside QEMU. [W26-S05]
 - Later: the devices of a real PC (E24, W27) · Secure Boot · runtime services · a boot menu.

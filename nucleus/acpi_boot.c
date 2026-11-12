@@ -24,7 +24,8 @@ static const void *physmap(void *ctx, uint64_t pa, uint64_t len) {
 }
 
 void acpi_init(void) {
-    const struct acpi_mem m = {physmap, 0};
+    const struct acpi_mem m = {physmap, 0, boot_info()->rsdp_addr};
+    if (m.rsdp_pa) kprintf("[nucleus] acpi: rsdp from boot_info at %llx\n", (unsigned long long)m.rsdp_pa);
     int rc = acpi_parse(&m, &g_acpi);
     g_acpi_ok = rc == ACPI_OK;
     if (!g_acpi_ok) {

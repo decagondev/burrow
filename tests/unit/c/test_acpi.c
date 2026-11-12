@@ -17,7 +17,7 @@ static const void *map(void *ctx, uint64_t pa, uint64_t len) {
     return pa + len <= MEM_BYTES ? g_mem + pa : 0;
 }
 
-static const struct acpi_mem g_m = {map, 0};
+static const struct acpi_mem g_m = {map, 0, 0};
 
 static void put16(uint64_t pa, uint16_t v) { memcpy(g_mem + pa, &v, 2); }
 static void put32(uint64_t pa, uint32_t v) { memcpy(g_mem + pa, &v, 4); }
@@ -170,4 +170,29 @@ TEST(acpi_bad_checksums) {
 TEST(acpi_error_names) {
     CHECK(strcmp(acpi_error(ACPI_NO_RSDP), "no RSDP") == 0);
     CHECK(strcmp(acpi_error(ACPI_OK), "ok") == 0);
+}
+
+/* W26-S03: UEFI firmware names the RSDP (boot_info's rsdp_addr), anywhere
+ * in memory, not in the areas a BIOS scan reads; a wrong address falls
+ * back to the scan. */
+TEST(acpi_rsdp_from_firmware) {
+    fresh();
+    static const uint8_t aml[] = {0x08, '_', 'S', '5', '_', 0x12, 0x06, 0x04, 0x00, 0x00, 0x00, 0x00};
+    dsdt(0x110000, aml, sizeof aml);
+    fadt(0x111000, 0, 0x110000);
+    madt(0x112000, 0);
+    header(0x113000, "XSDT", 52);
+    put64(0x113000 + 36, 0x111000);
+    put64(0x113000 + 44, 0x112000);
+    sum_fix(0x113000, 52, 9);
+    rsdp(0x17E014, 2, 0, 0x113000);      /* OVMF's was at 0x7b7e014: not 16-aligned */
+    struct acpi_info i;
+    CHECK(acpi_parse(&g_m, &i) == ACPI_NO_RSDP);
+    struct acpi_mem m = g_m;
+    m.rsdp_pa = 0x17E014;
+    CHECK(acpi_parse(&m, &i) == ACPI_OK);
+    CHECK(i.revision == 2 && i.ncpus == 4);
+    m.rsdp_pa = 0x17E000;                /* not an RSDP: the scan finds the BIOS one */
+    rsdp(0xF5A10, 2, 0, 0x113000);
+    CHECK(acpi_parse(&m, &i) == ACPI_OK);
 }

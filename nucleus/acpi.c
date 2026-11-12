@@ -1,6 +1,6 @@
 /* acpi.c - see acpi.h (W20-S04). Pure: physical memory only through
- * acpi_mem, no I/O. Finds the RSDP on a 16-byte boundary in the EBDA's
- * first KiB or in 0xE0000-0xFFFFF, takes the XSDT when the RSDP is ACPI
+ * acpi_mem, no I/O. Finds the RSDP where UEFI firmware said (W26-S03), else
+ * on a 16-byte boundary in the EBDA's first KiB or in 0xE0000-0xFFFFF, takes the XSDT when the RSDP is ACPI
  * 2.0+ and has one, else the RSDT, and reads the MADT (processors with the
  * enabled flag, the first I/O APIC, an APIC address override), the FADT
  * (SCI, SMI command, PM1 control blocks, the DSDT, X_DSDT when there) and
@@ -57,6 +57,10 @@ static const uint8_t *rsdp_in(const struct acpi_mem *m, uint64_t lo, uint64_t hi
 }
 
 static const uint8_t *find_rsdp(const struct acpi_mem *m) {
+    if (m->rsdp_pa) {   /* UEFI: the firmware's configuration table named it */
+        const uint8_t *r = rsdp_in(m, m->rsdp_pa, m->rsdp_pa + 20);
+        if (r) return r;
+    }
     const uint8_t *seg = m->map(m->ctx, EBDA_SEG_PA, 2);
     if (seg) {
         uint64_t ebda = (uint64_t)rd16(seg) << 4;

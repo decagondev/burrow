@@ -4,7 +4,7 @@
 #include "vmsetup.h"
 #include "layout.h"
 
-#define POOL_FRAMES 16
+#define POOL_FRAMES 24
 #define FAKE_PHYS   0x7000000ull
 static unsigned char pool[POOL_FRAMES][4096] __attribute__((aligned(4096)));
 static unsigned used;
@@ -45,7 +45,7 @@ static struct pt_ctx build_map(const struct e820_entry *m, uint32_t n, int use_n
     struct pt_ctx c = { pool_alloc, pool_ptr, 0, 0 };
     used = 0;
     if (pt_init(&c) != PT_OK) abort();
-    struct vm_plan p = { m, n, &nucleus, use_nx };
+    struct vm_plan p = { m, n, &nucleus, use_nx, 0, 0 };
     const char *what;
     *st = vm_build(&c, &p, &what);
     return c;
@@ -109,4 +109,30 @@ TEST(vm_build_rejects_shared_pages) {
     CHECK(st == PT_ALREADY_MAPPED);
     nucleus.seg[1].vaddr = 0xFFFFFFFF80101000ull;
     nucleus.seg[1].paddr = 0x101000;
+}
+/* W26-S03: UEFI firmware may load the loader above 1 GiB; its pages are
+ * identity-mapped (executable) beside the first 1 GiB, and one below adds
+ * nothing. */
+TEST(vm_build_maps_the_loader) {
+    struct pt_ctx c = { pool_alloc, pool_ptr, 0, 0 };
+    used = 0;
+    if (pt_init(&c) != PT_OK) abort();
+    struct vm_plan p = { big, 5, &nucleus, 1, 0x7E000800ull, 0x5000 };
+    const char *what;
+    CHECK(vm_build(&c, &p, &what) == PT_OK);
+    uint64_t fl = flags_at(&c, 0x7E001234ull, 0x7E001234ull);
+    CHECK(fl & PTE_P); CHECK(fl & PTE_W); CHECK(!(fl & PTE_NX));
+    CHECK(flags_at(&c, 0x7E005FFFull, 0x7E005FFFull) & PTE_P);
+    uint64_t pa;
+    CHECK(pt_translate(&c, 0x7E006000ull, &pa, &fl) == PT_NOT_MAPPED);
+    CHECK(pt_translate(&c, 0x7DFFF000ull, &pa, &fl) == PT_NOT_MAPPED);
+    enum pt_status st;
+    build(1, &st);
+    unsigned plain = used;
+    c = (struct pt_ctx){ pool_alloc, pool_ptr, 0, 0 };
+    used = 0;
+    if (pt_init(&c) != PT_OK) abort();
+    struct vm_plan low = { map, 3, &nucleus, 1, 0x6235000ull, 0x8000 };
+    CHECK(vm_build(&c, &low, &what) == PT_OK);
+    CHECK_EQ_U64(used, plain);
 }

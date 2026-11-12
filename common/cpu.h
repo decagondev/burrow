@@ -62,4 +62,12 @@ static inline int cpu_has_nx(void) {
     cpuid(0x80000001u, &a, &b, &c, &d);
     return (d >> 20) & 1;
 }
+
+/* The loaders' last step (loader/handoff.c): load cr3, jump to entry with
+ * RDI = arg. The code doing it must be mapped the same in both address
+ * spaces (the identity map, PIT-21); nothing touches the stack after cr3. */
+static inline __attribute__((noreturn)) void cpu_enter_space(uint64_t cr3, uint64_t entry, uint64_t arg) {
+    __asm__ volatile("mov %0, %%cr3\n\tjmp *%1" :: "r"(cr3), "r"(entry), "D"(arg) : "memory");
+    __builtin_unreachable();
+}
 #endif

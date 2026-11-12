@@ -16,6 +16,7 @@
 struct acpi_mem {
     const void *(*map)(void *ctx, uint64_t pa, uint64_t len);
     void *ctx;
+    uint64_t rsdp_pa;   /* where UEFI firmware said the RSDP is (boot_info v4, W26-S03); 0: scan */
 };
 
 struct acpi_info {
@@ -35,7 +36,8 @@ struct acpi_info {
 
 enum { ACPI_OK = 0, ACPI_NO_RSDP = -1, ACPI_NO_MADT = -2, ACPI_NO_FADT = -3 };
 
-/* acpi_parse finds the RSDP (the EBDA's first KiB, then 0xE0000-0xFFFFF),
+/* acpi_parse finds the RSDP (at m->rsdp_pa when that one checks out, else
+ * the EBDA's first KiB, then 0xE0000-0xFFFFF),
  * walks the XSDT (or the RSDT), and reads the MADT, the FADT and the DSDT.
  * Tables with a bad checksum are skipped. */
 int acpi_parse(const struct acpi_mem *m, struct acpi_info *out);

@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-12 — W26-S03 Leave the firmware, start the nucleus
+
+**Did:** the BIOS loader's back half became `loader/handoff.c`, which both loaders call; the UEFI loader loads the nucleus, builds its page tables from one block of the firmware's pages, writes boot_info v4, leaves the boot services and jumps. The nucleus takes the RSDP from `boot_info`. `make uefi-smoke` reaches `BURROW:NUCLEUS:OK` (also with 2 GiB, the loader above 1 GiB), and `make uefi-ktest` runs `mm`, `sched`, `smp` and `irq` under OVMF on one CPU and four.
+
+**Surprise:** nothing in the nucleus had to change for OVMF beyond the RSDP: it already set every piece of CPU and interrupt state it relies on, so four CPUs came up on the first boot.
+
+**Learned:** OVMF loads the application near the top of low RAM, so above 1 GiB as soon as the guest has 2 GiB; the identity map has to follow the loader, not the other way round.
+
+**Next:** S04: the screen from GOP.
+
 ## 2026-11-12 — W26-S02 The machine from the firmware
 
 **Did:** the UEFI loader claims the nucleus's fixed pages, turns the firmware's memory map into E820 records at 0x2000 (`loader/efi/efimap.c`, pure, host-tested), finds the RSDP in the configuration table and reads the manifest and every payload from the boot partition with their CRCs (`firmware.c`, `files.c`). `boot_info` v4 carries `rsdp_addr`; REG-0010 (a payload changed in the partition) and REG-0011 (a page the firmware owns) boot OVMF in `make regress`.

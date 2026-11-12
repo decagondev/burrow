@@ -12,3 +12,28 @@ BURROW:EFI:OK
 [efi] manifest ok
 [efi] nucleus image crc ok
 [efi] payloads ok
+# W26-S03: out of the boot services, into the nucleus (loader/handoff.c)
+[efi] nucleus loaded entry=ffffffff80100000
+[efi] page tables ok
+[efi] boot_info v4 ok
+[efi] leaving boot services
+[efi] boot services exited
+[efi] machine:
+[efi] jumping to nucleus
+[nucleus] hello from the higher half
+[nucleus] boot_info v4 ok
+[nucleus] gdt ok
+[nucleus] idt ok
+[nucleus] pmm ok
+[nucleus] vmm ok
+[nucleus] protections: smep on, smap on, nx on ok
+[nucleus] acpi: rsdp from boot_info at
+[nucleus] acpi ok
+[nucleus] lapic ok
+[nucleus] time ok
+[nucleus] sse ok
+[nucleus] sched ok
+[nucleus] syscall gate ok
+[nucleus] irq ok
+[nucleus] smp:
+BURROW:NUCLEUS:OK

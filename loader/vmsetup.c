@@ -61,10 +61,21 @@ static enum pt_status map_nucleus(struct pt_ctx *c, const struct vm_plan *p) {
     return PT_OK;
 }
 
+/* The part of the loader above the identity map, whole 4 KiB pages, RWX. */
+static enum pt_status map_loader(struct pt_ctx *c, const struct vm_plan *p) {
+    if (!p->loader_bytes) return PT_OK;
+    uint64_t lo = p->loader_base > LOADER_IDENTITY_LIMIT ? p->loader_base : LOADER_IDENTITY_LIMIT;
+    uint64_t end = (p->loader_base + p->loader_bytes + PAGE_4K - 1) & ~(PAGE_4K - 1);
+    lo &= ~(PAGE_4K - 1);
+    return end > lo ? pt_map(c, lo, lo, end - lo, PTE_W) : PT_OK;
+}
+
 enum pt_status vm_build(struct pt_ctx *c, const struct vm_plan *p, const char **what) {
     enum pt_status st;
     *what = "identity map";
     if ((st = pt_map(c, 0, 0, LOADER_IDENTITY_LIMIT, PTE_W)) != PT_OK) return st;
+    *what = "loader identity map";
+    if ((st = map_loader(c, p)) != PT_OK) return st;
     *what = "physmap";
     if ((st = map_physmap(c, p)) != PT_OK) return st;
     *what = "nucleus";

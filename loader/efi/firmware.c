@@ -2,7 +2,7 @@
  * firmware.c - what the UEFI loader asks the firmware (W26-S02): pages at
  * the nucleus's fixed addresses, pages for payloads below 1 GiB, the memory
  * map as E820 records (efimap.c), and the ACPI RSDP from the configuration
- * table.
+ * table; and leaving the boot services (S03).
  *
  * RULE: only boot services, only before ExitBootServices; a page the
  * firmware will not give is a loud failure naming the address, never a
@@ -14,6 +14,7 @@
 #include "kprintf.h"
 #include "lib_string.h"
 #include "memmap.h"
+#include "cpu.h"
 
 static uint64_t pages_of(uint64_t bytes) { return (bytes + EFI_PAGE_BYTES - 1) / EFI_PAGE_BYTES; }
 
@@ -64,6 +65,35 @@ uint32_t efi_read_memory_map(struct e820_entry *out, uint32_t cap) {
             (unsigned)(size / desc), (unsigned long long)(e820_usable_bytes(out, n) >> 20));
     bs->free_pool(map);
     return n;
+}
+
+/* PIT-95: ExitBootServices wants the key of the latest map, so nothing
+ * allocates or prints between GetMemoryMap and it: the buffer is taken
+ * first, the conversion (efimap.c) is silent. A stale key
+ * (EFI_INVALID_PARAMETER) gets one more map and one more try; then
+ * interrupts go off for good. Returns the final map's record count. */
+uint32_t efi_leave_boot_services(struct e820_entry *out, uint32_t cap) {
+    struct efi_boot_services *bs = g_st->boot_services;
+    uint64_t size = 0, key, desc;
+    uint32_t version;
+    efi_status st = bs->get_memory_map(&size, 0, &key, &desc, &version);
+    if (st != EFI_BUFFER_TOO_SMALL) efi_panic("GetMemoryMap gave no size", st);
+    uint64_t room = size + 16 * desc;
+    void *map = 0;
+    if ((st = bs->allocate_pool(EFI_LOADER_DATA, room, &map)) != EFI_SUCCESS) efi_panic("no pool for the last map", st);
+    for (int attempt = 0; attempt < 2; attempt++) {
+        size = room;
+        if ((st = bs->get_memory_map(&size, map, &key, &desc, &version)) != EFI_SUCCESS) break;
+        uint32_t n;
+        if (efimap_to_e820(map, size, desc, out, cap, &n) != EFIMAP_OK) efi_panic("the last memory map", 0);
+        st = bs->exit_boot_services(g_image, key);
+        if (st == EFI_SUCCESS) {
+            cpu_cli();
+            return n;
+        }
+        if (st != EFI_INVALID_PARAMETER) break;
+    }
+    efi_panic("ExitBootServices", st);
 }
 
 /* ACPI 2.0's table first (it may carry an XSDT), then 1.0's; each checked

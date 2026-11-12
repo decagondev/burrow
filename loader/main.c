@@ -7,6 +7,8 @@
  *
  * Later waves extend this file by calling NEW modules (Open/Closed):
  *   W6: load "kernel" (Go) ELF and "initrd", hand everything to the nucleus
+ *   W26-S03: the back half (nucleus, page tables, boot_info, the jump) is
+ *   loader/handoff.c, which the UEFI loader shares
  *
  * RULE: keep all mutable globals zero-initialised (.bss). The self-CRC check
  * below hashes the loaded image, so .data must not change before it runs.
@@ -24,22 +26,17 @@
 #include "layout.h"
 #include "palloc.h"
 #include "image.h"
-#include "elf_load.h"
-#include "paging.h"
-#include "vmsetup.h"
+#include "handoff.h"
 #include "cpu.h"
 
 extern char __loader_start[], __loader_image_end[], __bss_end[];
-/* entry.asm: load CR3, then jump to entry with RDI = boot_info_virt. */
-extern void __attribute__((noreturn)) enter_nucleus(uint64_t cr3, uint64_t entry, uint64_t boot_info_virt);
 
 static uint16_t g_com1;                 /* .bss: serial_sink keeps a pointer to it */
 static struct ata_channel g_ata0;
 static struct block_device g_disk;
 static uint8_t g_sector[512];
 static struct palloc g_palloc;
-static struct boot_module g_modules[BOOT_MODULES_MAX];
-static uint32_t g_module_count;
+static struct handoff g_handoff;        /* the back half, shared with the UEFI loader (W26-S03) */
 
 /* An image read from disk into palloc'd frames (identity-mapped, so the
  * physical address is also a usable pointer). */
@@ -136,101 +133,15 @@ static struct disk_image read_nucleus_image(const struct manifest *m) {
     return read_payload(e);
 }
 
-static int is_boot_stage(const char *name) {
-    return strncmp(name, "stage2", MANIFEST_NAME_LEN) == 0 || strncmp(name, "loader", MANIFEST_NAME_LEN) == 0 ||
-           strncmp(name, "nucleus", MANIFEST_NAME_LEN) == 0;
-}
-
-static void add_module(const char *name, uint64_t start, uint64_t size) {
-    if (g_module_count == BOOT_MODULES_MAX) panic("too many boot modules");
-    struct boot_module *mod = &g_modules[g_module_count++];
-    size_t len = strlen(name);
-    if (len >= sizeof mod->name) panic("boot module name too long");
-    memcpy(mod->name, name, len);          /* rest stays NUL: g_modules is .bss */
-    mod->phys_start = start;
-    mod->size_bytes = size;
-}
-
-/* Every payload that is not a boot stage ("ktest" today, "kernel" and
- * "initrd" in W6) is read, verified and handed over as a boot module. */
+/* Every payload that is not a boot stage ("ktest", "kernel", "initrd", ...)
+ * is read, verified and handed over as a boot module. */
 static void load_payload_modules(const struct manifest *m) {
     for (unsigned i = 0; i < m->count; i++) {
         const struct manifest_entry *e = &m->entries[i];
-        if (is_boot_stage(e->name)) continue;
+        if (handoff_is_boot_stage(e->name)) continue;
         struct disk_image img = read_payload(e);
-        add_module(e->name, (uint64_t)(uintptr_t)img.bytes, img.size_bytes);
+        handoff_add_module(&g_handoff, e->name, (uint64_t)(uintptr_t)img.bytes, img.size_bytes);
     }
-}
-
-/* Copy PT_LOAD segments to their physical addresses inside the nucleus window. */
-static void load_nucleus(struct disk_image img, struct elf_loaded *out) {
-    struct load_window win = { NUCLEUS_PHYS_BASE, NUCLEUS_PHYS_LIMIT,
-                               (uint8_t *)(uintptr_t)NUCLEUS_PHYS_BASE };
-    enum elf_status st = elf64_load(img.bytes, img.size_bytes, &win, out);
-    if (st != ELF_OK) panic(elf_status_str(st));
-    for (uint32_t i = 0; i < out->count; i++) {
-        const struct elf64_segment *s = &out->seg[i];
-        if (s->vaddr < NUCLEUS_VIRT_BASE) panic("nucleus segment below the top 2 GiB");
-        kprintf("  segment %016llx -> phys %08llx  %6llu bytes  %c%c%c\n",
-                (unsigned long long)s->vaddr, (unsigned long long)s->paddr,
-                (unsigned long long)s->memsz, s->flags & 4 ? 'r' : '-',
-                s->flags & 2 ? 'w' : '-', s->flags & 1 ? 'x' : '-');
-    }
-    kprintf("[loader] nucleus loaded entry=%llx\n", (unsigned long long)out->entry);
-}
-
-static uint64_t frame_alloc(void *env) { return palloc_alloc(env, 1); }
-static void *frame_ptr(void *env, uint64_t pa) { (void)env; return (void *)(uintptr_t)pa; }
-
-/* The nucleus's first address space: identity + physmap + nucleus (vmsetup.h).
- * Returns the PML4's physical address. Tables are built, not yet loaded. */
-static uint64_t build_page_tables(const struct boot_info *bi, const struct elf_loaded *n) {
-    int nx = cpu_has_nx();
-    if (nx) wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NXE);   /* before bit 63 is ever live (PIT-20) */
-    struct pt_ctx c = { frame_alloc, frame_ptr, &g_palloc, 0 };
-    if (pt_init(&c) != PT_OK) panic("out of memory for page tables");
-    const struct e820_entry *map = (const struct e820_entry *)(uintptr_t)bi->e820_addr;
-    struct vm_plan plan = { map, bi->e820_count, n, nx };
-    const char *what;
-    enum pt_status st = vm_build(&c, &plan, &what);
-    if (st != PT_OK) {
-        kprintf("[loader] %s: %s\n", what, pt_status_str(st));
-        panic("could not build page tables");
-    }
-    uint64_t pa, fl;
-    if (pt_translate(&c, PHYSMAP_BASE + BOOTINFO_PHYS_ADDR, &pa, &fl) != PT_OK || pa != BOOTINFO_PHYS_ADDR ||
-        pt_translate(&c, n->entry, &pa, &fl) != PT_OK || (fl & PTE_NX))
-        panic("page tables fail their own walk");
-    kprintf("[loader] page tables ok (pml4=%llx, physmap %llu MiB, nx=%s)\n",
-            (unsigned long long)c.root,
-            (unsigned long long)(vm_physmap_size(map, bi->e820_count) >> 20), nx ? "on" : "off");
-    return c.root;
-}
-
-/* stage2 handed us v2; the nucleus gets v4 (BOOT_PROTOCOL.md §3). Call last:
- * "loader-frames" must cover every frame palloc handed out, page tables included. */
-static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) {
-    uint64_t nucleus_end = NUCLEUS_PHYS_BASE;
-    for (uint32_t i = 0; i < n->count; i++)
-        if (n->seg[i].paddr + n->seg[i].memsz > nucleus_end) nucleus_end = n->seg[i].paddr + n->seg[i].memsz;
-    nucleus_end = (nucleus_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
-    add_module("nucleus", NUCLEUS_PHYS_BASE, nucleus_end - NUCLEUS_PHYS_BASE);
-    add_module("loader-frames", g_palloc.first, g_palloc.end - g_palloc.first);
-
-    struct boot_module *mods = (struct boot_module *)(uintptr_t)BOOT_MODULES_PHYS_ADDR;
-    memset(mods, 0, BOOT_MODULES_MAX * sizeof *mods);
-    memcpy(mods, g_modules, g_module_count * sizeof *mods);
-    bi->physmap_base = PHYSMAP_BASE;
-    bi->modules_addr = BOOT_MODULES_PHYS_ADDR;
-    bi->module_count = g_module_count;
-    bi->rsdp_addr    = 0;              /* v4: the nucleus scans the BIOS areas */
-    bi->version      = BOOTINFO_VERSION;
-    for (uint32_t i = 0; i < bi->module_count; i++)
-        kprintf("  module %08llx - %08llx  %s\n",
-                (unsigned long long)mods[i].phys_start,
-                (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
-    kprintf("[loader] boot_info v4 ok (physmap=%llx, modules=%u)\n",
-            (unsigned long long)bi->physmap_base, bi->module_count);
 }
 
 void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
@@ -248,14 +159,20 @@ void __attribute__((noreturn)) loader_main(struct boot_info *bi) {
     check_disk(bi);
 
     init_frames(bi);
+    g_handoff.tag = "loader";
+    g_handoff.frames = &g_palloc;
+    g_handoff.map = (const struct e820_entry *)(uintptr_t)bi->e820_addr;
+    g_handoff.map_count = bi->e820_count;
     struct elf_loaded nucleus;
-    load_nucleus(read_nucleus_image(m), &nucleus);
+    struct disk_image img = read_nucleus_image(m);
+    handoff_load_nucleus(&g_handoff, img.bytes, img.size_bytes, &nucleus);
     load_payload_modules(m);
-    uint64_t pml4 = build_page_tables(bi, &nucleus);
-    upgrade_boot_info(bi, &nucleus);
+    uint64_t pml4 = handoff_page_tables(&g_handoff, &nucleus);
+    bi->rsdp_addr = 0;                  /* v4: the nucleus scans the BIOS areas */
+    handoff_boot_info(&g_handoff, bi, &nucleus);   /* last: loader-frames covers the page tables */
 
     kprintf("[loader] all checks passed\n");
     kprintf("BURROW:LOADER:OK\n");      /* smoke-test success marker */
     kprintf("[loader] jumping to nucleus\n");
-    enter_nucleus(pml4, nucleus.entry, PHYSMAP_BASE + (uint64_t)(uintptr_t)bi);
+    handoff_enter(pml4, &nucleus, bi);
 }

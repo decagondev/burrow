@@ -33,6 +33,7 @@ void efi_claim(uint64_t phys, uint64_t bytes, const char *what);
 uint64_t efi_alloc_low(uint64_t bytes, const char *what);
 uint32_t efi_read_memory_map(struct e820_entry *out, uint32_t cap);
 uint64_t efi_find_rsdp(void);
+uint32_t efi_leave_boot_services(struct e820_entry *out, uint32_t cap);   /* S03 */
 
 /* files.c: a payload read from burrow/<name> and checked against the manifest. */
 struct efi_payload { const char *name; uint64_t phys; uint64_t size_bytes; };
