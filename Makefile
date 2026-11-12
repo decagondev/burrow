@@ -192,9 +192,13 @@ $(BUILD)/disk.img: $(BOOT_PARTS)
 # mkimage -efi-app turns into a PE32+ EFI application; its boot partition
 # (the loader, the manifest, the payloads) is a FAT32 volume kernel/cmd/mkfat
 # makes, and mkimage -gpt wraps it in a GPT disk. OVMF boots it.
-EFI_CFLAGS := $(filter-out -fno-pic -fno-pie -mcmodel=small -Iloader,$(LOADER_CFLAGS)) 	-fpie -fshort-wchar -Iloader/efi
+EFI_CFLAGS := $(filter-out -fno-pic -fno-pie -mcmodel=small -Iloader,$(LOADER_CFLAGS)) \
+	-fpie -fshort-wchar -Iloader/efi -Iloader
 EFI_LDFLAGS := -nostdlib -static -pie --no-dynamic-linker -z text -z max-page-size=0x1000 -T loader/efi/linker.ld
-EFI_OBJ := $(patsubst loader/efi/%.c,$(BUILD)/efi/%.o,$(wildcard loader/efi/*.c)) 	$(patsubst common/%.c,$(BUILD)/efi/common_%.o,$(COMMON_C))
+EFI_LOADER_C := loader/manifest.c loader/memmap.c
+EFI_OBJ := $(patsubst loader/efi/%.c,$(BUILD)/efi/%.o,$(wildcard loader/efi/*.c)) \
+	$(patsubst loader/%.c,$(BUILD)/efi/loader_%.o,$(EFI_LOADER_C)) \
+	$(patsubst common/%.c,$(BUILD)/efi/common_%.o,$(COMMON_C))
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 
@@ -203,6 +207,10 @@ $(BUILD)/efi/%.o: loader/efi/%.c $(wildcard loader/efi/*.h) $(COMMON_H)
 	$(CC_TARGET) $(EFI_CFLAGS) -c $< -o $@
 
 $(BUILD)/efi/common_%.o: common/%.c $(COMMON_H)
+	@mkdir -p $(@D)
+	$(CC_TARGET) $(EFI_CFLAGS) -c $< -o $@
+
+$(BUILD)/efi/loader_%.o: loader/%.c $(wildcard loader/*.h) $(COMMON_H)
 	@mkdir -p $(@D)
 	$(CC_TARGET) $(EFI_CFLAGS) -c $< -o $@
 
@@ -225,7 +233,8 @@ $(BUILD)/uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/m
 # W26-S01: OVMF runs the UEFI loader (tests/smoke/expect/boot_to_efi.txt);
 # skips without the ovmf package.
 uefi-smoke: $(BUILD)/uefi.img
-	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "UEFI SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60; fi
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "UEFI SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
+	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60; fi
 
 # W26-S01: the UEFI image against sfdisk, mtools and fsck.fat, the EFI
 # application against objdump (skips what is not installed).
@@ -376,13 +385,13 @@ keys-lint:
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
-	loader/image.c loader/elf_load.c loader/vmsetup.c \
+	loader/image.c loader/elf_load.c loader/vmsetup.c loader/efi/efimap.c \
 	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c nucleus/lattrace.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
-$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
+$(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h loader/efi/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
 	$(HOSTCC) -std=c11 -O0 -g -Wall -Wextra -Werror -fno-builtin \
-		-fsanitize=address,undefined -Iinclude -Icommon -Iloader -Inucleus -Itests/unit/c \
+		-fsanitize=address,undefined -Iinclude -Icommon -Iloader -Iloader/efi -Inucleus -Itests/unit/c \
 		$(UNIT_SRC) -o $@
 
 test-c: $(BUILD)/unit_tests
@@ -942,7 +951,7 @@ ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
 	@for s in $(KTEST_SUITES); do for n in 1 4; do test $$s = smp -a $$n = 1 && continue; \
 		SMP=$$n QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done; done
 
-regress: $(BUILD)/disk.img $(BUILD)/go.img
+regress: $(BUILD)/disk.img $(BUILD)/go.img $(BUILD)/uefi.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
 
 # PIT-09: the Go runtime's syscall set (host strace) vs the pinned census.

@@ -207,7 +207,7 @@ static uint64_t build_page_tables(const struct boot_info *bi, const struct elf_l
     return c.root;
 }
 
-/* stage2 handed us v1; the nucleus gets v2 (BOOT_PROTOCOL.md §3). Call last:
+/* stage2 handed us v2; the nucleus gets v4 (BOOT_PROTOCOL.md §3). Call last:
  * "loader-frames" must cover every frame palloc handed out, page tables included. */
 static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) {
     uint64_t nucleus_end = NUCLEUS_PHYS_BASE;
@@ -223,12 +223,13 @@ static void upgrade_boot_info(struct boot_info *bi, const struct elf_loaded *n) 
     bi->physmap_base = PHYSMAP_BASE;
     bi->modules_addr = BOOT_MODULES_PHYS_ADDR;
     bi->module_count = g_module_count;
+    bi->rsdp_addr    = 0;              /* v4: the nucleus scans the BIOS areas */
     bi->version      = BOOTINFO_VERSION;
     for (uint32_t i = 0; i < bi->module_count; i++)
         kprintf("  module %08llx - %08llx  %s\n",
                 (unsigned long long)mods[i].phys_start,
                 (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
-    kprintf("[loader] boot_info v3 ok (physmap=%llx, modules=%u)\n",
+    kprintf("[loader] boot_info v4 ok (physmap=%llx, modules=%u)\n",
             (unsigned long long)bi->physmap_base, bi->module_count);
 }
 

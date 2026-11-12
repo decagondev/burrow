@@ -34,6 +34,11 @@ func TestParse(t *testing.T) {
 	if info != want {
 		t.Errorf("Parse = %+v, want %+v", info, want)
 	}
+	b := fakeInfo(Version, 0)
+	le.PutUint64(b[0x68:], 0x7f77014) // where OVMF keeps its RSDP (W26-S02)
+	if info, err := Parse(b); err != nil || info.RSDP != 0x7f77014 {
+		t.Errorf("RSDP = %#x, %v", info.RSDP, err)
+	}
 	for _, c := range []struct {
 		name string
 		b    []byte
@@ -42,6 +47,7 @@ func TestParse(t *testing.T) {
 		{"short", make([]byte, 16), "bytes"},
 		{"magic", make([]byte, InfoBytes), "magic"},
 		{"version 2", fakeInfo(2, 0), "version"}, // before W21-S02: a mixed image
+		{"version 3", fakeInfo(3, 0), "version"}, // before W26-S02: no rsdp_addr
 		{"too many modules", fakeInfo(Version, 17), "modules"},
 	} {
 		if _, err := Parse(c.b); err == nil || !strings.Contains(err.Error(), c.want) {

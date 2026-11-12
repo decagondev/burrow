@@ -3,3 +3,12 @@
 [efi] image at
 [efi] relocations ok
 BURROW:EFI:OK
+# W26-S02: the machine from the firmware, the payloads from the boot partition
+[efi] claimed 1000-2fff (boot_info, modules, e820)
+[efi] claimed 8000-8fff (ap trampoline)
+[efi] claimed 100000-3fffff (nucleus)
+[efi] memory map ok
+[efi] acpi rsdp at
+[efi] manifest ok
+[efi] nucleus image crc ok
+[efi] payloads ok

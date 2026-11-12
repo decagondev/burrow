@@ -11,10 +11,15 @@ WORK="$(dirname "$IMG")/regression"
 mkdir -p "$WORK"
 pass=0; failn=0
 
-boot() { # boot <img> <log> -> sets STATUS
+boot() { # boot <img> <log> -> sets STATUS; REG_UEFI=1 boots OVMF instead of SeaBIOS (W26)
+  local fw=()
+  if [ -n "${REG_UEFI:-}" ]; then
+    cp "$OVMF_VARS" "$2.vars"
+    fw=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE" -drive "if=pflash,format=raw,unit=1,file=$2.vars")
+  fi
   set +e
   timeout 20 "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m 128M ${REG_SMP:+-smp $REG_SMP} \
-    -drive "file=$1,format=raw,if=ide,index=0,media=disk" \
+    "${fw[@]}" -drive "file=$1,format=raw,if=ide,index=0,media=disk" \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
     -serial "file:$2" -display none -no-reboot
   STATUS=$?
@@ -96,6 +101,25 @@ vbe_no_mode() {
   "$b/mkimage" -o "$1" -stage1 "$b/stage1.bin" -stage2 "$b/stage2.bin" -payload loader="$b/loader.bin" \
     -payload nucleus="$b/nucleus.disk.elf" -payload kernel="$b/kernel.elf" -video 1000x700x32 >/dev/null
 }
+# W26-S02: the UEFI image (build/uefi.img), changed inside its boot partition
+# with mtools (the partition starts at 1 MiB).
+OVMF_CODE="${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}"
+OVMF_VARS="${OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}"
+uefi_copy() { cp "$(dirname "$IMG")/uefi.img" "$1"; }
+# A payload changed on the boot partition: the UEFI loader checks its CRC too.
+efi_payload_crc() {
+  uefi_copy "$1" || return 1
+  local f="$WORK/efi-nucleus.bin"
+  MTOOLS_SKIP_CHECK=1 mcopy -n -o -i "$1@@1M" ::/burrow/nucleus "$f" && flip_byte "$f" $((0x1000 + 16)) &&
+    MTOOLS_SKIP_CHECK=1 mcopy -o -i "$1@@1M" "$f" ::/burrow/nucleus
+}
+# PIT-94: a fixed address the firmware owns stops the boot, naming it.
+# burrow/efitest makes the loader claim its own first page as well.
+efi_page_taken() {
+  uefi_copy "$1" || return 1
+  echo claim-self > "$WORK/efitest.txt"
+  MTOOLS_SKIP_CHECK=1 mcopy -o -i "$1@@1M" "$WORK/efitest.txt" ::/burrow/efitest
+}
 # A Go panic prints itself and every goroutine, then exit_group fails the run.
 go_panic()         { with_kargs panic=boot "$1"; }
 # PIT-07: a nil write in Go is a #PF in Go text; the report must say so.
@@ -111,5 +135,11 @@ REG_SMP=2 case_run REG-0008-broken-trampoline "smp: cpu with apic id 1 did not s
 case_run REG-0006-go-panic     "panic: kargs asked for a panic" 35  go_panic
 case_run REG-0007-go-nil-fault "[trap] fault in the Go kernel"  35  go_nil_fault
 case_run REG-0009-vbe-no-mode "[nucleus] framebuffer: none (dispi fallback)" any vbe_no_mode
+if [ -f "$OVMF_CODE" ] && [ -f "$(dirname "$IMG")/uefi.img" ] && command -v mcopy >/dev/null; then
+  REG_UEFI=1 case_run REG-0010-efi-payload-crc "[efi] PANIC: nucleus CRC mismatch" 35 efi_payload_crc
+  REG_UEFI=1 case_run REG-0011-efi-page-taken "[efi] PANIC: the firmware owns" 35 efi_page_taken
+else
+  echo "  skip  REG-0010, REG-0011 (no OVMF, build/uefi.img or mtools)"
+fi
 echo "$pass passed, $failn failed"
 [ "$failn" -eq 0 ]

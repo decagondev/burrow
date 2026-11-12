@@ -10,6 +10,8 @@
  *   - It grows without changing calling conventions (add fields, bump version).
  *   - It is the single source of truth handed up the chain:
  *       stage2 -> loader -> nucleus -> Go kernel.
+ *   Since W26 the UEFI loader (loader/efi/) fills the same struct from the
+ *   firmware instead of stage2.
  */
 #ifndef BURROW_BOOT_INFO_H
 #define BURROW_BOOT_INFO_H
@@ -20,11 +22,12 @@
 #define BOOTINFO_PHYS_ADDR   0x1000u                /* where stage2 builds it  */
 #define BOOTINFO_MAGIC       0x4F464E49544F4F42ull  /* "BOOTINFO" little-endian */
 #define BOOTINFO_VERSION_STAGE2 2u                /* what stage2 writes (2: the framebuffer, W21-S02) */
-#define BOOTINFO_VERSION     3u                     /* what the nucleus gets    */
+#define BOOTINFO_VERSION     4u                     /* what the nucleus gets (4: rsdp_addr, W26-S02) */
 
 /* fb_source: who filled the framebuffer fields (0: nobody, the kernel uses DISPI). */
 #define FB_SOURCE_NONE 0u
 #define FB_SOURCE_VBE  1u
+#define FB_SOURCE_GOP  2u   /* the UEFI loader, from the graphics output protocol (W26-S04) */
 
 #define E820_PHYS_ADDR       0x2000u   /* stage2 stores the raw E820 map here */
 #define E820_MAX_ENTRIES     128u
@@ -87,7 +90,10 @@ struct boot_info {
     uint8_t  fb_blue_pos;      /* 0x65                                         */
     uint8_t  fb_source;        /* 0x66  FB_SOURCE_*                            */
     uint8_t  fb_reserved;      /* 0x67                                         */
-    uint64_t reserved[3];      /* 0x68  room to grow without moving anything   */
+    /* ---- version 4 (W26-S02): what UEFI firmware tells the loader ---- */
+    uint64_t rsdp_addr;        /* 0x68  physical address of the ACPI RSDP; 0: the
+                                *       nucleus scans the BIOS areas (stage2's path) */
+    uint64_t reserved[2];      /* 0x70  room to grow without moving anything   */
 } __attribute__((packed));     /* total 0x80 = 128 bytes                       */
 
 #ifndef __ASSEMBLER__
@@ -107,7 +113,8 @@ _Static_assert(offsetof(struct boot_info, fb_pitch)      == 0x40, "abi drift");
 _Static_assert(offsetof(struct boot_info, fb_bpp)        == 0x44, "abi drift");
 _Static_assert(offsetof(struct boot_info, fb_red_size)   == 0x60, "abi drift");
 _Static_assert(offsetof(struct boot_info, fb_source)     == 0x66, "abi drift");
-_Static_assert(offsetof(struct boot_info, reserved)      == 0x68, "abi drift");
+_Static_assert(offsetof(struct boot_info, rsdp_addr)     == 0x68, "abi drift");
+_Static_assert(offsetof(struct boot_info, reserved)      == 0x70, "abi drift");
 _Static_assert(sizeof(struct boot_module)                == 32,   "abi drift");
 _Static_assert(BOOT_MODULES_PHYS_ADDR + BOOT_MODULES_MAX * 32 <= 0x2000, "modules overlap e820");
 _Static_assert(sizeof(struct boot_info)                  == 0x80, "abi drift");

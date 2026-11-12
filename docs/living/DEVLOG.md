@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-12 — W26-S02 The machine from the firmware
+
+**Did:** the UEFI loader claims the nucleus's fixed pages, turns the firmware's memory map into E820 records at 0x2000 (`loader/efi/efimap.c`, pure, host-tested), finds the RSDP in the configuration table and reads the manifest and every payload from the boot partition with their CRCs (`firmware.c`, `files.c`). `boot_info` v4 carries `rsdp_addr`; REG-0010 (a payload changed in the partition) and REG-0011 (a page the firmware owns) boot OVMF in `make regress`.
+
+**Surprise:** OVMF leaves every low page the nucleus wants free, so nothing had to move; the test of a taken page had to borrow the loader's own image. And S01's Makefile edit, written through a heredoc, had lost its line continuations without anything failing.
+
+**Learned:** a regression case can change a file inside a FAT partition in place with mtools at `@@1M`, no loop devices or root.
+
+**Next:** S03: leave the boot services and start the nucleus through the BIOS loader's back half.
+
 ## 2026-11-12 — W26-S01 A UEFI application
 
 **Did:** `loader/efi/` (`efi.h` with the system table, boot services and protocols the loader will use, offsets checked; `main.c`'s `efi_main` says hello on COM1 and the firmware's console), linked as a static PIE and turned into a PE32+ by `mkimage -efi-app`; `mkimage -esp-dir` and `-gpt` with `kernel/cmd/mkfat` make `build/uefi.img`, a GPT disk with a `BURROWBOOT` EFI system partition; `smoke.sh` boots OVMF; `make uefi-smoke` and `make uefi-interop` (sfdisk, fsck.fat, mtools, objdump) in `make test`.

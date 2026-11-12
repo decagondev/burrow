@@ -35,7 +35,7 @@ BI_E820_ADDR       equ 0x18
 BI_MANIFEST_ADDR   equ 0x20
 BI_LOADER_BASE     equ 0x28
 BI_STRUCT_SIZE     equ 0x80
-BOOTINFO_VERSION   equ 2          ; = BOOTINFO_VERSION_STAGE2; the loader upgrades to 3
+BOOTINFO_VERSION   equ 2          ; = BOOTINFO_VERSION_STAGE2; the loader upgrades to 4
 ; framebuffer (W21-S02): vbe_setup fills these after it set a mode
 BI_FB_ADDR         equ 0x30
 BI_FB_WIDTH        equ 0x38
@@ -49,6 +49,7 @@ FB_SOURCE_VBE      equ 1
 BI_PHYSMAP_BASE    equ 0x48
 BI_MODULES_ADDR    equ 0x50
 BI_MODULE_COUNT    equ 0x58
+BI_RSDP_ADDR       equ 0x68      ; v4 (W26-S02): the UEFI loader's; stage2 leaves 0
 ; "BOOTINFO" as two dwords (little-endian): 'BOOT' then 'INFO'
 BOOTINFO_MAGIC_LO  equ 0x544F4F42
 BOOTINFO_MAGIC_HI  equ 0x4F464E49

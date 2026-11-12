@@ -9,6 +9,7 @@ TEST(kprintf_int_min); TEST(kprintf_no_sink_is_safe);
 TEST(manifest_valid); TEST(manifest_bad_magic); TEST(manifest_bad_count);
 TEST(manifest_too_small); TEST(manifest_overlap_stage2); TEST(manifest_find);
 TEST(e820_usable_sum); TEST(e820_max_addr); TEST(e820_names);
+TEST(efimap_types); TEST(efimap_merges_sorts); TEST(efimap_capacity);
 TEST(elf_valid); TEST(elf_load_segment); TEST(elf_non_load_is_skipped);
 TEST(elf_rejects); TEST(elf_rejects_segment_past_end);
 TEST(palloc_bumps_from_floor); TEST(palloc_skips_reserved_ranges); TEST(palloc_jumps_holes);
@@ -43,6 +44,7 @@ int main(void) {
     puts("[manifest]"); RUN(manifest_valid); RUN(manifest_bad_magic); RUN(manifest_bad_count);
                         RUN(manifest_too_small); RUN(manifest_overlap_stage2); RUN(manifest_find);
     puts("[memmap]");   RUN(e820_usable_sum); RUN(e820_max_addr); RUN(e820_names);
+    puts("[efimap]");   RUN(efimap_types); RUN(efimap_merges_sorts); RUN(efimap_capacity);
     puts("[elf64]");    RUN(elf_valid); RUN(elf_load_segment); RUN(elf_non_load_is_skipped);
                         RUN(elf_rejects); RUN(elf_rejects_segment_past_end);
     puts("[palloc]");   RUN(palloc_bumps_from_floor); RUN(palloc_skips_reserved_ranges);

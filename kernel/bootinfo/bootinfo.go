@@ -1,4 +1,4 @@
-// Package bootinfo parses the boot_info v3 block and the boot module table
+// Package bootinfo parses the boot_info v4 block and the boot module table
 // the loader leaves for the nucleus (include/burrow/boot_info.h,
 // docs/02-architecture/BOOT_PROTOCOL.md). Pure: it reads byte slices, so
 // the layout is checked on the host; arch/amd64 supplies the bytes.
@@ -15,7 +15,7 @@ import (
 // mirrors (boot/boot_abi.inc, tools/mkimage) and this block together.
 const (
 	Magic   = 0x4F464E49544F4F42 // "BOOTINFO" little-endian
-	Version = 3                  // 3: the framebuffer (W21-S02)
+	Version = 4                  // 3: the framebuffer (W21-S02); 4: rsdp_addr (W26-S02)
 
 	offMagic       = 0x00
 	offVersion     = 0x08
@@ -30,7 +30,9 @@ const (
 	offFbBPP       = 0x44
 	offFbFields    = 0x60 // red size, pos; green size, pos; blue size, pos (VBE's order)
 	offFbSource    = 0x66
+	offRSDP        = 0x68 // v4 (W26-S02): the ACPI RSDP UEFI firmware named, else 0
 	FbSourceVBE    = 1
+	FbSourceGOP    = 2 // the UEFI loader (W26-S04)
 	InfoBytes      = 0x80
 
 	ModuleBytes   = 32 // name[16], phys_start u64, size_bytes u64
@@ -38,13 +40,14 @@ const (
 	MaxModules    = 16
 )
 
-// Info is the part of boot_info v3 the Go kernel uses.
+// Info is the part of boot_info v4 the Go kernel uses.
 type Info struct {
 	BootDrive   uint32
 	PhysmapBase uint64
 	ModulesAddr uint64 // physical address of the module table
 	ModuleCount int
 	Framebuffer Framebuffer // Source 0: none (the kernel sets a DISPI mode itself)
+	RSDP        uint64      // physical; 0 when the firmware was a BIOS (W26-S02)
 }
 
 // Field is one colour channel of a pixel: Size bits from bit Pos up.
@@ -93,6 +96,7 @@ func Parse(b []byte) (Info, error) {
 		ModulesAddr: le.Uint64(b[offModulesAddr:]),
 		ModuleCount: n,
 		Framebuffer: parseFramebuffer(b),
+		RSDP:        le.Uint64(b[offRSDP:]),
 	}, nil
 }
 

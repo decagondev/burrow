@@ -28,7 +28,7 @@ void boot_init(struct boot_info *bi) {
     for (uint32_t i = 0; i < n; i++)
         kprintf("  module %08llx - %08llx  %s\n", (unsigned long long)mods[i].phys_start,
                 (unsigned long long)(mods[i].phys_start + mods[i].size_bytes), mods[i].name);
-    kprintf("[nucleus] boot_info v3 ok (physmap=%llx, modules=%u, e820 entries=%u)\n",
+    kprintf("[nucleus] boot_info v4 ok (physmap=%llx, modules=%u, e820 entries=%u)\n",
             (unsigned long long)bi->physmap_base, bi->module_count, bi->e820_count);
     report_framebuffer(bi);
 }
