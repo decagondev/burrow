@@ -31,6 +31,7 @@
 | M24 | ssh, TLS and a browser | the host logs in to Burrow over ssh (password, key, interactive, `scp`), `dbclient` logs in over loopback; `wget` and `curl` fetch over TLS and refuse a bad certificate; NetSurf renders pages in X, follows a link, loads `https://` (done: `make tls-smoke`, `make ssh-smoke`, `make browser-smoke`) | W24 |
 | M25 | Cheaper round trips | `make lat-bench` prints a round trip's steps; `getpid` about half (103 to 52 us), clocks through a vDSO (85 ns); BUG-0033 closed; burrow runs the desktop on the ext2 root (`make unix-desktop-smoke`). Not reached: the ping-pongs and `scp` (1.25 MB/s) twice as fast (R-09) | W25 |
 | M26 | Booting from UEFI | OVMF boots a GPT disk's `BOOTX64.EFI`; the nucleus, the console, Doom and the desktop run with GOP's framebuffer and the firmware's ACPI tables, on four CPUs and on one; the BIOS images boot as before; a USB-stick image and a real-hardware guide (planned: `make uefi-smoke`, `make uefi-usb`) | W26 |
+| M27 | A real PC's devices | q35 with OVMF and no legacy devices boots one USB stick: interrupts through the I/O APIC and MSI, volumes on USB, SATA and NVMe, a USB keyboard and mouse driving the console, Doom and the desktop; the stick and an initrd-only image ready for a real PC, with a report of what it found (planned: `make q35-smoke`, `make usb-smoke`, `make usb-desktop-smoke`) | W27 |
 
 ```mermaid
 flowchart TB
@@ -48,7 +49,7 @@ flowchart TB
     end
     subgraph desk["Desktop"]
         direction LR
-        W14["W14<br/>desktop groundwork"] --> W15["W15<br/>Qt"] --> W16["W16<br/>X11 desktop"] --> W17["W17<br/>networking"] --> W18["W18<br/>foundations"] --> W19["W19<br/>a multi-user Unix"] --> W20["W20<br/>many CPUs, hardened"] --> W21["W21<br/>firmware framebuffer"] --> W22["W22<br/>sound, a tablet"] --> W23["W23<br/>/proc, virtio"] --> W24["W24<br/>ssh, a browser"] --> W25["W25<br/>speed"] --> W26["W26<br/>UEFI"] --> X["later: real-PC drivers,<br/>GTK"]
+        W14["W14<br/>desktop groundwork"] --> W15["W15<br/>Qt"] --> W16["W16<br/>X11 desktop"] --> W17["W17<br/>networking"] --> W18["W18<br/>foundations"] --> W19["W19<br/>a multi-user Unix"] --> W20["W20<br/>many CPUs, hardened"] --> W21["W21<br/>firmware framebuffer"] --> W22["W22<br/>sound, a tablet"] --> W23["W23<br/>/proc, virtio"] --> W24["W24<br/>ssh, a browser"] --> W25["W25<br/>speed"] --> W26["W26<br/>UEFI"] --> W27["W27<br/>a real PC's devices"] --> X["later: gcc, Python,<br/>GTK"]
     end
     boot --> core --> unix --> desk
     classDef done fill:#2e7d32,color:#fff;

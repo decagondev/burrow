@@ -29,6 +29,7 @@
 | W24 | ssh, TLS and a browser | M24 | done | [WAVE-24](WAVE-24-ssh-browser.md) |
 | W25 | Cheaper round trips | M25 | done | [WAVE-25](WAVE-25-speed.md) |
 | W26 | Booting from UEFI | M26 | in progress | [WAVE-26](WAVE-26-uefi.md) |
+| W27 | A real PC's devices | M27 | planned | [WAVE-27](WAVE-27-real-pc.md) |
 
 **Learning mode for W1-W3.** The starter kit ships working code for these waves. To learn by typing, run `git switch -c learn`, delete the file a slice creates, and rebuild it from the slice steps. `make smoke` tells you when you match the reference behaviour; `git diff main -- <file>` shows the reference.
 

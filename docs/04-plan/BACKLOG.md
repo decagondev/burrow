@@ -218,7 +218,17 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 - [ ] E23.F03 As a kernel dev, I want the loader to leave the firmware's boot services and start the nucleus on any CPU count, so that everything above the loader is unchanged. [W26-S03]
 - [ ] E23.F04 As a user, I want the screen GOP sets, at the size the image asks for, so that the console, Doom and X draw under UEFI. [W26-S04]
 - [ ] E23.F05 As a user, I want the demos on UEFI and an image to write to a USB stick, with a guide to what a real PC still lacks, so that I can try Burrow outside QEMU. [W26-S05]
-- Later: AHCI, xHCI with USB keyboards and mice, NVMe and the `q35` machine (W27) · Secure Boot · runtime services · a boot menu.
+- Later: the devices of a real PC (E24, W27) · Secure Boot · runtime services · a boot menu.
+
+## E24 A real PC's devices
+*Exit: Burrow boots from a USB stick on a machine with no legacy devices and runs the desktop with USB input and modern disks.* [W27]
+
+- [ ] E24.F01 As a kernel dev, I want interrupts through the I/O APIC and MSI, so that devices interrupt on machines without a usable 8259 path. [W27-S01]
+- [ ] E24.F02 As a user, I want SATA (AHCI) and NVMe disks, and partitions found on every disk, so that Burrow reads the disks a real PC has. [W27-S02]
+- [ ] E24.F03 As a user, I want USB keyboards and mice (xHCI, HID), so that I can use a PC with no PS/2 ports. [W27-S03]
+- [ ] E24.F04 As a user, I want USB storage, so that the stick Burrow boots from also holds its root and data volumes. [W27-S04]
+- [ ] E24.F05 As a tester, I want one stick image that boots q35 and a real PC, a smaller initrd-only image, and a report of what the kernel found, so that a real machine's result comes back as one photo or file. [W27-S05]
+- Later: Intel HD Audio · real network cards (e1000e/igc, r8169) · ACPI AML for power-off · EHCI and external hubs · Wi-Fi.
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [W20, then later]
