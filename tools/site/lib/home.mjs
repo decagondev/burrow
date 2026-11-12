@@ -13,7 +13,7 @@ const STRATA = [
   { cls: 's-user', name: 'User space', lang: 'C, C++, Go, Lua + musl', waves: ['W9', 'W10', 'W11', 'W12', 'W13', 'W19', 'W24'], text: 'Shell, busybox, DOOM, compilers and editors talking to the kernel through the Linux system-call ABI; users, logins and passwords; ssh and a browser.' },
   { cls: 's-go', name: 'Go kernel', lang: 'Go', waves: ['W6', 'W7', 'W8', 'W17', 'W18', 'W22', 'W23', 'W25'], text: 'The stock Go runtime in ring 0: drivers (sound, virtio, an absolute pointer), files (FAT32, ext2), processes with copy-on-write fork and shared memory, POSIX policy and a TCP/IP stack.' },
   { cls: 's-nucleus', name: 'Nucleus', lang: 'C + assembly', waves: ['W4', 'W5', 'W20'], text: 'Threads on every CPU, memory, interrupts and the system-call gate that lets Go run, with the CPU\'s own protections on.' },
-  { cls: 's-loader', name: 'C loader', lang: 'C', waves: ['W3'], text: 'Verifies every input, reads the disk and hands over a description of the machine.' },
+  { cls: 's-loader', name: 'C loader', lang: 'C', waves: ['W3', 'W26'], text: 'Verifies every input, reads the disk and hands over a description of the machine, from a BIOS or from UEFI.' },
   { cls: 's-stage2', name: 'Stage 2', lang: 'NASM', waves: ['W2', 'W21'], text: 'Memory map, A20, protected mode, paging, long mode, then calls C; a VBE graphics mode from the BIOS.' },
   { cls: 's-stage1', name: 'Stage 1', lang: 'NASM', waves: ['W1'], text: 'The 512-byte boot sector the BIOS runs first.' },
   { cls: 's-tools', name: 'Foundations', lang: 'Make, Go, shell', waves: ['W0'], text: 'Build system, disk-image tool and the test harness every layer stands on.' },
