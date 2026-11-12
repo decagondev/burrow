@@ -17,7 +17,7 @@ At the `burrow>` console:
 run /opt/x11/bin/startx       or from busybox sh: startx
 ```
 
-`startx` starts the server, runs your session script and, when it ends, stops the server; the console comes back as it was. `make run-desktop` uses the same `burrow-home.img` as `make run-dev`, so your files are the same on both.
+`startx` starts the server, runs your session script and, when it ends, stops the server; the console comes back as it was. On the ext2 root (`make run-unix`, W25-S05) a user logged in runs it too: it starts the root disk's set-user-id `/usr/bin/Xfbdev` when there is one, and the session script is `~/.xinitrc` (UNIX.md). `make run-desktop` uses the same `burrow-home.img` as `make run-dev`, so your files are the same on both.
 
 ## dwm's keys
 

@@ -1,0 +1,11 @@
+# Ordered markers for the desktop as a user (W25-S05, tests/smoke/keys/unix-desktop.keys,
+# run by tests/smoke/unix-desktop.sh). Append-only.
+volume "NETDATA" mounted at /opt/net
+burrow login: burrow
+desk: env :0 /opt/x11/bin:/bin:/opt/net/bin
+desk: dropbear started
+-rwsr-xr-x
+startx: /home/burrow/.xinitrc
+startx: done
+desk: the host over ssh sees Xfbdev as root, dwm, st and netsurf as burrow
+burrow> poweroff

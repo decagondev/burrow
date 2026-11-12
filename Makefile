@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -313,7 +313,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -602,14 +602,17 @@ run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
 # root, git-ignored, made once: delete it to start again).
 ROOT_IMG ?= burrow-root.img
 ROOT_SRC := $(BUILD)/busybox scripts/mkroot.py $(wildcard initrd/etc/*)
+# W25-S05: the set-user-id X server when the X disk is built
+ROOT_XSERVER := $(wildcard $(BUILD)/x11-root/bin/Xfbdev)
+MKROOT = python3 scripts/mkroot.py $(if $(ROOT_XSERVER),--xserver $(ROOT_XSERVER))
 $(BUILD)/go-unix.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo login > $(BUILD)/kargs-unix.txt
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-unix.txt >/dev/null
-$(BUILD)/root-test.img: $(ROOT_SRC)
-	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $@
+$(BUILD)/root-test.img: $(ROOT_SRC) $(ROOT_XSERVER)
+	$(MKROOT) $(BUILD)/busybox initrd/etc $@
 $(ROOT_IMG):
-	python3 scripts/mkroot.py $(BUILD)/busybox initrd/etc $(abspath $@)
+	$(MKROOT) $(BUILD)/busybox initrd/etc $(abspath $@)
 UNIX_DRIVE = $(call data_drive,$(BUILD)/unix-test.img,1)
 unix-smoke:
 	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory unix-smoke-run; \
@@ -809,6 +812,17 @@ ssh-bench: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img
 	SSH_MODE=bench MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/ssh-smoke.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/ssh-root.img 420
 	@grep -a "SSH BENCH" $(BUILD)/ssh-host.log
 	python3 tests/smoke/ssh-budgets.py $(BUILD)/ssh-host.log
+# The desktop as a user (W25-S05): go-unix.img on a fresh test root (made
+# with the set-user-id X server) with the NETDATA and X disks: burrow logs
+# in, starts dropbear through su and runs startx with st, NetSurf and dwm;
+# the host checks them over ssh (tests/smoke/unix-desktop.py) and ends the
+# session (skips without make x11 busybox net-ports browser, or ssh).
+unix-desktop-smoke:
+	@if [ -f $(BUILD)/net-root/bin/netsurf ] && [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && command -v ssh >/dev/null; then $(MAKE) --no-print-directory unix-desktop-smoke-run; \
+	else echo "UNIX DESKTOP SMOKE SKIP (make x11 busybox net-ports browser, and an ssh client on the host)"; fi
+unix-desktop-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(BUILD)/net-data.img $(BUILD)/x11-data.img
+	cp $(BUILD)/root-test.img $(BUILD)/unix-desktop-root.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" tests/smoke/unix-desktop.sh $(BUILD) $(BUILD)/go-unix.img $(BUILD)/unix-desktop-root.img 600
 # browser-bench (W24-S06; not in make test): browser-smoke's boot, then
 # NetSurf's first page against tests/smoke/browser-budgets.py.
 browser-bench: browser-smoke-run

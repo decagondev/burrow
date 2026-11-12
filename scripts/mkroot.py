@@ -6,11 +6,15 @@ mke2fs -d (label BURROWROOT, which the kernel mounts at /), then every
 inode gets its owner and mode from here with debugfs, so the image is the
 same whoever builds it and wherever the tree lived (WSL's /mnt/c keeps no
 modes). Accounts: root (password "root") and burrow (uid 1000, password
-"burrow"): a test machine's. Never writes outside a temporary directory
-and the output image.
+"burrow"): a test machine's. W25-S05: with --xserver, a set-user-id root
+copy of TinyX's Xfbdev at /usr/bin/Xfbdev (the X disk is FAT, which keeps
+no set-id bits), which startx prefers, so a user can start X; /etc/profile
+gives login sessions the data disks' environment files. Never writes
+outside a temporary directory and the output image.
 
-Usage: scripts/mkroot.py <busybox> <etc-dir> <out.img> [size]
-Docs: docs/06-guides/UNIX.md, docs/04-plan/waves/WAVE-19-unix.md (S06).
+Usage: scripts/mkroot.py [--xserver Xfbdev] <busybox> <etc-dir> <out.img> [size]
+Docs: docs/06-guides/UNIX.md, docs/04-plan/waves/WAVE-19-unix.md (S06),
+docs/04-plan/waves/WAVE-25-speed.md (S05).
 """
 import os
 import shutil
@@ -31,8 +35,26 @@ SPECIAL = {  # path: (mode, uid, gid)
     'bin/busybox': (0o104755, 0, 0),  # set-uid root: su and passwd need it
     'tmp': (0o041777, 0, 0),
     'etc/dropbear': (0o040700, 0, 0),  # W24-S02: dropbear -R makes its host keys here
+    'usr/bin/Xfbdev': (0o104755, 0, 0),  # W25-S05: set-uid root, as TinyX needs to start for a user
 }
-PROFILE = 'export PATH=/bin:/opt/net/bin\n'  # /opt/net: the NETDATA disk's programs (W24)
+# /etc/profile, read by every login shell (the console's login, dropbear's
+# sessions): /opt/net holds the NETDATA disk's programs (W24); W25-S05: the
+# variables of the data disks' .env files (which the kernel gives programs
+# the console starts, but login clears), PATH last so neither file's hides
+# the other's programs.
+PROFILE = r'''for f in /opt/x11/x11.env /opt/net/net.env; do
+	[ -r "$f" ] || continue
+	while IFS= read -r line; do
+		case "$line" in
+		''|'#'*|PATH=*) ;;
+		*=*) export "$line" ;;
+		esac
+	done < "$f"
+done
+PATH=/bin:/opt/net/bin
+[ -d /opt/x11/bin ] && PATH=/opt/x11/bin:$PATH
+export PATH
+'''
 
 
 def tool(name):
@@ -64,10 +86,12 @@ def etc_files(etc_src, etc):
         f.write(PROFILE)
 
 
-def tree(root, busybox, etc_src):
-    for d in ['bin', 'etc', 'etc/dropbear', 'root', 'home/burrow', 'tmp', 'dev', 'mnt']:
+def tree(root, busybox, etc_src, xserver):
+    for d in ['bin', 'etc', 'etc/dropbear', 'root', 'home/burrow', 'tmp', 'dev', 'mnt', 'usr/bin']:
         os.makedirs(os.path.join(root, d))
     shutil.copy(busybox, os.path.join(root, 'bin/busybox'))
+    if xserver:
+        shutil.copy(xserver, os.path.join(root, 'usr/bin/Xfbdev'))
     applets = subprocess.run([busybox, '--list'], check=True, capture_output=True, text=True).stdout.split()
     for a in applets:
         if a != 'busybox':
@@ -102,12 +126,15 @@ def debugfs_script(root):
 
 
 def main():
-    busybox, etc_src, out = sys.argv[1], sys.argv[2], sys.argv[3]
-    size = sys.argv[4] if len(sys.argv) > 4 else '64M'
+    args, xserver = sys.argv[1:], None
+    if args[:1] == ['--xserver']:
+        xserver, args = args[1], args[2:]
+    busybox, etc_src, out = args[0], args[1], args[2]
+    size = args[3] if len(args) > 3 else '64M'
     work = tempfile.mkdtemp(prefix='burrow-root-')
     try:
         root = os.path.join(work, 'root')
-        tree(root, busybox, etc_src)
+        tree(root, busybox, etc_src, xserver)
         if os.path.exists(out):
             os.remove(out)
         subprocess.run([tool('mke2fs'), '-q', '-F', '-t', 'ext2', '-L', 'BURROWROOT', '-E', 'root_owner=0:0',

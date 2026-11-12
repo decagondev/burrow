@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-12 — W25-S05 The desktop as a user
+
+**Did:** the ext2 root gets a set-user-id root copy of TinyX's server (`scripts/mkroot.py --xserver`, `/usr/bin/Xfbdev`, 4755) that `startx` prefers, and `/etc/profile` gives login shells the X and net disks' environment files. burrow logs in, starts dropbear through `su`, runs `startx` with st, NetSurf and dwm; `make unix-desktop-smoke` (in `make test`) has the host check over ssh that the three are burrow's and the server root's, then end the session.
+
+**Surprise:** nothing in the kernel had to change: set-id `execve`, the device modes and `/tmp`'s sticky socket directory were enough. The first run's only failure was the test's own parser (busybox `ps` here prints `VSZ STAT`, not `TIME`).
+
+**Next:** W25-S06: M25.
+
 ## 2026-11-11 — W25-S04 Wake-ups
 
 **Did:** BUG-0033 explained and closed: not the kernel. The keys file waited for `demo: up` after typing `echo demo: up''`, and the echo matched whenever the console's wrap kept the marker whole, so the screen was dumped before NetSurf started. `tests/smoke/keyslint.py` now refuses such a wait (in `sendkeys.py` and `make keys-lint`) and found six weak waits in existing smokes, now fixed. The wake-up path measured: the nucleus hands over promptly; Go's hand-off is the cost. `poll`, `select` and `epoll` wait with a plain `select` for a few files (`waitAny`). `scp` 1.25 MB/s, NetSurf's first page 2.71 s.

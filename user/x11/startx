@@ -4,9 +4,13 @@
 # ($HOME/.xinitrc, /home/.xinitrc, then /opt/x11/etc/xinitrc, which starts
 # dwm) and stops the server when that script ends, so the console comes
 # back. Run it from busybox sh, or as `run /opt/x11/bin/startx` from the
-# console. Never touches the home disk itself. Docs: docs/06-guides/DESKTOP.md.
+# console. W25-S05: the ext2 root's set-user-id copy (/usr/bin/Xfbdev) when
+# there is one, so a user can start X. Never touches the home disk itself.
+# Docs: docs/06-guides/DESKTOP.md.
 B=/bin/busybox
-/opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 &
+X=/opt/x11/bin/Xfbdev
+[ -u /usr/bin/Xfbdev ] && X=/usr/bin/Xfbdev
+$X :0 -nolock > /tmp/x.log 2>&1 &
 server=$!
 tries=0
 while [ ! -S /tmp/.X11-unix/X0 ] && [ $tries -lt 30 ]; do

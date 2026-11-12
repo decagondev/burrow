@@ -1,0 +1,39 @@
+# The desktop as a user (W25-S05, run by tests/smoke/unix-desktop.sh):
+# burrow logs in on the console of go-unix.img (an ext2 root with the
+# set-user-id X server at /usr/bin/Xfbdev, the NETDATA and X disks); the
+# login shell has the disks' environment from /etc/profile; root's password
+# starts dropbear through su; burrow writes a page and a session (st,
+# NetSurf on the page, then dwm) and runs startx. While X runs, the host
+# checks the programs over ssh (tests/smoke/unix-desktop.py) and ends the
+# session with pkill dwm; startx gives the console back and the report is
+# printed. Then burrow logs out and the console powers off.
+wait login:
+type burrow
+key ret
+wait Password:
+type burrow
+key ret
+wait $
+type printf 'desk: env %s %s\n' "$DISPLAY" "$PATH"; id -un
+key ret
+wait desk: env :0 /opt/x11/bin:/bin:/opt/net/bin
+wait burrow
+type su -c '/opt/net/bin/dropbear -R -p 22' && echo desk: dropbear'' started
+key ret
+wait Password:
+type root
+key ret
+wait desk: dropbear started
+type printf '<html><body bgcolor="#20a040"><h1>burrow</h1></body></html>' > ~/page.html; ls -l /usr/bin/Xfbdev
+key ret
+wait -rwsr-xr-x
+type printf '%s\n' 'st &' 'netsurf -v -f x -w 800 -h 600 file://$HOME/page.html > /tmp/ns.log 2>&1 &' '(sleep 10; touch /tmp/desk-go) &' 'exec dwm' > ~/.xinitrc; startx; cat /tmp/desk-report
+key ret
+wait startx: /home/burrow/.xinitrc
+wait startx: done
+wait desk: the host over ssh sees
+type exit
+key ret
+wait burrow>
+type poweroff
+key ret
