@@ -36,9 +36,18 @@ if [ -n "$KEYS" ]; then
   python3 "$(dirname "$0")/sendkeys.py" "$MON" "$LOG" "$KEYS" "$((TIMEOUT > 12 ? TIMEOUT - 6 : TIMEOUT))" "$QMP" &
 fi
 
+# W26: with OVMF_CODE and OVMF_VARS set, UEFI firmware (OVMF) boots the image
+# instead of SeaBIOS; each boot gets a fresh copy of the variable store.
+FIRMWARE=()
+if [ -n "${OVMF_CODE:-}" ]; then
+  cp "$OVMF_VARS" "$LOG.vars"
+  FIRMWARE=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE"
+            -drive "if=pflash,format=raw,unit=1,file=$LOG.vars")
+fi
+
 set +e
 timeout "$TIMEOUT" "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" -smp "${SMP:-1}" -accel tcg,thread=multi \
-  -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
+  "${FIRMWARE[@]}" -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot
 STATUS=$?

@@ -10,11 +10,12 @@
 | Python 3 | any | small scripts |
 | Node.js | 18+ (optional) | Mermaid check |
 | strace | any (optional, Linux) | Go census |
+| OVMF | any (optional; `ovmf` package) | UEFI boots (`make uefi-smoke`, W26) |
 
 ## Ubuntu / Debian / WSL2
 
 ```sh
-sudo apt install build-essential nasm qemu-system-x86 gdb python3 strace git
+sudo apt install build-essential nasm qemu-system-x86 gdb python3 strace git ovmf
 # Go: use the official tarball for the pinned version (distro Go is often old)
 curl -LO https://go.dev/dl/go1.27.X.linux-amd64.tar.gz   # pick the latest 1.27.x
 sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.X.linux-amd64.tar.gz

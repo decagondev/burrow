@@ -1,0 +1,5 @@
+# W26-S01: OVMF runs Burrow's UEFI loader from the GPT disk's EFI system partition.
+[efi] hello from UEFI
+[efi] image at
+[efi] relocations ok
+BURROW:EFI:OK

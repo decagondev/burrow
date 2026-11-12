@@ -213,7 +213,7 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E23 Booting from UEFI
 *Exit: Burrow boots from UEFI firmware as well as from a BIOS, with the screen from GOP and the machine described by the firmware.* [W26]
 
-- [ ] E23.F01 As a user, I want a Burrow disk that UEFI firmware boots (a GPT disk with an EFI system partition and a loader the firmware runs), so that machines without a BIOS can start it. [W26-S01]
+- [x] E23.F01 As a user, I want a Burrow disk that UEFI firmware boots (a GPT disk with an EFI system partition and a loader the firmware runs), so that machines without a BIOS can start it. [W26-S01]
 - [ ] E23.F02 As a kernel dev, I want the memory map and the ACPI tables from the firmware, and the payloads read from the boot partition with their CRCs, so that the nucleus gets the same `boot_info` on both paths. [W26-S02]
 - [ ] E23.F03 As a kernel dev, I want the loader to leave the firmware's boot services and start the nucleus on any CPU count, so that everything above the loader is unchanged. [W26-S03]
 - [ ] E23.F04 As a user, I want the screen GOP sets, at the size the image asks for, so that the console, Doom and X draw under UEFI. [W26-S04]

@@ -102,7 +102,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: uefi-smoke uefi-interop all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -186,6 +186,51 @@ MKIMAGE_GO = $(MKIMAGE_BOOT) -video $(VIDEO)
 
 $(BUILD)/disk.img: $(BOOT_PARTS)
 	$(MKIMAGE_BOOT)
+
+# ---- UEFI (W26) -------------------------------------------------------------
+# The UEFI loader (loader/efi/) is a static position-independent ELF that
+# mkimage -efi-app turns into a PE32+ EFI application; its boot partition
+# (the loader, the manifest, the payloads) is a FAT32 volume kernel/cmd/mkfat
+# makes, and mkimage -gpt wraps it in a GPT disk. OVMF boots it.
+EFI_CFLAGS := $(filter-out -fno-pic -fno-pie -mcmodel=small -Iloader,$(LOADER_CFLAGS)) 	-fpie -fshort-wchar -Iloader/efi
+EFI_LDFLAGS := -nostdlib -static -pie --no-dynamic-linker -z text -z max-page-size=0x1000 -T loader/efi/linker.ld
+EFI_OBJ := $(patsubst loader/efi/%.c,$(BUILD)/efi/%.o,$(wildcard loader/efi/*.c)) 	$(patsubst common/%.c,$(BUILD)/efi/common_%.o,$(COMMON_C))
+OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
+OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
+
+$(BUILD)/efi/%.o: loader/efi/%.c $(wildcard loader/efi/*.h) $(COMMON_H)
+	@mkdir -p $(@D)
+	$(CC_TARGET) $(EFI_CFLAGS) -c $< -o $@
+
+$(BUILD)/efi/common_%.o: common/%.c $(COMMON_H)
+	@mkdir -p $(@D)
+	$(CC_TARGET) $(EFI_CFLAGS) -c $< -o $@
+
+$(BUILD)/efi/loader.elf: $(EFI_OBJ) loader/efi/linker.ld
+	$(LD_TARGET) $(EFI_LDFLAGS) $(EFI_OBJ) -o $@
+
+$(BUILD)/efi/BOOTX64.EFI: $(BUILD)/efi/loader.elf $(BUILD)/mkimage
+	$(BUILD)/mkimage -efi-app $< -o $@ >/dev/null
+
+# $(call uefi_image,name,payload flags): build/<name>.img from its boot partition
+define uefi_image
+	$(BUILD)/mkimage -esp-dir $(BUILD)/esp/$(1) -efi $(BUILD)/efi/BOOTX64.EFI $(2) >/dev/null
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/esp/$(1).fat -label BURROWBOOT ../$(BUILD)/esp/$(1)
+	$(BUILD)/mkimage -gpt $(BUILD)/esp/$(1).fat -o $(BUILD)/$(1).img >/dev/null
+endef
+
+$(BUILD)/uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/mkimage $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	$(call uefi_image,uefi,-payload nucleus=$(BUILD)/nucleus.disk.elf)
+
+# W26-S01: OVMF runs the UEFI loader (tests/smoke/expect/boot_to_efi.txt);
+# skips without the ovmf package.
+uefi-smoke: $(BUILD)/uefi.img
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "UEFI SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60; fi
+
+# W26-S01: the UEFI image against sfdisk, mtools and fsck.fat, the EFI
+# application against objdump (skips what is not installed).
+uefi-interop: $(BUILD)/uefi.img
+	tests/regression/uefi_interop.sh $(BUILD)
 
 # User programs (W9): static Linux x86-64 executables from user/, no libc,
 # installed in the initrd's /bin.
@@ -313,7 +358,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest regress
 
 test-unit: test-c test-go keys-lint
 

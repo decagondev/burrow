@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-12 — W26-S01 A UEFI application
+
+**Did:** `loader/efi/` (`efi.h` with the system table, boot services and protocols the loader will use, offsets checked; `main.c`'s `efi_main` says hello on COM1 and the firmware's console), linked as a static PIE and turned into a PE32+ by `mkimage -efi-app`; `mkimage -esp-dir` and `-gpt` with `kernel/cmd/mkfat` make `build/uefi.img`, a GPT disk with a `BURROWBOOT` EFI system partition; `smoke.sh` boots OVMF; `make uefi-smoke` and `make uefi-interop` (sfdisk, fsck.fat, mtools, objdump) in `make test`.
+
+**Surprise:** `ld -m i386pep` happily links ELF objects into a PE and writes no base relocations, so the image runs only at the address it was linked for; and ld calls a PIE linked above address 0 `ET_EXEC`. Also: `sfdisk` reads a disk whose primary GPT header is corrupt without failing, from the backup.
+
+**Learned:** a PE32+ is small enough to write by hand from an ELF's segments and its `R_X86_64_RELATIVE` list, and doing so leaves one tool that knows every byte of the image, as mkimage already did for the BIOS disk. OVMF boots it first time from QEMU's IDE disk.
+
+**Next:** S02: the memory map, the ACPI tables and the payloads from the firmware.
+
 ## 2026-11-12 — W25 done: cheaper round trips (M25)
 
 **Did:** the wave in six slices. The round trip measured step by step: `user/lat.c` on Burrow and Linux, TSC stamps along a request behind `/dev/lattrace` (S01); a vDSO for the clocks (S02); the Go kernel given the vDSO too, calls that cannot block answered on the dispatcher, an answer sent with the next wait (S03); `poll`'s wait without `reflect.Select`, and BUG-0033 explained as a test error, closed with a lint that found six more weak waits (S04); burrow running the desktop on the ext2 root (S05); budgets from the measurements, ARCHITECTURE.md §7.10 and ADR-0012 (S06). `make unix-desktop-smoke` and `make keys-lint` are in `make test`, green on four CPUs and on one.
