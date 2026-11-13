@@ -33,8 +33,9 @@ func main() {
 	espDir := flag.String("esp-dir", "", "W26: write the boot partition's files (the -efi loader, the manifest, the payloads) into this directory")
 	efi := flag.String("efi", "", "W26: the EFI application -esp-dir puts at "+ESPLoaderPath)
 	gpt := flag.String("gpt", "", "W26: a FAT32 partition image to wrap in a GPT disk -o as its EFI system partition")
-	var payloads payloadFlags
+	var payloads, parts payloadFlags
 	flag.Var(&payloads, "payload", "name=path (repeatable, order = disk order)")
+	flag.Var(&parts, "part", "W26-S05: name=path, a data volume -gpt puts after the EFI system partition (repeatable)")
 	flag.Parse()
 
 	switch {
@@ -47,7 +48,7 @@ func main() {
 		writeOut(*out, must(ELFToPE(mustRead(*efiApp))))
 		return
 	case *gpt != "" && *out != "":
-		writeOut(*out, must(BuildGPT(mustRead(*gpt))))
+		writeOut(*out, must(BuildGPT(mustRead(*gpt), readParts(parts)...)))
 		return
 	case *espDir != "" && *efi != "":
 		if err := writeESP(*espDir, mustRead(*efi), readPayloads(payloads, *video)); err != nil {
@@ -70,6 +71,19 @@ func main() {
 	}
 	printManifest(m)
 	fmt.Printf("wrote %s (%d bytes)\n", *out, len(img))
+}
+
+// readParts reads each -part name=path.
+func readParts(specs []string) []GPTPart {
+	var out []GPTPart
+	for _, s := range specs {
+		name, path, ok := strings.Cut(s, "=")
+		if !ok {
+			fail(fmt.Errorf("-part %q: want name=path", s))
+		}
+		out = append(out, GPTPart{name, mustRead(path)})
+	}
+	return out
 }
 
 // readPayloads reads each -payload name=path, then adds the -video request.

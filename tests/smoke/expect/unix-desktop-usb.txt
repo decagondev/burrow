@@ -1,0 +1,22 @@
+# Ordered markers for the desktop as a user from the USB stick (W26-S05,
+# make uefi-smoke-usb: build/burrow-usb.img booted by OVMF with no other
+# disk; tests/smoke/keys/unix-desktop.keys, run by tests/smoke/unix-desktop.sh).
+# The boot disk is GPT: its EFI system partition is named and never mounted,
+# and its other partitions are the root and the data volumes, found by
+# label. Then the same session as unix-desktop.txt. Append-only.
+BURROW:EFI:OK
+[nucleus] screen: text on the gop framebuffer
+BURROW:NUCLEUS:OK
+BURROW:GO:OK goroutine says 42
+[block] INFO: hda: GPT, boot partition "BURROWBOOT"
+hda2: ext2 volume "BURROWROOT" mounted at / in place of the initrd (read-write)
+hda3: FAT32 volume "NETDATA" mounted at /opt/net
+hda4: FAT32 volume "X11DATA" mounted at /opt/x11
+burrow login: burrow
+desk: env :0 /opt/x11/bin:/bin:/opt/net/bin
+desk: dropbear started
+-rwsr-xr-x
+startx: /home/burrow/.xinitrc
+startx: done
+desk: the host over ssh sees Xfbdev as root, dwm, st and netsurf as burrow
+burrow> poweroff

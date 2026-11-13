@@ -1,8 +1,10 @@
 // gpt.go wraps an EFI system partition (a FAT32 volume kernel/cmd/mkfat made)
 // in a GPT disk, the layout UEFI firmware boots from (W26-S01): a protective
 // MBR, the primary header and its 128-entry table, the partition at 1 MiB,
-// then the backup table and header in the last sectors. GUIDs come from the
-// partition's bytes, so the same inputs give the same disk.
+// then the backup table and header in the last sectors. Since W26-S05 data
+// volumes (ext2 or FAT32 images) may follow it, each at the next MiB, as
+// Linux file system data partitions: make uefi-usb's stick. GUIDs come from
+// the partitions' bytes, so the same inputs give the same disk.
 //
 // Pure: bytes in, bytes out. Docs: docs/04-plan/waves/WAVE-26-uefi.md.
 package main
@@ -26,33 +28,76 @@ const (
 	gptPartitionName = "EFI system partition"
 )
 
+// GPTPart is a data partition: its name in the table and its bytes.
+type GPTPart struct {
+	Name string
+	Data []byte
+}
+
+// linuxDataGUID is 0FC63DAF-8483-4772-8E79-3D69D8477DE4, a Linux file
+// system's partition type, in GPT's byte order.
+var linuxDataGUID = [16]byte{0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47,
+	0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4}
+
+const gptAlignSectors = 2048 // data partitions start on a MiB
+
 // espTypeGUID is C12A7328-F81F-11D2-BA4B-00A0C93EC93B in GPT's mixed-endian
 // encoding (the first three fields little-endian).
 var espTypeGUID = [16]byte{0x28, 0x73, 0x2A, 0xC1, 0x1F, 0xF8, 0xD2, 0x11,
 	0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B}
 
-// BuildGPT returns a disk holding esp as its one partition, an EFI system partition.
-func BuildGPT(esp []byte) ([]byte, error) {
-	if len(esp) == 0 || len(esp)%SectorSize != 0 {
-		return nil, fmt.Errorf("partition is %d bytes; want whole sectors", len(esp))
+// BuildGPT returns a disk holding esp as its first partition, an EFI
+// system partition, and each data volume after it.
+func BuildGPT(esp []byte, data ...GPTPart) ([]byte, error) {
+	parts := append([]GPTPart{{gptPartitionName, esp}}, data...)
+	if len(parts) > gptEntries {
+		return nil, fmt.Errorf("%d partitions; a table holds %d", len(parts), gptEntries)
 	}
-	espSectors := uint64(len(esp) / SectorSize)
-	total := gptESPFirstLBA + espSectors + gptEntrySectors + 1
-	last := total - 1
+	firsts := make([]uint64, len(parts))
+	next := uint64(gptESPFirstLBA)
+	for i, p := range parts {
+		if len(p.Data) == 0 || len(p.Data)%SectorSize != 0 {
+			return nil, fmt.Errorf("partition %q is %d bytes; want whole sectors", p.Name, len(p.Data))
+		}
+		next = (next + gptAlignSectors - 1) / gptAlignSectors * gptAlignSectors
+		firsts[i] = next
+		next += uint64(len(p.Data) / SectorSize)
+	}
+	total := next + gptEntrySectors + 1
 	disk := make([]byte, total*SectorSize)
-
-	sum := sha256.Sum256(esp)
-	diskGUID, partGUID := randomGUID(sum[0:16]), randomGUID(sum[16:32])
 	entries := make([]byte, gptEntries*gptEntrySize)
-	copy(entries[0:16], espTypeGUID[:])
-	copy(entries[16:32], partGUID[:])
-	binary.LittleEndian.PutUint64(entries[32:], gptESPFirstLBA)
-	binary.LittleEndian.PutUint64(entries[40:], gptESPFirstLBA+espSectors-1)
-	for i, u := range utf16.Encode([]rune(gptPartitionName)) {
-		binary.LittleEndian.PutUint16(entries[56+2*i:], u)
+	for i, p := range parts {
+		typ := linuxDataGUID
+		if i == 0 {
+			typ = espTypeGUID
+		}
+		putEntry(entries[i*gptEntrySize:], typ, p, firsts[i])
+		copy(disk[firsts[i]*SectorSize:], p.Data)
 	}
-	entriesCRC := crc32.ChecksumIEEE(entries)
+	sum := sha256.Sum256(esp)
+	writeTables(disk, total, entries, randomGUID(sum[0:16]))
+	return disk, nil
+}
 
+// putEntry writes one table entry; its GUID comes from the partition's bytes.
+func putEntry(e []byte, typ [16]byte, p GPTPart, first uint64) {
+	h := sha256.Sum256(p.Data)
+	partGUID := randomGUID(h[16:32])
+	copy(e[0:16], typ[:])
+	copy(e[16:32], partGUID[:])
+	binary.LittleEndian.PutUint64(e[32:], first)
+	binary.LittleEndian.PutUint64(e[40:], first+uint64(len(p.Data)/SectorSize)-1)
+	for j, u := range utf16.Encode([]rune(p.Name)) {
+		if j < 36 {
+			binary.LittleEndian.PutUint16(e[56+2*j:], u)
+		}
+	}
+}
+
+// writeTables writes the protective MBR, both headers and both tables.
+func writeTables(disk []byte, total uint64, entries []byte, diskGUID [16]byte) {
+	last := total - 1
+	entriesCRC := crc32.ChecksumIEEE(entries)
 	protectiveMBR(disk[:SectorSize], total)
 	backupEntries := last - gptEntrySectors
 	copy(disk[gptEntriesLBA*SectorSize:], entries)
@@ -76,8 +121,6 @@ func BuildGPT(esp []byte) ([]byte, error) {
 	}
 	copy(disk[gptHeaderLBA*SectorSize:], hdr(gptHeaderLBA, last, gptEntriesLBA))
 	copy(disk[last*SectorSize:], hdr(last, gptHeaderLBA, backupEntries))
-	copy(disk[gptESPFirstLBA*SectorSize:], esp)
-	return disk, nil
 }
 
 // protectiveMBR marks the whole disk as one partition of type 0xEE, so tools

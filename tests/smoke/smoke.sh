@@ -18,12 +18,14 @@
 #      must exit 0 by itself: the guest turned the machine off through ACPI;
 #   3. no line containing "PANIC" or "FAIL";
 #   4. if <expect-file> with .screen for .txt exists, its pixel checks pass.
-# The full serial log is kept in build/smoke-<name>.log for the bug tracker.
+# The full serial log is kept in build/smoke-<name>.log for the bug tracker
+# (<name> is the expect file's, or SMOKE_NAME's when one expect file serves
+# two boots: W26-S05's UEFI runs of the BIOS smokes).
 set -euo pipefail
 
 IMG="$1"; EXPECT="$2"; TIMEOUT="${3:-20}"; KEYS="${4:-}"
 QEMU="${QEMU:-qemu-system-x86_64}"
-NAME="$(basename "$EXPECT" .txt)"
+NAME="${SMOKE_NAME:-$(basename "$EXPECT" .txt)}"
 LOG="$(dirname "$IMG")/smoke-${NAME}.log"
 
 MONITOR=()

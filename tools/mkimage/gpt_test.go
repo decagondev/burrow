@@ -86,3 +86,52 @@ func TestESPFiles(t *testing.T) {
 		t.Fatal("a payload named manifest accepted")
 	}
 }
+
+// W26-S05: data volumes follow the EFI system partition, each on the next
+// MiB, typed as Linux file system data, named, their bytes in place.
+func TestBuildGPTDataPartitions(t *testing.T) {
+	le := binary.LittleEndian
+	esp := bytes.Repeat([]byte{0xE5}, 4096*SectorSize)
+	a := bytes.Repeat([]byte{0xAA}, 100*SectorSize)
+	b := bytes.Repeat([]byte{0xBB}, 3000*SectorSize)
+	disk, err := BuildGPT(esp, GPTPart{"root", a}, GPTPart{"x11", b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		first, n uint64
+		data     []byte
+		name     string
+	}{{2048, 4096, esp, gptPartitionName}, {6144, 100, a, "root"}, {8192, 3000, b, "x11"}}
+	total := uint64(len(disk) / SectorSize)
+	if total != 8192+3000+33 {
+		t.Fatalf("%d sectors", total)
+	}
+	entries := disk[2*SectorSize : 2*SectorSize+gptEntries*gptEntrySize]
+	for i, w := range want {
+		e := entries[i*gptEntrySize:]
+		typ := linuxDataGUID
+		if i == 0 {
+			typ = espTypeGUID
+		}
+		if !bytes.Equal(e[:16], typ[:]) || le.Uint64(e[32:]) != w.first || le.Uint64(e[40:]) != w.first+w.n-1 {
+			t.Fatalf("entry %d: % x", i, e[:48])
+		}
+		if string(bytes.ReplaceAll(e[56:56+2*len(w.name)], []byte{0}, nil)) != w.name {
+			t.Errorf("entry %d name % x", i, e[56:80])
+		}
+		if !bytes.Equal(disk[w.first*SectorSize:(w.first+w.n)*SectorSize], w.data) {
+			t.Fatalf("partition %d's bytes moved", i)
+		}
+	}
+	if !bytes.Equal(entries[3*gptEntrySize:], make([]byte, (gptEntries-3)*gptEntrySize)) {
+		t.Fatal("unused entries are not zero")
+	}
+	h := disk[SectorSize : SectorSize+gptHeaderSize]
+	if le.Uint64(h[48:]) != total-34 || crc32.ChecksumIEEE(entries) != le.Uint32(h[88:]) {
+		t.Fatalf("header: last usable %d", le.Uint64(h[48:]))
+	}
+	if _, err := BuildGPT(esp, GPTPart{"odd", a[:10]}); err == nil {
+		t.Fatal("a partial sector accepted")
+	}
+}

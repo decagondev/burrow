@@ -23,8 +23,8 @@ const manifestMagic = "BRWMNFST"
 // checkBootDisk reads the boot disk's manifest sector through the Go ATA
 // driver: proof that the block layer reads what the loader read (W8-S06).
 // A UEFI image's boot disk is a GPT disk instead (W26-S04): its EFI system
-// partition is named by its FAT label and never mounted (PIT-99; hda is
-// not one of mountData's disks either).
+// partition is named by its FAT label and never mounted (PIT-99; only its
+// other partitions are mountData's, bootDataPartitions in bootparts.go).
 func checkBootDisk(log *klog.Logger) {
 	d, ok := block.Get("hda")
 	if !ok {
@@ -100,9 +100,14 @@ var dataDisks = map[string]struct{ point, env string }{
 // the Qt disk (W15-S02), /mnt for the first other one, and /opt/x11 for the
 // X disk (W16-S02). Since W23-S04 the virtio disks (vda..vdd) are mounted
 // the same way, after the IDE ones; a label found on two disks is refused
-// the second time (PIT-81), never mounted twice.
+// the second time (PIT-81), never mounted twice. Since W26-S05 the GPT boot
+// disk's own data partitions (a USB stick's root and data volumes) come
+// first.
 func (k *kernel) mountData(log *klog.Logger) {
 	seen := map[string]string{}
+	for _, p := range bootDataPartitions() {
+		k.mountDisk(log, p.name, p.dev, seen)
+	}
 	for _, name := range []string{"hdb", "hdc", "hdd", "vda", "vdb", "vdc", "vdd"} {
 		if d, ok := block.Get(name); ok {
 			k.mountDisk(log, name, d, seen)

@@ -98,11 +98,24 @@ NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
 RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
 xp = $(if $(filter virtio,$(DISK_IF)),$(BUILD)/virtio-expect/$(notdir $(1)),$(1))
+# W26-S05: UEFI=1 boots a run target's UEFI twin (go-dev-uefi.img for
+# go-dev.img, uefi.img for disk.img) with OVMF, whose variables persist in
+# build/run-ovmf-vars.fd like a PC's. run_common is QEMU_COMMON with the
+# boot disk named; run_img the image a run target boots.
+UEFI ?= 0
+ifeq ($(UEFI),1)
+run_img = $(BUILD)/$(if $(filter disk,$(1)),uefi,$(1)-uefi).img
+RUN_FW = -drive if=pflash,format=raw,unit=0,readonly=on,file=$(OVMF_CODE) -drive if=pflash,format=raw,unit=1,file=$(BUILD)/run-ovmf-vars.fd
+RUN_FW_DEP = $(BUILD)/run-ovmf-vars.fd
+else
+run_img = $(BUILD)/$(1).img
+endif
+run_common = $(RUN_FW) $(subst $(BUILD)/disk.img,$(call run_img,$(1)),$(QEMU_COMMON))
 QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,thread=multi $(RUN_SOUND) $(RUN_TABLET) $(RUN_NIC) \
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: uefi-smoke uefi-interop uefi-ktest all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -235,6 +248,12 @@ $(BUILD)/uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/m
 $(BUILD)/go-uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/kernel.elf $(BUILD)/initrd.tar $(BUILD)/mkimage $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	$(call uefi_image,go-uefi,-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar)
 
+# W26-S05: the other Go images' UEFI twins (go-busybox, go-doom, go-dev,
+# go-unix), each from its BIOS image's payload list (GO_*_PAYLOADS), the
+# nucleus and the video request; $(call uefi_go_image,name,payloads).
+UEFI_PARTS := $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/mkimage $(BUILD)/kernel.elf $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+uefi_go_image = $(call uefi_image,$(1),-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf $(2))
+
 # W26-S01: OVMF runs the UEFI loader (tests/smoke/expect/boot_to_efi.txt);
 # skips without the ovmf package. S03: on to BURROW:NUCLEUS:OK, then again
 # with 2 GiB, where OVMF loads the loader near 2 GiB, above the identity map.
@@ -246,7 +265,34 @@ uefi-smoke: $(BUILD)/uefi.img $(BUILD)/go-uefi.img
 	$(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60 && \
 	MEM=2G $(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60 && \
 	MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/go-uefi.img \
-		tests/smoke/expect/boot_to_go_uefi.txt 120 tests/smoke/keys/boot_to_go_uefi.keys; fi
+		tests/smoke/expect/boot_to_go_uefi.txt 120 tests/smoke/keys/boot_to_go_uefi.keys && \
+	$(MAKE) --no-print-directory uefi-smoke-doom uefi-smoke-net uefi-smoke-usb; fi
+
+# W26-S05: the demos under OVMF, each skipping without its ports: Doom on
+# go-doom-uefi.img (doom-smoke's keys, markers, pixels and sounds), the
+# network on go-dev-uefi.img (net-smoke's fetches and ping), and the desktop
+# as burrow from the USB stick alone (unix-desktop-smoke's session, its
+# root and data volumes partitions of the boot disk). Logs: smoke-*-uefi.log.
+uefi-smoke-doom:
+	@if [ -f $(BUILD)/doom-root/doom ]; then $(MAKE) --no-print-directory uefi-smoke-doom-run; \
+	else echo "UEFI DOOM SMOKE SKIP (make doom)"; fi
+uefi-smoke-doom-run: $(BUILD)/go-doom-uefi.img $(BUILD)/doom-data.img
+	rm -f $(DOOM_WAV)
+	SMOKE_NAME=doom-uefi MEM=$(GO_MEM) $(OVMF_ENV) QEMU_EXTRA="$(DOOM_DRIVE) $(DOOM_SOUND)" \
+		tests/smoke/smoke.sh $(BUILD)/go-doom-uefi.img tests/smoke/expect/doom.txt 150 tests/smoke/keys/doom.keys
+	python3 tests/smoke/checkwav.py $(DOOM_WAV) sounds 4
+uefi-smoke-net:
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory uefi-smoke-net-run; \
+	else echo "UEFI NET SMOKE SKIP (make busybox ports)"; fi
+uefi-smoke-net-run: $(BUILD)/go-dev-uefi.img
+	SMOKE_NAME=net-uefi MEM=$(GO_MEM) $(OVMF_ENV) tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev-uefi.img net 150
+uefi-smoke-usb:
+	@if [ -f $(BUILD)/net-root/bin/netsurf ] && [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && command -v ssh >/dev/null; then $(MAKE) --no-print-directory uefi-smoke-usb-run; \
+	else echo "UEFI USB SMOKE SKIP (make x11 busybox net-ports browser, and an ssh client on the host)"; fi
+uefi-smoke-usb-run: $(BUILD)/burrow-usb.img
+	cp $(USB_IMG) $(BUILD)/usb-test.img
+	SMOKE_NAME=unix-desktop-usb MEM=$(GO_MEM) $(OVMF_ENV) EXPECT=tests/smoke/expect/unix-desktop-usb.txt \
+		tests/smoke/unix-desktop.sh $(BUILD) $(BUILD)/usb-test.img - 600
 
 # W26-S03: the ktest suites that touch what the firmware leaves behind
 # (memory, interrupts, timers, the other CPUs), booted by OVMF through the
@@ -330,8 +376,11 @@ $(BUILD)/initrd-busybox.tar: $(BUILD)/initrd.tar $(BUILD)/busybox
 	rm -rf $(BUILD)/initrd-busybox-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-busybox-root
 	cp $(BUILD)/busybox $(BUILD)/initrd-busybox-root/bin/busybox
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-busybox-root $@  # modes by content (W19-S04)
+GO_BUSYBOX_PAYLOADS = -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar
 $(BUILD)/go-busybox.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-busybox.tar
-	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-busybox.tar >/dev/null
+	$(MKIMAGE_GO) $(GO_BUSYBOX_PAYLOADS) >/dev/null
+$(BUILD)/go-busybox-uefi.img: $(UEFI_PARTS) $(BUILD)/initrd-busybox.tar
+	$(call uefi_go_image,go-busybox-uefi,$(GO_BUSYBOX_PAYLOADS))
 
 # Doom (W11): `make doom` downloads doomgeneric (pinned commit) and Freedoom
 # (pinned sha256) once (scripts/doom.sh) and builds build/doom-root/doom with
@@ -344,8 +393,11 @@ $(BUILD)/initrd-doom.tar: $(BUILD)/initrd.tar $(BUILD)/doom-root/doom
 	rm -rf $(BUILD)/initrd-doom-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-doom-root
 	cp $(BUILD)/doom-root/doom $(BUILD)/initrd-doom-root/bin/doom
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-doom-root $@  # modes by content (W19-S04)
+GO_DOOM_PAYLOADS = -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar
 $(BUILD)/go-doom.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-doom.tar
-	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-doom.tar >/dev/null
+	$(MKIMAGE_GO) $(GO_DOOM_PAYLOADS) >/dev/null
+$(BUILD)/go-doom-uefi.img: $(UEFI_PARTS) $(BUILD)/initrd-doom.tar
+	$(call uefi_go_image,go-doom-uefi,$(GO_DOOM_PAYLOADS))
 DOOM_DRIVE := -drive file=$(BUILD)/doom-data.img,format=raw,if=ide,index=1,media=disk
 $(BUILD)/doom-data.img: $(BUILD)/doom-root/freedoom1.wad $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	rm -rf $(BUILD)/doom-data && mkdir -p $(BUILD)/doom-data
@@ -383,8 +435,8 @@ $(BUILD)/ktest-%.img: tests/ktest/%.txt $(BOOT_PARTS)
 	$(MKIMAGE_BOOT) -payload ktest=$< >/dev/null
 
 # ---- run / debug ------------------------------------------------------------
-run: $(BUILD)/disk.img
-	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none
+run: $(call run_img,disk) $(RUN_FW_DEP)
+	$(QEMU) $(call run_common,disk) -serial mon:stdio -display none
 
 debug: $(BUILD)/disk.img
 	@echo "QEMU paused. In another terminal: gdb -x scripts/gdbinit"
@@ -553,8 +605,8 @@ x11-smoke-run: $(BUILD)/go-dev.img $(BUILD)/x11-data.img
 # dmenu, quit, the console back; the second boot finds the file and the
 # session script untouched, then fsck.fat checks the disk.
 X11_DRIVE_HDC := -drive file=$(BUILD)/x11-data.img,format=raw,if=ide,index=2,media=disk
-run-desktop: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/x11-data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+run-desktop: $(call run_img,go-dev) $(RUN_FW_DEP) $(HOME_IMG) $(BUILD)/x11-data.img
+	$(QEMU) $(call run_common,go-dev) -m $(GO_MEM) \
 		$(call run_drive,$(HOME_IMG),1) $(call run_drive,$(BUILD)/x11-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 desktop-smoke:
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ] && \
@@ -630,8 +682,8 @@ qtpad-smoke: $(BUILD)/go-dev.img $(BUILD)/qt-data.img
 	else echo "QTPAD HOME SKIP (no fsck.fat)"; fi
 # The Qt workbench in a QEMU window (W15-S06): run-dev's image and home disk,
 # with the Qt disk at /opt/qt: run /opt/qt/bin/qtpad /home/hello.c
-run-qt: $(BUILD)/go-dev.img $(HOME_IMG) $(BUILD)/qt-data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+run-qt: $(call run_img,go-dev) $(RUN_FW_DEP) $(HOME_IMG) $(BUILD)/qt-data.img
+	$(QEMU) $(call run_common,go-dev) -m $(GO_MEM) \
 		$(call run_drive,$(HOME_IMG),1) $(call run_drive,$(BUILD)/qt-data.img,2) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # Downloaded ports (W12-S04..S06): `make ports` fetches Lua, TinyCC and a
@@ -666,10 +718,13 @@ $(BUILD)/initrd-dev.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/ports-roo
 	cp $(BUILD)/busybox $(BUILD)/initrd-dev-root/bin/busybox
 	cp -R $(BUILD)/ports-root/. $(BUILD)/initrd-dev-root/
 	python3 scripts/mkinitrd.py $(BUILD)/initrd-dev-root $@  # modes by content (W19-S04)
+GO_DEV_PAYLOADS = -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar
 $(BUILD)/go-dev.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd-dev.tar
-	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-dev.tar >/dev/null
-run-dev: $(BUILD)/go-dev.img $(HOME_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(QEMU_COMMON)) -m $(GO_MEM) \
+	$(MKIMAGE_GO) $(GO_DEV_PAYLOADS) >/dev/null
+$(BUILD)/go-dev-uefi.img: $(UEFI_PARTS) $(BUILD)/initrd-dev.tar
+	$(call uefi_go_image,go-dev-uefi,$(GO_DEV_PAYLOADS))
+run-dev: $(call run_img,go-dev) $(RUN_FW_DEP) $(HOME_IMG)
+	$(QEMU) $(call run_common,go-dev) -m $(GO_MEM) \
 		$(call run_drive,$(HOME_IMG),1) -serial mon:stdio -display $(DEV_DISPLAY)
 
 # A multi-user Unix (W19-S06): go-unix.img's kargs say "login", so the
@@ -683,10 +738,13 @@ ROOT_SRC := $(BUILD)/busybox scripts/mkroot.py $(wildcard initrd/etc/*)
 # W25-S05: the set-user-id X server when the X disk is built
 ROOT_XSERVER := $(wildcard $(BUILD)/x11-root/bin/Xfbdev)
 MKROOT = python3 scripts/mkroot.py $(if $(ROOT_XSERVER),--xserver $(ROOT_XSERVER))
-$(BUILD)/go-unix.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
-	echo login > $(BUILD)/kargs-unix.txt
-	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
-		-payload kargs=$(BUILD)/kargs-unix.txt >/dev/null
+GO_UNIX_PAYLOADS = -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar -payload kargs=$(BUILD)/kargs-unix.txt
+$(BUILD)/kargs-unix.txt: | $(BUILD)
+	echo login > $@
+$(BUILD)/go-unix.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar $(BUILD)/kargs-unix.txt
+	$(MKIMAGE_GO) $(GO_UNIX_PAYLOADS) >/dev/null
+$(BUILD)/go-unix-uefi.img: $(UEFI_PARTS) $(BUILD)/initrd.tar $(BUILD)/kargs-unix.txt
+	$(call uefi_go_image,go-unix-uefi,$(GO_UNIX_PAYLOADS))
 $(BUILD)/root-test.img: $(ROOT_SRC) $(ROOT_XSERVER)
 	$(MKROOT) $(BUILD)/busybox initrd/etc $@
 $(ROOT_IMG):
@@ -717,11 +775,32 @@ unix-smoke-run: $(BUILD)/go-unix.img $(BUILD)/root-test.img $(call xp,tests/smok
 RUN_SSH_FWD ?= 2222
 UNIX_NET_IMG := $(if $(wildcard $(BUILD)/net-root/bin/curl),$(BUILD)/net-data.img)
 UNIX_X11_IMG := $(if $(wildcard $(BUILD)/x11-root/bin/Xfbdev),$(BUILD)/x11-data.img)
-run-unix: $(BUILD)/go-unix.img $(ROOT_IMG) $(UNIX_NET_IMG) $(UNIX_X11_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-unix.img,$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
+run-unix: $(call run_img,go-unix) $(RUN_FW_DEP) $(ROOT_IMG) $(UNIX_NET_IMG) $(UNIX_X11_IMG)
+	$(QEMU) $(filter-out $(RUN_NIC),$(call run_common,go-unix)) -m $(GO_MEM) \
 		$(call run_drive,$(ROOT_IMG),1) $(if $(UNIX_NET_IMG),$(call run_drive,$(UNIX_NET_IMG),2)) \
 		$(if $(UNIX_X11_IMG),$(call run_drive,$(UNIX_X11_IMG),3)) \
 		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_SSH_FWD)-:22 -serial mon:stdio -display $(DEV_DISPLAY)
+
+# A USB stick (W26-S05): go-unix-uefi.img's boot partition with a fresh root
+# (scripts/mkroot.py, with the set-user-id X server when the X disk is
+# built) and the NETDATA and X disks when they are built, as partitions of
+# one GPT disk (mkimage -gpt ... -part); the kernel mounts the boot disk's
+# partitions by label (kernel/cmd/kernel/bootparts.go). Write it with dd or
+# Rufus's DD mode (docs/06-guides/REAL_HARDWARE.md); make run-usb boots it.
+USB_IMG := $(BUILD)/burrow-usb.img
+$(BUILD)/usb-root.img: $(ROOT_SRC) $(ROOT_XSERVER)
+	$(MKROOT) $(BUILD)/busybox initrd/etc $@
+$(USB_IMG): $(BUILD)/go-unix-uefi.img $(BUILD)/usb-root.img $(UNIX_NET_IMG) $(UNIX_X11_IMG)
+	$(BUILD)/mkimage -gpt $(BUILD)/esp/go-unix-uefi.fat -part "Burrow root=$(BUILD)/usb-root.img" \
+		$(if $(UNIX_NET_IMG),-part "Burrow net=$(UNIX_NET_IMG)") $(if $(UNIX_X11_IMG),-part "Burrow X11=$(UNIX_X11_IMG)") -o $@ >/dev/null
+	@echo "wrote $@ ($$(du -m $@ | cut -f1) MiB): the boot partition, the root$(if $(UNIX_NET_IMG),$(comma) NETDATA)$(if $(UNIX_X11_IMG),$(comma) X11DATA)"
+uefi-usb: $(USB_IMG)
+run-usb: $(USB_IMG) $(BUILD)/run-ovmf-vars.fd
+	$(QEMU) -drive if=pflash,format=raw,unit=0,readonly=on,file=$(OVMF_CODE) -drive if=pflash,format=raw,unit=1,file=$(BUILD)/run-ovmf-vars.fd \
+		$(subst $(BUILD)/disk.img,$(USB_IMG),$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
+		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_SSH_FWD)-:22 -serial mon:stdio -display $(DEV_DISPLAY)
+$(BUILD)/run-ovmf-vars.fd: | $(BUILD)
+	cp "$(OVMF_VARS)" $@
 
 # The network from busybox (W17-S04): tests/smoke/net-smoke.sh serves two
 # files from the host (python3 -m http.server on a free port) and boots
@@ -775,8 +854,8 @@ net-bench: $(BUILD)/go-dev.img
 # beyond if the host has it) and the host's port 8080 forwarded to 8080 in
 # Burrow: `httpd -p 8080 -h /home` there, then http://localhost:8080 here.
 RUN_NET_FWD ?= 8080
-run-net: $(BUILD)/go-dev.img $(HOME_IMG)
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-dev.img,$(filter-out $(RUN_NIC),$(QEMU_COMMON))) -m $(GO_MEM) \
+run-net: $(call run_img,go-dev) $(RUN_FW_DEP) $(HOME_IMG)
+	$(QEMU) $(filter-out $(RUN_NIC),$(call run_common,go-dev)) -m $(GO_MEM) \
 		$(call run_drive,$(HOME_IMG),1) \
 		-nic user,model=$(NIC_MODEL),hostfwd=tcp:127.0.0.1:$(RUN_NET_FWD)-:8080 -serial mon:stdio -display $(DEV_DISPLAY)
 
@@ -956,19 +1035,19 @@ hostsim:
 # Boot the Go image interactively: the console reads the serial line (Ctrl-A X
 # quits). GO_DISPLAY=gtk (or sdl) also shows the screen and takes the keyboard.
 GO_DISPLAY ?= none
-run-go: $(BUILD)/go.img $(BUILD)/data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+run-go: $(call run_img,go) $(RUN_FW_DEP) $(BUILD)/data.img
+	$(QEMU) $(call run_common,go) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # busybox, interactive (W10-S08, vi since W13-S01): needs `make busybox`
 # first. At burrow> type `run /bin/busybox sh`; vi draws on the screen
 # console (VT100 since W13-S02) and on this terminal (the serial line).
-run-busybox: $(BUILD)/go-busybox.img $(BUILD)/data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-busybox.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+run-busybox: $(call run_img,go-busybox) $(RUN_FW_DEP) $(BUILD)/data.img
+	$(QEMU) $(call run_common,go-busybox) -m $(GO_MEM) $(DATA_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # Doom, interactive (W11): needs `make doom` first. At burrow> type
 #   run /bin/doom -iwad /mnt/freedoom1.wad
-run-doom: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
-	$(QEMU) $(subst $(BUILD)/disk.img,$(BUILD)/go-doom.img,$(QEMU_COMMON)) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
+run-doom: $(call run_img,go-doom) $(RUN_FW_DEP) $(BUILD)/doom-data.img
+	$(QEMU) $(call run_common,go-doom) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
 # W20-S06: every suite on one CPU and on four (smp only on four).
 ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))

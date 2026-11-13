@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-13 — W26-S05 Everything on UEFI, and a USB stick
+
+**Did:** UEFI twins of the busybox, Doom, dev and unix images from the same payload lists, and `UEFI=1` on every run target; `mkimage -gpt -part` puts data volumes beside the EFI system partition and `make uefi-usb` writes `build/burrow-usb.img` (the boot partition, the root, NETDATA, X11DATA), which the kernel mounts from its own partitions by label (`bootparts.go`); `uefi-smoke` runs Doom, the network and the desktop as burrow from the stick alone under OVMF; REAL_HARDWARE.md says how to write the stick and what a real PC still lacks.
+
+**Surprise:** nothing past the boot disk cared about the firmware: Doom, the network and X ran under OVMF on the first boot with the BIOS smokes' own keys and markers.
+
+**Learned:** a partition is only a disk if it can be written like one: `Partition.Device` had to become a `block.Writer` on a writable disk for the root on the stick to mount read-write. The boot disk's partitions mount before the other disks, so a second disk with the same label is the one refused (PIT-81).
+
+**Next:** S06 (M26): the boot time on both firmwares, ARCHITECTURE.md §7.11, ADR-0013.
+
 ## 2026-11-13 — W26-S04 The screen from GOP
 
 **Did:** the UEFI loader sets the video payload's mode through GOP and hands its framebuffer to the nucleus and the Go kernel (`fb_source` GOP); the loader and the nucleus draw their lines on it in the Go console's font until the Go kernel starts, and again on a panic; `kernel/block/gpt` names the GPT boot disk's boot partition without mounting it; `go-uefi.img` boots under OVMF to the console, its screen is checked, and `poweroff` turns QEMU off through ACPI with no debug-exit device.

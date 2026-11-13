@@ -3,9 +3,10 @@
 // the payloads (tools/mkimage/gpt.go writes them), and S05's USB stick puts
 // the data volumes beside it. Read checks the primary header and the entry
 // array against their CRCs and every partition against the disk's size;
-// Partition.Device reads one partition as a block.Device.
+// Partition.Device reads one partition as a block.Device (and writes it
+// when the disk can be written).
 //
-// It never writes a disk and never trusts a field it has not checked.
+// It never writes outside a partition and never trusts a field it has not checked.
 // UEFI 2.10, 5.3. Docs: docs/04-plan/waves/WAVE-26-uefi.md (S04, PIT-99).
 package gpt
 
@@ -38,8 +39,10 @@ var ErrNotGPT = errors.New("gpt: no GPT header")
 
 var le = binary.LittleEndian
 
-// Partition is one used entry: its type, name and inclusive sector range.
+// Partition is one used entry: its number (the entry's, from 1, as Linux
+// names partitions), type, name and inclusive sector range.
 type Partition struct {
+	Number      int
 	Type        [16]byte
 	Name        string
 	First, Last uint64
@@ -112,7 +115,7 @@ func parseEntries(b []byte, esize int, diskSectors uint64) (Table, error) {
 	var t Table
 	for off := 0; off+esize <= len(b); off += esize {
 		e := b[off : off+esize]
-		var p Partition
+		p := Partition{Number: off/esize + 1}
 		copy(p.Type[:], e[:16])
 		if p.Type == ([16]byte{}) {
 			continue // unused
@@ -135,9 +138,15 @@ func name(b []byte) string {
 	return strings.TrimRight(string(utf16.Decode(u)), "\x00")
 }
 
-// Device reads p on d as a disk of its own (sector 0 = p.First).
+// Device reads p on d as a disk of its own (sector 0 = p.First). When d
+// can be written so can the partition (W26-S05: the USB stick's root and
+// data volumes), never outside its sectors.
 func (p Partition) Device(d block.Device) block.Device {
-	return &slice{d: d, first: p.First, n: p.Last - p.First + 1}
+	s := &slice{d: d, first: p.First, n: p.Last - p.First + 1}
+	if w, ok := d.(block.Writer); ok {
+		return &writableSlice{slice: s, w: w}
+	}
+	return s
 }
 
 type slice struct {
@@ -154,3 +163,17 @@ func (s *slice) ReadSectors(lba uint64, buf []byte) error {
 	}
 	return s.d.ReadSectors(s.first+lba, buf)
 }
+
+type writableSlice struct {
+	*slice
+	w block.Writer
+}
+
+func (s *writableSlice) WriteSectors(lba uint64, buf []byte) error {
+	if err := block.CheckRange(s, lba, buf); err != nil {
+		return err
+	}
+	return s.w.WriteSectors(s.first+lba, buf)
+}
+
+func (s *writableSlice) Flush() error { return s.w.Flush() }

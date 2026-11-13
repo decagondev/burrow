@@ -99,6 +99,35 @@ func TestPartitionDeviceConformance(t *testing.T) {
 	blocktest.Run(t, tbl[0].Device(block.NewRAM(img, ss)), blocktest.Pattern(64, ss))
 }
 
+// W26-S05: a partition of a writable disk is a block.Writer that writes
+// only its own sectors.
+func TestPartitionWriterConformance(t *testing.T) {
+	img := disk(256, []part{{dataType, 64, 127, "x"}})
+	copy(img[64*ss:128*ss], blocktest.Pattern(64, ss))
+	ram := block.NewRAM(img, ss)
+	tbl, err := Read(ram)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tbl[0].Number != 1 {
+		t.Errorf("the first entry is partition %d", tbl[0].Number)
+	}
+	w, ok := tbl[0].Device(ram).(block.Writer)
+	if !ok {
+		t.Fatal("a partition of a RAM disk cannot be written")
+	}
+	before := append([]byte(nil), img...)
+	blocktest.RunWriter(t, w)
+	for i := range img {
+		if (i < 64*ss || i >= 128*ss) && img[i] != before[i] {
+			t.Fatalf("byte %d outside the partition changed", i)
+		}
+	}
+	if _, err := Read(ram); err != nil {
+		t.Errorf("the table after the writes: %v", err)
+	}
+}
+
 func TestReadRefuses(t *testing.T) {
 	if _, err := Read(block.NewRAM(make([]byte, 64*ss), ss)); !errors.Is(err, ErrNotGPT) {
 		t.Errorf("blank disk: %v, want ErrNotGPT", err)
