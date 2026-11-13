@@ -35,6 +35,16 @@ None (BUG-0033 closed in W25-S04: a test error, not a kernel bug).
 
 ## Closed
 
+### BUG-0035: x11-smoke's st step waited for two markers that raced (not a kernel bug)
+- Found: 2026-11-13, W26-S05's `make test` on four CPUs: x11-smoke timed out; the run on one CPU passed.
+- Severity: minor (a flaky smoke; the kernel, X and st did what they were asked).
+- Symptom: `sendkeys: 'xfocus: st-256color' never appeared in build/smoke-x11.log after offset 7313`, with the log showing `xfocus: st-256color` just before `st: shell up`.
+- Root cause: `tests/smoke/keys/x11.keys` started `xfocus st-256color` in the background on the console and, at the same time, st, whose shell prints `st: shell up`; then it waited for `st: shell up` and after it for `xfocus: st-256color`. The two programs are independent, so on four CPUs xfocus could find st's window and print before st's shell printed, and the second wait, which searches after the first one's match, never matched. `x11.txt` wants the same order.
+- Fix: xfocus runs in st's shell after its printf, writing to `/dev/tty1`, so the order is the one the waits and the expect file want (`tests/smoke/keys/x11.keys`).
+- Mitigation: two waits in a row are an ordering claim; a keys file may only wait for markers in an order one process (or a pipeline) guarantees.
+- Regression: `make x11-smoke` (three runs in a row on four CPUs after the fix).
+- Lesson: passing many times proves little about ordering; this race was in the keys file since W16 and on four CPUs since W20 before it lost once.
+
 ### BUG-0033: A keys file's wait was satisfied by the echo of its own command (not a kernel bug)
 - Found: 2026-11-11, W24-S06, trying the M24 demo by hand; explained 2026-11-11, W25-S04.
 - Severity: minor in itself (no smoke was failing), but it hid weak checks: six existing keys files had the same mistake, so a wait (and the ordered expect line after it) could pass on the echo of the command instead of its output.

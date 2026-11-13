@@ -37,7 +37,10 @@ screendump build/screen-x11-after.ppm
 # writes is shown on the console after st and the server have gone. With no
 # window manager, keys go to the window under the pointer, so nothing may be
 # typed before st's window is up: xfocus waits for it (and focuses it).
-type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/xfocus st-256color & /opt/x11/bin/st -e /bin/busybox sh -c 'printf "st: shell %s\n" up > /dev/tty1; exec /bin/busybox sh'; kill %1; wait; cat /tmp/st.txt
+# BUG-0035: xfocus runs in st's shell after its printf, so the two markers
+# come in the order the waits want (in the background on the console, it
+# raced the printf and could print first on four CPUs).
+type /opt/x11/bin/Xfbdev :0 -nolock > /tmp/x.log 2>&1 & sleep 6; /opt/x11/bin/st -e /bin/busybox sh -c 'printf "st: shell %s\n" up > /dev/tty1; /opt/x11/bin/xfocus st-256color > /dev/tty1; exec /bin/busybox sh'; kill %1; wait; cat /tmp/st.txt
 key ret
 wait st: shell up
 wait xfocus: st-256color
