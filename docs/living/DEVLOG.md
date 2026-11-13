@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-13 — BUG-0036 Writing where the firmware ran
+
+**Did:** found why the nucleus maps the Go kernel 1.1 s slower after OVMF: TSC stamps around each step put it all in zeroing new frames, a second zeroing was fast, and the slow frames were the ones OVMF's memory map called Boot Services Code. QEMU's TCG keeps such pages write-protected until every translation on them is gone, so each store pays. Closed with no change to Burrow; the docs that said "not found" say why.
+
+**Surprise:** my own note in the bug had ruled this out for the wrong reason: 2 GiB moves the frames, but OVMF moves with them.
+
+**Next:** W27.
+
 ## 2026-11-13 — W26 done: booting from UEFI (M26)
 
 **Did:** the wave in six slices. A UEFI application of our own, linked as a static PIE and turned into a PE32+ by `mkimage`, on a GPT disk with an EFI system partition (S01); the memory map, the RSDP and the payloads with their CRCs from the firmware, `boot_info` v4 (S02); the BIOS loader's back half shared as `loader/handoff.c`, the boot services left, the nucleus started on four CPUs (S03); the screen from GOP, with the loader's and the nucleus's lines drawn on it (S04); every demo on OVMF, `UEFI=1` for the run targets, a USB-stick image whose partitions the kernel mounts, REAL_HARDWARE.md (S05); `make boot-bench`, ARCHITECTURE.md §7.11, ADR-0013, BOOT_PROTOCOL.md §8 (S06). `make test` green on four CPUs and on one.
@@ -22,7 +30,7 @@ Links:     BUG-xxxx, ADR-xxxx
 
 **Learned:** ADR-0002's bet paid: with one `boot_info` as the only contract, a second front half was a loader's worth of work, not a kernel's. A bench that splits a boot into parts finds what a total hides (BUG-0036, 1.1 s that should not be there).
 
-**Next:** W27, a real PC's devices; or BUG-0036.
+**Next:** W27, a real PC's devices.
 
 ## 2026-11-13 — W26-S06 M26
 

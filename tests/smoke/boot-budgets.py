@@ -21,7 +21,8 @@ development machine, four CPUs, three boots each on 2026-11-13): BIOS
 the 18 MB initrd by PIO (about 1.75 MB/s); UEFI 7.28-7.34 s: OVMF's boot
 manager 1.9 s, the UEFI loader 3.4 s (the payloads through the firmware's
 block I/O, about 8 MB/s), the nucleus 0.56 s and 1.44 s to the Go kernel,
-1.1 s more than the BIOS path takes for it (BUG-0036). On one CPU: BIOS
+1.1 s more than the BIOS path takes for it (BUG-0036: TCG's first
+stores into frames that held OVMF's code). On one CPU: BIOS
 15.5 s, UEFI 6.9 s. Before its first line OVMF spends another 2.2 s
 (SeaBIOS 0.15 s), which no budget counts.
 Docs: docs/04-plan/waves/WAVE-26-uefi.md (S06).

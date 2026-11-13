@@ -583,7 +583,7 @@ always were; every Go image has a UEFI twin from the same payload list.
 | the firmware after its first line | - | 1.9 s (OVMF's boot manager) |
 | Burrow's front half (to the nucleus) | 14.6 s (25 MB by ATA PIO, 1.75 MB/s) | 3.4 s (the firmware's block I/O, 8 MB/s) |
 | the nucleus | 0.42 s | 0.56 s |
-| the Go kernel mapped and started | 0.37 s | 1.44 s (BUG-0036) |
+| the Go kernel mapped and started | 0.37 s | 1.44 s (BUG-0036: TCG's first stores into frames that held OVMF's code) |
 | first line to `BURROW:GO:OK` | 15.4 s | 7.3 s |
 
 ## 8. Design principles applied (SOLID and friends)

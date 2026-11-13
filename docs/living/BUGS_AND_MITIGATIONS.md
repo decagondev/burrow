@@ -31,17 +31,19 @@ flowchart LR
 
 ## Open
 
-### BUG-0036: After OVMF the nucleus maps the Go kernel six times slower than after SeaBIOS
-- Found: 2026-11-13, W26-S06, `make boot-bench`: from `BURROW:NUCLEUS:OK` to the Go kernel took 1.44 s under UEFI and 0.37 s under a BIOS.
-- Severity: minor (1.1 s of a 7.3 s boot on QEMU TCG; nothing fails; real hardware not measured).
-- Symptom: `go_load.c`'s `map_go_elf`, which takes a zeroed frame and copies into it for each page, maps the 3 MB text in 150 ms and the 32 MB data and bss in 930 ms after OVMF, against 18 and 146 ms after SeaBIOS (`build/boot-bench-*.log`, the `go segment` lines' stamps). The same on one CPU and on four, and with 2 GiB as with 512 MiB.
-- Root cause: not found. Ruled out: the CPU count, the frames' place (the free list hands out the highest first, where OVMF ran, but 2 GiB moves them and changes nothing, and `pmm_init`, which writes into every free frame, takes 0.3 s on both paths), and the nucleus's GOP screen (it draws nothing after `screen: handed to the Go kernel`). Left to look at: what else differs between the paths once the nucleus runs, such as the page tables `loader/handoff.c` builds from the firmware's block and TCG's handling of the framebuffer's write-combining mapping.
-- Fix: none yet.
-- Mitigation: `make boot-bench` reports each part of a boot, so a change here shows.
-- Regression: `make boot-bench` (UEFI's budget, 10 s, has room for it today).
-- Lesson: pending.
+None (BUG-0036 closed in its own commit after W26-S06: QEMU's, not Burrow's).
 
 ## Closed
+
+### BUG-0036: After OVMF the nucleus mapped the Go kernel six times slower than after SeaBIOS (QEMU TCG, not Burrow)
+- Found: 2026-11-13, W26-S06, `make boot-bench`: from `BURROW:NUCLEUS:OK` to the Go kernel took 1.44 s under UEFI and 0.37 s under a BIOS.
+- Severity: minor (1.1 s of a 7.3 s boot on QEMU TCG; nothing failed; KVM and real hardware do not pay it).
+- Symptom: `go_load.c`'s `map_go_elf`, which takes a zeroed frame and copies into it for each page, mapped the 3 MB text in 150 ms and the 32 MB data and bss in 930 ms after OVMF, against 18 and 146 ms after SeaBIOS; the same on one CPU and on four, with 512 MiB and with 2 GiB, and with interrupts off.
+- Root cause: QEMU's TCG keeps a page that holds translated guest code write-protected in its software TLB, and every store into it takes the slow path that looks for translations to throw away, until none is left on the page. OVMF runs its drivers from the top of RAM, wherever that is, and the nucleus's free list hands out the highest frames first, so the Go kernel's segments landed on frames that had held OVMF's code and the UEFI loader's own. `pmm_init`'s one 8-byte link per frame only cleared the translations under those 8 bytes. Measured with TSC stamps around each step: zeroing took 3.7 billion cycles after OVMF against 0.56 after SeaBIOS, a second zeroing of the same frames 0.24 on both, and copying into them the same on both; 577 frames took over 100 000 cycles to zero, and the firmware's memory map (logged by the loader for the test) put 492 of them in Boot Services Code and 5 in Loader Code, with 4.1 of the 4.1 billion extra cycles, about 2 ms a frame. SeaBIOS runs nothing up there. The note that 2 GiB "moved the frames" was wrong: OVMF moves with the top of RAM.
+- Fix: none in Burrow. Handing out the firmware's code frames last would move the cost to whoever touches them later, and needs `boot_info` to carry the page types for an emulator's sake.
+- Mitigation: when TCG is slower on one path, time a second pass over the same memory before suspecting the kernel; KVM (not open to this WSL user) would show the difference vanish. ARCHITECTURE.md §7.11's table says where the second goes.
+- Regression: `make boot-bench` (the UEFI budget, 10 s, counts it).
+- Lesson: a boot's first writes to memory are not free on an emulator: they pay for what the firmware ran there.
 
 ### BUG-0035: x11-smoke's st step waited for two markers that raced (not a kernel bug)
 - Found: 2026-11-13, W26-S05's `make test` on four CPUs: x11-smoke timed out; the run on one CPU passed.

@@ -78,8 +78,9 @@ Option 3, with one `boot_info` for both paths.
 - Boots got faster under UEFI on QEMU: 7.3 s from the firmware's first line
   to `BURROW:GO:OK` against 15.4 s, because OVMF's block I/O reads the
   payloads about four times as fast as the BIOS loader's ATA PIO (`make
-  boot-bench`). The Go kernel's segments map slower after OVMF than after
-  SeaBIOS, for a reason not yet found (BUG-0036).
+  boot-bench`). The Go kernel's segments map 1.1 s slower after OVMF than after
+  SeaBIOS, because TCG makes the first stores into frames that held
+  OVMF's code expensive (BUG-0036, QEMU's cost, not Burrow's).
 - Not decided here and not done: Secure Boot (the loader is unsigned),
   runtime services, a boot menu, El Torito, a 32-bit UEFI. Real PCs need
   drivers QEMU's `pc` machine does not (W27).
