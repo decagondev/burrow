@@ -1,0 +1,13 @@
+# Pixels of the Go console on GOP's framebuffer (W26-S04), dumped by
+# tests/smoke/keys/boot_to_go_uefi.keys at the first prompt: the video
+# payload's mode, and the same screen as the BIOS image's
+# (boot_to_go.screen). Append-only.
+size  build/screen-boot_to_go_uefi.ppm 1024 768
+# the band's gradient ends and the title's "B"
+pixel build/screen-boot_to_go_uefi.ppm 0 2 #007d9c
+pixel build/screen-boot_to_go_uefi.ppm 1023 2 #5dc9e2
+pixel build/screen-boot_to_go_uefi.ppm 26 20 #ffffff
+# the prompt's "b" stem, the paper beside it, and the right margin
+pixel build/screen-boot_to_go_uefi.ppm 1 97 #e6e6e6
+pixel build/screen-boot_to_go_uefi.ppm 3 97 #1e1e28
+pixel build/screen-boot_to_go_uefi.ppm 1022 700 #1e1e28

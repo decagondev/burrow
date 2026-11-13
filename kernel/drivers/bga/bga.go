@@ -76,13 +76,17 @@ type Mode struct {
 	Width, Height, Pitch int
 	BPP                  int
 	Format               gfx.Format
-	Source               string // "vbe" or "dispi"
+	Source               string // "vbe", "gop" (the UEFI loader's, W26-S04) or "dispi"
 }
+
+// firmwareSources names the framebuffers a loader set before the kernel.
+var firmwareSources = map[uint8]string{bootinfo.FbSourceVBE: "vbe", bootinfo.FbSourceGOP: "gop"}
 
 // FirmwareMode turns the firmware's descriptor into a Mode; ok is false
 // when there is none or its layout is one gfx cannot draw.
 func FirmwareMode(fb bootinfo.Framebuffer) (Mode, bool, error) {
-	if fb.Source != bootinfo.FbSourceVBE {
+	source, ok := firmwareSources[fb.Source]
+	if !ok {
 		return Mode{}, false, nil
 	}
 	f, err := gfx.FormatFor(fb.BPP, gfx.Field(fb.Red), gfx.Field(fb.Green), gfx.Field(fb.Blue))
@@ -90,7 +94,7 @@ func FirmwareMode(fb bootinfo.Framebuffer) (Mode, bool, error) {
 		return Mode{}, false, err
 	}
 	return Mode{Phys: fb.Phys, Width: fb.Width, Height: fb.Height, Pitch: fb.Pitch, BPP: fb.BPP,
-		Format: f, Source: "vbe"}, true, nil
+		Format: f, Source: source}, true, nil
 }
 
 var (
@@ -136,7 +140,7 @@ func (d *display) Probe(env *driver.Env) bool {
 	if env.MapMMIO == nil {
 		return false
 	}
-	d.firm = env.Framebuffer.Source == bootinfo.FbSourceVBE
+	_, d.firm = firmwareSources[env.Framebuffer.Source]
 	if env.Ports16 != nil && env.Ports32 != nil {
 		dev, ok := pci.Find(pci.Scan(env.Ports32), Vendor, Device)
 		d.dev, d.bga = dev, ok && read(env.Ports16, regID) >= idMin

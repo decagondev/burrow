@@ -34,6 +34,7 @@
 #include "acpi.h"
 #include "smp.h"
 #include "pat.h"
+#include "screen.h"
 
 static uint16_t g_com1;   /* serial_sink keeps a pointer to it */
 
@@ -57,7 +58,7 @@ static void init_idt(void) {
 void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
-    kprintf_set_sink(serial_sink(&g_com1));
+    kprintf_set_sink(screen_sink(serial_sink(&g_com1)));   /* W26-S04: and a GOP screen */
     kprintf_set_guard(kprint_enter, kprint_leave);   /* one line at a time across threads and CPUs */
     kprintf("[nucleus] hello from the higher half (main=%p, boot_info=%p)\n",
             (void *)nucleus_main, (void *)bi);
@@ -69,6 +70,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     vmm_init();
     protect_init();
     pat_init();
+    screen_init();
     acpi_init();
     pic_disable();
     lapic_init();
@@ -87,6 +89,7 @@ void __attribute__((noreturn)) nucleus_main(struct boot_info *bi) {
     }
 
     kprintf("BURROW:NUCLEUS:OK\n");
+    screen_release();                  /* W26-S04: the Go kernel's from here (a panic takes it back) */
     if (go_kernel_start() == 0) {
         kprintf("[nucleus] starting the Go kernel\n");
         thread_exit();                 /* "main" is done; Go threads take over */

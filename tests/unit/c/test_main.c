@@ -32,7 +32,10 @@ TEST(regions_hint_or_first_fit); TEST(regions_first_fit_uses_gaps); TEST(regions
 TEST(regions_release_splits_and_trims); TEST(regions_full_table);
 TEST(acpi_qemu_like); TEST(acpi_xsdt_ebda_override); TEST(acpi_bad_checksums); TEST(acpi_error_names); TEST(acpi_rsdp_from_firmware);
 TEST(lattrace_sums_the_steps); TEST(lattrace_skips_bad_stamps);
-TEST(fbdesc_vbe_modes); TEST(fbdesc_refusals);
+TEST(fbdesc_vbe_modes); TEST(fbdesc_refusals); TEST(fbdesc_gop_and_sources);
+TEST(gopmode_formats); TEST(gopmode_pick_and_fill);
+TEST(textgrid_lines); TEST(textgrid_controls);
+TEST(fbcon_draws_glyphs); TEST(fbcon_rgb565_and_scale); TEST(fbcon_tee_keeps_early_lines);
 TEST(go_stack_layout); TEST(go_stack_sysinfo_ehdr);
 TEST(go_stack_split_words);
 
@@ -71,7 +74,10 @@ int main(void) {
                         RUN(regions_full_table);
     puts("[acpi]");     RUN(acpi_qemu_like); RUN(acpi_xsdt_ebda_override); RUN(acpi_bad_checksums);
                         RUN(acpi_error_names); RUN(acpi_rsdp_from_firmware);
-    puts("[fbdesc]");   RUN(fbdesc_vbe_modes); RUN(fbdesc_refusals);
+    puts("[fbdesc]");   RUN(fbdesc_vbe_modes); RUN(fbdesc_refusals); RUN(fbdesc_gop_and_sources);
+    puts("[gopmode]");  RUN(gopmode_formats); RUN(gopmode_pick_and_fill);
+    puts("[textgrid]"); RUN(textgrid_lines); RUN(textgrid_controls);
+    puts("[fbcon]");    RUN(fbcon_draws_glyphs); RUN(fbcon_rgb565_and_scale); RUN(fbcon_tee_keeps_early_lines);
     puts("[lattrace]"); RUN(lattrace_sums_the_steps); RUN(lattrace_skips_bad_stamps);
     puts("[go_stack]"); RUN(go_stack_layout); RUN(go_stack_split_words); RUN(go_stack_sysinfo_ehdr);
     printf("\n%d checks, %d failures\n", mt_checks, mt_failures);

@@ -1,0 +1,7 @@
+# Typed into the Go console of go-uefi.img under OVMF (W26-S04): the screen
+# at GOP's mode once the prompt is up, then a power-off that must go through
+# ACPI (make uefi-smoke boots it with no debug-exit device).
+wait burrow>
+screendump build/screen-boot_to_go_uefi.ppm
+type poweroff
+key ret

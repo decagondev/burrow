@@ -105,3 +105,18 @@ func TestFirmwareModeRefusesABadLayout(t *testing.T) {
 		t.Errorf("none: ok %v, err %v", ok, err)
 	}
 }
+
+// W26-S04: a GOP framebuffer from the UEFI loader is the firmware's mode too.
+func TestFirmwareModeFromGOP(t *testing.T) {
+	gop := bootinfo.Framebuffer{Source: bootinfo.FbSourceGOP, Phys: 0x80000000, Width: 1024, Height: 768,
+		Pitch: 4096, BPP: 32, Red: bootinfo.Field{Size: 8, Pos: 16}, Green: bootinfo.Field{Size: 8, Pos: 8},
+		Blue: bootinfo.Field{Size: 8, Pos: 0}}
+	m, ok, err := FirmwareMode(gop)
+	if !ok || err != nil || m.Source != "gop" || m.Phys != 0x80000000 || m.Pitch != 4096 {
+		t.Fatalf("FirmwareMode = %+v, %v, %v", m, ok, err)
+	}
+	d := &display{}
+	if !d.Probe(&driver.Env{Framebuffer: gop, MapMMIO: func(pa, n uint64) ([]byte, error) { return nil, nil }}) || !d.firm {
+		t.Error("Probe: want the firmware's display")
+	}
+}

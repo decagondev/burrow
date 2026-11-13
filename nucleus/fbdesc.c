@@ -24,7 +24,7 @@ static int fields_ok(const struct fb_desc *d) {
 }
 
 enum fb_status fb_desc_from_bootinfo(const struct boot_info *bi, struct fb_desc *out) {
-    if (bi->fb_source != FB_SOURCE_VBE) return FB_NONE;
+    if (bi->fb_source != FB_SOURCE_VBE && bi->fb_source != FB_SOURCE_GOP) return FB_NONE;
     struct fb_desc d = {
         .phys = bi->fb_addr, .width = bi->fb_width, .height = bi->fb_height,
         .pitch_bytes = bi->fb_pitch, .bpp = bi->fb_bpp,
@@ -41,6 +41,10 @@ enum fb_status fb_desc_from_bootinfo(const struct boot_info *bi, struct fb_desc 
     if (!fields_ok(&d)) return FB_BAD_FIELDS;
     *out = d;
     return FB_OK;
+}
+
+const char *fb_source_str(uint8_t source) {
+    return source == FB_SOURCE_VBE ? "vbe" : source == FB_SOURCE_GOP ? "gop" : "none";
 }
 
 const char *fb_status_str(enum fb_status st) {

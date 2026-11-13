@@ -10,6 +10,7 @@
 #include "vmm.h"
 #include "cputime.h"
 #include "sched.h"
+#include "screen.h"
 
 #define PF_PRESENT 1u   /* #PF error code bit 0: the page was present (a protection fault) */
 
@@ -108,6 +109,7 @@ static void peek(const char *reg, uint64_t addr) {
 }
 
 static void __attribute__((noreturn)) report(const struct trap_frame *f, uint64_t cr2) {
+    screen_panic();   /* W26-S04: on the screen too, when the firmware gave one */
     kprintf("[trap] %s at rip=%016llx err=%llx cr2=%016llx\n", trap_name(f->vector),
             (unsigned long long)f->rip, (unsigned long long)f->error, (unsigned long long)cr2);
     kprintf("  rax=%016llx rbx=%016llx rcx=%016llx rdx=%016llx\n",

@@ -12,4 +12,5 @@
 [ktest] nx_kernel_data ok
 [ktest] bug0027_fault_in_present ok
 [ktest] pat_wc_mapping ok
+[ktest] screen_gop_text ok
 BURROW:KTEST:OK

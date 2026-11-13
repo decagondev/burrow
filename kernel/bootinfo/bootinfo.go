@@ -101,7 +101,7 @@ func Parse(b []byte) (Info, error) {
 }
 
 func parseFramebuffer(b []byte) Framebuffer {
-	if b[offFbSource] != FbSourceVBE {
+	if src := b[offFbSource]; src != FbSourceVBE && src != FbSourceGOP {
 		return Framebuffer{}
 	}
 	f := b[offFbFields:]

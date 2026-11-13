@@ -1,0 +1,28 @@
+# Ordered markers for go-uefi.img (go.img's payloads on a GPT disk) booted by
+# OVMF (make uefi-smoke, W26-S04). Append-only. The loader sets the video
+# payload's mode through GOP, the nucleus draws its lines on it until the Go
+# kernel starts, the Go console takes the same framebuffer, the boot disk is
+# a GPT disk whose boot partition is never mounted, and poweroff goes
+# through ACPI with the RSDP the firmware named (no debug-exit device).
+BURROW:EFI:OK
+[efi] manifest ok (4 entries)
+[efi] video image crc ok (16 bytes at phys
+[efi] payloads ok
+, 1024x768x32 pitch 4096 at
+[efi] jumping to nucleus
+(gop; red 8@16 green 8@8 blue 8@0)
+[nucleus] pat ok
+[nucleus] screen: text on the gop framebuffer (85x38 cells)
+[nucleus] acpi: rsdp from boot_info at
+S5 found on port
+BURROW:NUCLEUS:OK
+[nucleus] screen: handed to the Go kernel
+[nucleus] starting the Go kernel
+BURROW:GO:OK goroutine says 42
+BURROW:GO:SELFTEST:OK
+(pitch 4096, gop)
+[block] INFO: hda: GPT, boot partition "BURROWBOOT" (FAT32, LBA 2048-
+[console] INFO: ready: type on the keyboard
+burrow> poweroff
+[console] INFO: poweroff
+[nucleus] acpi: powering off

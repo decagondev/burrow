@@ -9,3 +9,5 @@ smap_smep_user_page
 nx_kernel_data
 bug0027_fault_in_present
 pat_wc_mapping
+# W26-S04: the nucleus's lines on a GOP framebuffer (passes, saying so, without one)
+screen_gop_text

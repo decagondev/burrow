@@ -108,3 +108,24 @@ func mustParse(t *testing.T, b []byte) Info {
 	}
 	return info
 }
+
+// W26-S04: the UEFI loader's GOP framebuffer reads like stage2's VBE one;
+// an unknown source is no framebuffer.
+func TestParseFramebufferGOP(t *testing.T) {
+	b := fakeInfo(Version, 1)
+	le.PutUint64(b[0x30:], 0x80000000)
+	le.PutUint32(b[0x38:], 1024)
+	le.PutUint32(b[0x3C:], 768)
+	le.PutUint32(b[0x40:], 4096)
+	le.PutUint32(b[0x44:], 32)
+	copy(b[0x60:], []byte{8, 16, 8, 8, 8, 0})
+	b[0x66] = FbSourceGOP
+	fb := mustParse(t, b).Framebuffer
+	if fb.Source != FbSourceGOP || fb.Phys != 0x80000000 || fb.Width != 1024 || fb.Pitch != 4096 {
+		t.Errorf("framebuffer = %+v", fb)
+	}
+	b[0x66] = 3
+	if fb := mustParse(t, b).Framebuffer; fb != (Framebuffer{}) {
+		t.Errorf("source 3: %+v, want none", fb)
+	}
+}

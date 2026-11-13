@@ -13,7 +13,9 @@
 # PASS requires ALL of:
 #   1. every non-comment line of <expect-file> appears in the serial log,
 #      IN ORDER (a stage printing out of order is a bug too);
-#   2. QEMU exits with status 33 = isa-debug-exit code 0x10 (success);
+#   2. QEMU exits with status 33 = isa-debug-exit code 0x10 (success), or
+#      with POWEROFF=acpi (W26-S04) there is no debug-exit device and QEMU
+#      must exit 0 by itself: the guest turned the machine off through ACPI;
 #   3. no line containing "PANIC" or "FAIL";
 #   4. if <expect-file> with .screen for .txt exists, its pixel checks pass.
 # The full serial log is kept in build/smoke-<name>.log for the bug tracker.
@@ -45,10 +47,14 @@ if [ -n "${OVMF_CODE:-}" ]; then
             -drive "if=pflash,format=raw,unit=1,file=$LOG.vars")
 fi
 
+# POWEROFF=acpi: no debug-exit device, so success is ACPI S5 turning QEMU off.
+DEBUG_EXIT=(-device isa-debug-exit,iobase=0xf4,iosize=0x04); WANT_STATUS=33
+if [ "${POWEROFF:-}" = acpi ]; then DEBUG_EXIT=(); WANT_STATUS=0; fi
+
 set +e
 timeout "$TIMEOUT" "$QEMU" -machine pc -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" -smp "${SMP:-1}" -accel tcg,thread=multi \
   "${FIRMWARE[@]}" -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
-  -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+  "${DEBUG_EXIT[@]}" \
   "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot
 STATUS=$?
 [ -n "$KEYS" ] && wait
@@ -69,7 +75,7 @@ while IFS= read -r want || [ -n "$want" ]; do
   line_no=$((line_no + found))
 done < "$EXPECT"
 
-[ "$STATUS" -eq 33 ] || fail "QEMU exit status $STATUS, want 33 (debug-exit 0x10)"
+[ "$STATUS" -eq "$WANT_STATUS" ] || fail "QEMU exit status $STATUS, want $WANT_STATUS (33: debug-exit 0x10; 0: ACPI power-off)"
 # Screen checks: pixels of the keys file's screendumps (tests/smoke/checkscreen.py).
 SCREEN="${EXPECT%.txt}.screen"
 if [ -f "$SCREEN" ]; then

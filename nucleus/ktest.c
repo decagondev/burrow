@@ -43,6 +43,7 @@ static const struct ktest g_tests[] = {
     { "madvise_returns_frames", kt_madvise_returns_frames },
     { "bug0027_fault_in_present", kt_bug0027_fault_in_present },
     { "pat_wc_mapping",     kt_pat_wc_mapping },
+    { "screen_gop_text",    kt_screen_gop_text },
     { "smp_pat_everywhere", kt_smp_pat_everywhere },
     { "nu_bootinfo_mmio",   kt_nu_bootinfo_mmio },
     { "nu_mem_info",        kt_nu_mem_info },

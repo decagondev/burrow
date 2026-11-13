@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-13 — W26-S04 The screen from GOP
+
+**Did:** the UEFI loader sets the video payload's mode through GOP and hands its framebuffer to the nucleus and the Go kernel (`fb_source` GOP); the loader and the nucleus draw their lines on it in the Go console's font until the Go kernel starts, and again on a panic; `kernel/block/gpt` names the GPT boot disk's boot partition without mounting it; `go-uefi.img` boots under OVMF to the console, its screen is checked, and `poweroff` turns QEMU off through ACPI with no debug-exit device.
+
+**Surprise:** everything past the loader already worked: the Go display took a GOP framebuffer as it takes VBE's, and the console, the keyboard and the ACPI power-off needed nothing for OVMF.
+
+**Learned:** a smoke marker matches one per line; two fragments of one line fail as "out of order". OVMF's default GOP mode is 1280x800, not the 1024x768 the images ask for, so the video payload matters on UEFI too.
+
+**Next:** S05: Doom, the desktop and the network on UEFI, and a USB stick image.
+
 ## 2026-11-12 — W26-S03 Leave the firmware, start the nucleus
 
 **Did:** the BIOS loader's back half became `loader/handoff.c`, which both loaders call; the UEFI loader loads the nucleus, builds its page tables from one block of the firmware's pages, writes boot_info v4, leaves the boot services and jumps. The nucleus takes the RSDP from `boot_info`. `make uefi-smoke` reaches `BURROW:NUCLEUS:OK` (also with 2 GiB, the loader above 1 GiB), and `make uefi-ktest` runs `mm`, `sched`, `smp` and `irq` under OVMF on one CPU and four.

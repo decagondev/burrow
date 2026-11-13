@@ -7,7 +7,8 @@
  * E820_PHYS_ADDR, the ACPI RSDP, the manifest and every payload read from
  * the boot partition with its CRC. S03: the nucleus loaded, its page tables
  * and boot_info v4 through the BIOS loader's back half (loader/handoff.c),
- * then ExitBootServices, interrupts off, and the jump.
+ * then ExitBootServices, interrupts off, and the jump. S04: the screen from
+ * GOP (gop.c) in boot_info, and every line on it too (common/fbcon.c).
  *
  * RULE: firmware is called only through the EFIAPI pointers of efi.h; the
  * loader never writes to the firmware's memory or tables.
@@ -22,12 +23,16 @@
 #include "cpu.h"
 #include "handoff.h"
 #include "vmsetup.h"
+#include "fbcon.h"
 
 #define MSR_APIC_BASE 0x1Bu
 
 struct efi_system_table *g_st;
 efi_handle g_image;
 static uint16_t g_com1;
+static struct fbcon_tee g_tee;         /* S04: COM1, and the screen once GOP gave one */
+static struct fbcon g_con;
+static const struct video_request *g_video;   /* the image's "video" payload, if any */
 static struct handoff g_handoff;
 static struct palloc g_frames;
 static struct e820_entry g_arena;      /* the page tables' block, palloc's one "RAM" range */
@@ -86,6 +91,9 @@ static struct efi_payload read_payloads(const struct manifest *m) {
         struct efi_payload p = efi_read_payload(&m->entries[i]);
         if (strncmp(p.name, "nucleus", MANIFEST_NAME_LEN) == 0) nucleus = p;
         else if (!handoff_is_boot_stage(p.name)) handoff_add_module(&g_handoff, p.name, p.phys, p.size_bytes);
+        if (strncmp(p.name, "video", MANIFEST_NAME_LEN) == 0 && p.size_bytes == sizeof(struct video_request) &&
+            memcmp((const void *)(uintptr_t)p.phys, VIDEO_MAGIC, 4) == 0)
+            g_video = (const struct video_request *)(uintptr_t)p.phys;
     }
     if (!nucleus.name) efi_panic("no nucleus in the manifest", EFI_NOT_FOUND);
     return nucleus;
@@ -101,7 +109,7 @@ static struct boot_info *start_boot_info(uint32_t e820_count, uint64_t rsdp, con
     bi->e820_count = e820_count;
     bi->loader_base = (uint64_t)(uintptr_t)li->image_base;
     bi->rsdp_addr = rsdp;
-    return bi;   /* manifest_addr 0: the manifest stays in the boot partition; fb_*: S04 */
+    return bi;   /* manifest_addr 0: the manifest stays in the boot partition; fb_*: gop.c */
 }
 
 /* The page tables come from one block of the firmware's pages below 1 GiB,
@@ -125,7 +133,8 @@ static void report_cpu_state(void) {
 efi_status EFIAPI efi_main(efi_handle image, struct efi_system_table *st) {
     g_com1 = COM1_PORT;
     serial_init(g_com1);
-    kprintf_set_sink(serial_sink(&g_com1));
+    fbcon_tee_init(&g_tee, serial_sink(&g_com1));
+    kprintf_set_sink(fbcon_tee_sink(&g_tee));
     g_st = st;
     g_image = image;
     if (!st || st->hdr.signature != EFI_SYSTEM_TABLE_SIGNATURE) efi_panic("bad system table", 0);
@@ -145,6 +154,8 @@ efi_status EFIAPI efi_main(efi_handle image, struct efi_system_table *st) {
     g_handoff.loader_bytes = li->image_size;
     struct efi_payload img = read_payloads(efi_read_manifest());
     kprintf("[efi] payloads ok\n");
+    struct fbcon_screen screen;          /* S04: the lines so far, and every one after, on it */
+    if (efi_setup_screen(bi, g_video, &screen) && fbcon_init(&g_con, &screen)) fbcon_tee_attach(&g_tee, &g_con);
 
     struct elf_loaded nucleus;           /* S03: the BIOS loader's back half */
     handoff_load_nucleus(&g_handoff, (const uint8_t *)(uintptr_t)img.phys, img.size_bytes, &nucleus);

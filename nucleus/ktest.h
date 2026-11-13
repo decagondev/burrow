@@ -62,6 +62,7 @@ int kt_madvise_dontneed_zeroes(void);
 int kt_madvise_returns_frames(void);
 int kt_bug0027_fault_in_present(void);
 int kt_pat_wc_mapping(void);          /* W21-S04 */
+int kt_screen_gop_text(void);         /* W26-S04 */
 int kt_smp_pat_everywhere(void);
 int kt_nu_bootinfo_mmio(void);
 int kt_nu_mem_info(void);

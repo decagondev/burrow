@@ -2,10 +2,11 @@
  * efi.h - the few UEFI structures Burrow's UEFI loader uses (W26).
  *
  * Declared by hand from the UEFI specification (2.10): the system table, the
- * boot services, the text output, loaded image, simple file system and file
- * protocols, and the GUIDs that name them. No EDK II and no gnu-efi: what is
- * not used is not declared, and the members before a used one are kept only
- * as placeholders so the offsets match the specification.
+ * boot services, the text output, loaded image, simple file system, file and
+ * graphics output (W26-S04) protocols, and the GUIDs that name them. No
+ * EDK II and no gnu-efi: what is not used is not declared, and the members
+ * before a used one are kept only as placeholders so the offsets match the
+ * specification.
  *
  * RULE: every function pointer here is EFIAPI (Microsoft's x64 convention);
  * calling firmware through a pointer without it corrupts arguments.
@@ -152,6 +153,42 @@ struct efi_simple_file_system {
     efi_status (EFIAPI *open_volume)(struct efi_simple_file_system *self, struct efi_file **root);
 };
 
+/* EFI_GRAPHICS_OUTPUT_PROTOCOL (W26-S04). */
+enum efi_pixel_format {
+    EFI_PIXEL_RGBX_8 = 0,    /* PixelRedGreenBlueReserved8BitPerColor: red in byte 0 */
+    EFI_PIXEL_BGRX_8 = 1,    /* PixelBlueGreenRedReserved8BitPerColor: blue in byte 0 */
+    EFI_PIXEL_BIT_MASK = 2,  /* PixelBitMask: the masks say */
+    EFI_PIXEL_BLT_ONLY = 3,  /* no framebuffer at all */
+};
+
+struct efi_pixel_bitmask { uint32_t red, green, blue, reserved; };
+
+struct efi_gop_mode_info {
+    uint32_t version;
+    uint32_t horizontal_resolution;
+    uint32_t vertical_resolution;
+    uint32_t pixel_format;              /* enum efi_pixel_format */
+    struct efi_pixel_bitmask mask;
+    uint32_t pixels_per_scan_line;
+};
+
+struct efi_gop_mode {
+    uint32_t max_mode;
+    uint32_t mode;
+    struct efi_gop_mode_info *info;
+    uint64_t size_of_info;
+    uint64_t frame_buffer_base;
+    uint64_t frame_buffer_size;
+};
+
+struct efi_gop {
+    efi_status (EFIAPI *query_mode)(struct efi_gop *self, uint32_t mode, uint64_t *size_of_info,
+                                    struct efi_gop_mode_info **info);
+    efi_status (EFIAPI *set_mode)(struct efi_gop *self, uint32_t mode);
+    void *blt;
+    struct efi_gop_mode *mode;
+};
+
 #define EFI_LOADED_IMAGE_PROTOCOL_GUID \
     { 0x5B1B31A1, 0x9562, 0x11D2, { 0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B } }
 #define EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID \
@@ -179,4 +216,8 @@ _Static_assert(offsetof(struct efi_loaded_image, device_handle) == 24, "efi drif
 _Static_assert(offsetof(struct efi_loaded_image, image_base) == 64, "efi drift");
 _Static_assert(sizeof(struct efi_memory_descriptor) == 40, "efi drift");
 _Static_assert(sizeof(struct efi_configuration_table) == 24, "efi drift");
+_Static_assert(sizeof(struct efi_gop_mode_info) == 36, "efi drift");
+_Static_assert(offsetof(struct efi_gop_mode_info, pixels_per_scan_line) == 32, "efi drift");
+_Static_assert(offsetof(struct efi_gop_mode, frame_buffer_base) == 24, "efi drift");
+_Static_assert(offsetof(struct efi_gop, mode) == 24, "efi drift");
 #endif

@@ -1,5 +1,5 @@
-/* fbdesc.h - the framebuffer stage2 recorded in boot_info (W21-S02), read
- * and checked. Pure: no hardware, no globals; host-tested in
+/* fbdesc.h - the framebuffer stage2 (VBE, W21-S02) or the UEFI loader
+ * (GOP, W26-S04) recorded in boot_info, read and checked. Pure: no hardware, no globals; host-tested in
  * tests/unit/c/test_fbdesc.c. Never trusts a field: a descriptor that is
  * not internally consistent is reported, not used.
  * Docs: docs/02-architecture/BOOT_PROTOCOL.md, WAVE-21-framebuffer.md. */
@@ -22,7 +22,7 @@ struct fb_desc {
 
 enum fb_status {
     FB_OK = 0,
-    FB_NONE,          /* stage2 set no mode (fb_source 0) */
+    FB_NONE,          /* no loader set a mode (fb_source neither VBE nor GOP) */
     FB_BAD_BASE,      /* zero, not page aligned, or past 2^46 */
     FB_BAD_SIZE,      /* a side of 0 or over FB_MAX_SIDE_PIXELS, or over FB_MAX_BYTES in all */
     FB_BAD_BPP,       /* not 15, 16, 24 or 32 */
@@ -33,4 +33,5 @@ enum fb_status {
 /* Fills *out from bi's framebuffer fields when they make sense. */
 enum fb_status fb_desc_from_bootinfo(const struct boot_info *bi, struct fb_desc *out);
 const char *fb_status_str(enum fb_status st);
+const char *fb_source_str(uint8_t source);   /* "vbe", "gop", "none" */
 #endif

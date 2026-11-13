@@ -59,3 +59,21 @@ TEST(fbdesc_refusals) {
     CHECK(fb_desc_from_bootinfo(&bi, &d) == FB_BAD_FIELDS);
     CHECK(strcmp(fb_status_str(FB_BAD_PITCH), "pitch shorter than a row") == 0);
 }
+
+/* W26-S04: the UEFI loader's GOP framebuffer goes through the same check;
+ * an unknown source is no framebuffer. */
+TEST(fbdesc_gop_and_sources) {
+    struct fb_desc d;
+    struct boot_info bi = xrgb(1024, 768, 4096);
+    bi.fb_source = FB_SOURCE_GOP;
+    bi.fb_addr = 0x80000000u;
+    CHECK(fb_desc_from_bootinfo(&bi, &d) == FB_OK && d.phys == 0x80000000u);
+    bi.fb_red_pos = 0, bi.fb_blue_pos = 16;                    /* PixelRedGreenBlueReserved8BitPerColor */
+    CHECK(fb_desc_from_bootinfo(&bi, &d) == FB_OK && d.blue.pos == 16);
+    bi.fb_pitch = 4092;
+    CHECK(fb_desc_from_bootinfo(&bi, &d) == FB_BAD_PITCH);
+    bi = xrgb(1024, 768, 4096), bi.fb_source = 3;
+    CHECK(fb_desc_from_bootinfo(&bi, &d) == FB_NONE);
+    CHECK(strcmp(fb_source_str(FB_SOURCE_GOP), "gop") == 0 && strcmp(fb_source_str(FB_SOURCE_VBE), "vbe") == 0);
+    CHECK(strcmp(fb_source_str(7), "none") == 0);
+}

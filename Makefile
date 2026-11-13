@@ -230,13 +230,23 @@ endef
 $(BUILD)/uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/mkimage $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	$(call uefi_image,uefi,-payload nucleus=$(BUILD)/nucleus.disk.elf)
 
+# W26-S04: go.img's UEFI twin, from the same payloads (the video request is
+# GOP's mode here).
+$(BUILD)/go-uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/kernel.elf $(BUILD)/initrd.tar $(BUILD)/mkimage $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
+	$(call uefi_image,go-uefi,-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar)
+
 # W26-S01: OVMF runs the UEFI loader (tests/smoke/expect/boot_to_efi.txt);
 # skips without the ovmf package. S03: on to BURROW:NUCLEUS:OK, then again
 # with 2 GiB, where OVMF loads the loader near 2 GiB, above the identity map.
-uefi-smoke: $(BUILD)/uefi.img
+# S04: go-uefi.img to the Go console (boot_to_go_uefi.txt), the screen at
+# GOP's mode, and a power-off through ACPI with no debug-exit device.
+OVMF_ENV = OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)"
+uefi-smoke: $(BUILD)/uefi.img $(BUILD)/go-uefi.img
 	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "UEFI SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
-	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60 && \
-	MEM=2G OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60; fi
+	$(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60 && \
+	MEM=2G $(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/uefi.img tests/smoke/expect/boot_to_efi.txt 60 && \
+	MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) tests/smoke/smoke.sh $(BUILD)/go-uefi.img \
+		tests/smoke/expect/boot_to_go_uefi.txt 120 tests/smoke/keys/boot_to_go_uefi.keys; fi
 
 # W26-S03: the ktest suites that touch what the firmware leaves behind
 # (memory, interrupts, timers, the other CPUs), booted by OVMF through the
@@ -399,7 +409,7 @@ keys-lint:
 UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
-	loader/image.c loader/elf_load.c loader/vmsetup.c loader/efi/efimap.c \
+	loader/image.c loader/elf_load.c loader/vmsetup.c loader/efi/efimap.c loader/efi/gopmode.c \
 	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c nucleus/lattrace.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 

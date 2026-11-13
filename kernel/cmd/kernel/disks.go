@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"burrow/kernel/block"
+	"burrow/kernel/block/gpt"
 	"burrow/kernel/fs/ext2"
 	"burrow/kernel/fs/fat"
 	"burrow/kernel/klog"
@@ -21,6 +22,9 @@ const manifestMagic = "BRWMNFST"
 
 // checkBootDisk reads the boot disk's manifest sector through the Go ATA
 // driver: proof that the block layer reads what the loader read (W8-S06).
+// A UEFI image's boot disk is a GPT disk instead (W26-S04): its EFI system
+// partition is named by its FAT label and never mounted (PIT-99; hda is
+// not one of mountData's disks either).
 func checkBootDisk(log *klog.Logger) {
 	d, ok := block.Get("hda")
 	if !ok {
@@ -32,11 +36,34 @@ func checkBootDisk(log *klog.Logger) {
 		log.Errorf("hda: %v", err)
 		return
 	}
+	if bytes.HasPrefix(sector, []byte("EFI PART")) {
+		checkGPTBootDisk(log, d)
+		return
+	}
 	if !bytes.HasPrefix(sector, []byte(manifestMagic)) {
 		log.Errorf("hda sector 1: no manifest (% x)", sector[:8])
 		return
 	}
 	log.Infof("hda sector 1: boot manifest %q found", manifestMagic)
+}
+
+func checkGPTBootDisk(log *klog.Logger, d block.Device) {
+	tbl, err := gpt.Read(d)
+	if err != nil {
+		log.Errorf("hda: %v", err)
+		return
+	}
+	esp, ok := tbl.ESP()
+	if !ok {
+		log.Errorf("hda: GPT with %d partitions and no EFI system partition", len(tbl))
+		return
+	}
+	fsys, err := fat.Mount(block.ReaderAt(esp.Device(d)))
+	if err != nil {
+		log.Errorf("hda: GPT, boot partition at LBA %d: %v", esp.First, err)
+		return
+	}
+	log.Infof("hda: GPT, boot partition %q (FAT32, LBA %d-%d; not mounted)", fsys.Label, esp.First, esp.Last)
 }
 
 func listDisks(out io.Writer) {

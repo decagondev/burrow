@@ -48,8 +48,8 @@ static void report_framebuffer(struct boot_info *bi) {
         bi->fb_source = FB_SOURCE_NONE;
         return;
     }
-    kprintf("[nucleus] framebuffer %ux%ux%u pitch %u at %llx (vbe; red %u@%u green %u@%u blue %u@%u)\n",
-            d.width, d.height, d.bpp, d.pitch_bytes, (unsigned long long)d.phys,
+    kprintf("[nucleus] framebuffer %ux%ux%u pitch %u at %llx (%s; red %u@%u green %u@%u blue %u@%u)\n",
+            d.width, d.height, d.bpp, d.pitch_bytes, (unsigned long long)d.phys, fb_source_str(bi->fb_source),
             d.red.size, d.red.pos, d.green.size, d.green.pos, d.blue.size, d.blue.pos);
 }
 

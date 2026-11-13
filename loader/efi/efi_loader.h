@@ -3,9 +3,9 @@
  *
  * main.c runs the steps; firmware.c asks the firmware about the machine
  * (pages, the memory map, the ACPI tables); files.c reads the boot
- * partition. Each step prints a marker on COM1 (tests/smoke/expect/
- * boot_to_efi.txt) and any failure is loud: "[efi] PANIC: ..." and
- * debug-exit 0x11.
+ * partition; gop.c sets the screen (S04). Each step prints a marker on COM1
+ * (tests/smoke/expect/boot_to_efi.txt), and on the screen once it is set,
+ * and any failure is loud: "[efi] PANIC: ..." and debug-exit 0x11.
  * Docs: docs/04-plan/waves/WAVE-26-uefi.md, docs/02-architecture/BOOT_PROTOCOL.md.
  */
 #ifndef LOADER_EFI_LOADER_H
@@ -40,4 +40,9 @@ struct efi_payload { const char *name; uint64_t phys; uint64_t size_bytes; };
 const struct manifest *efi_read_manifest(void);
 struct efi_payload efi_read_payload(const struct manifest_entry *e);
 int efi_file_exists(const char16 *path);
+
+/* gop.c (S04): the screen's mode set (want may be 0) and its framebuffer
+ * written into bi; 1 with *out filled when there is one to draw on. */
+struct fbcon_screen;
+int efi_setup_screen(struct boot_info *bi, const struct video_request *want, struct fbcon_screen *out);
 #endif
