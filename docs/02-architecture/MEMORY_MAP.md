@@ -47,6 +47,21 @@ flowchart TB
 
 Rule of thumb from experience: **anything below 1 MiB that you did not put there yourself belongs to the firmware.** Always consult the E820 map rather than assuming a hole is free.
 
+### Physical memory on the UEFI path (W26)
+
+Under UEFI the firmware owns memory until `ExitBootServices`, and the loader takes what it needs from it ([ADR-0013](../03-decisions/ADR-0013-uefi-loader.md), BOOT_PROTOCOL.md §8). Only the nucleus's fixed addresses are the same as on the BIOS path; nothing of stage1's or stage2's (the manifest copy at `0x600`, the boot page tables at `0x3000`, the loader at `0x10000`, the VBE scratch) exists. As seen under OVMF with 512 MiB:
+
+| Range | Contents | How the loader gets it |
+|---|---|---|
+| `0x01000 - 0x02FFF` | `struct boot_info`, the module table, the E820 records (the firmware's map converted, rewritten after `ExitBootServices`) | claimed with `AllocatePages(AllocateAddress)` |
+| `0x08000 - 0x08FFF` | the APs' trampoline, as on the BIOS path | claimed the same way |
+| `0x100000 - 0x3FFFFF` | the nucleus's segments | claimed the same way |
+| where the firmware loads it (about `0x1E200000` with 512 MiB, `0x7E237000` with 2 GiB) | the UEFI loader's image, 40 KiB; identity-mapped by the hand-off wherever it is | the firmware's choice |
+| firmware pages below 1 GiB (`0x1C98F000..0x1E226010` here) | the payloads (`kernel`, `initrd`, `video` modules), and one block for the page tables (32 pages plus two per GiB of physmap, the `loader-frames` module) | `AllocatePages(AllocateMaxAddress)` below 1 GiB, as loader data |
+| `0x80000000` on QEMU's VGA | GOP's framebuffer (SeaBIOS's VBE mode puts it at `0xFD000000`) | GOP's mode |
+
+The rest, including the firmware's boot-services code and data, is usable RAM once the boot services are gone; runtime services, ACPI NVS and MMIO stay reserved and ACPI reclaim memory is `E820_ACPI` (`loader/efi/efimap.c`). The RSDP is wherever the firmware put it (`0x1FB7E014` here), named by `boot_info.rsdp_addr`.
+
 ## 2. Virtual memory once the nucleus runs (Waves 4-9) *(provisional)*
 
 x86-64 has a 48-bit canonical address space: a lower half `0x0000_0000_0000_0000 - 0x0000_7FFF_FFFF_FFFF` and an upper half `0xFFFF_8000_0000_0000 - 0xFFFF_FFFF_FFFF_FFFF`. Everything in between is non-canonical and faults.

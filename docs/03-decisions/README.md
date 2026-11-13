@@ -16,3 +16,4 @@ An ADR records one significant decision: context, options, choice, consequences.
 | [0010](ADR-0010-ext2.md) | ext2 as Burrow's Unix file system | Accepted |
 | [0011](ADR-0011-smp.md) | Per-CPU state through GS, and how the other CPUs start | Accepted |
 | [0012](ADR-0012-vdso-dispatcher.md) | A vDSO, and the dispatcher answers what never blocks | Accepted |
+| [0013](ADR-0013-uefi-loader.md) | A UEFI loader of our own beside the BIOS chain | Accepted |

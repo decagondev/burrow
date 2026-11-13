@@ -538,6 +538,54 @@ write: 118 us from taken to answered), which answering on the dispatcher
 does not fix: the goroutines such a call wakes wait for the dispatcher's P
 while it waits in the nucleus (W25-S04; RISKS.md R-09).
 
+### 7.11 Booting from UEFI (Wave 26)
+
+The loader has two front halves and one back half (ADR-0013). Under a BIOS,
+stage1 and stage2 find the memory map and a VBE mode, enter long mode and call
+`loader/main.c`, which reads the payloads with its own ATA driver. Under UEFI,
+the firmware runs `\EFI\BOOT\BOOTX64.EFI` from the GPT disk's EFI system
+partition: `loader/efi/` asks the firmware for the same facts and reads the
+same payloads from `burrow/` on that partition. Both fill one `struct
+boot_info` and call `loader/handoff.c`, which puts the nucleus at 1 MiB, builds
+the page tables and jumps. From the nucleus up nothing knows which firmware it
+had, except that the RSDP may come in `boot_info` and the nucleus draws its
+lines on GOP's screen until the Go kernel starts (BOOT_PROTOCOL.md §8).
+
+```mermaid
+sequenceDiagram
+    participant F as UEFI firmware (OVMF)
+    participant L as loader/efi (BOOTX64.EFI)
+    participant H as loader/handoff.c
+    participant N as nucleus
+    participant G as Go kernel
+    F->>L: efi_main(image, system table)
+    L->>F: AllocatePages(AllocateAddress): 0x1000-0x2FFF, 0x8000, 1-4 MiB
+    L->>F: GetMemoryMap, configuration table (RSDP)
+    L->>F: file protocol: burrow/manifest, each payload (CRC checked)
+    L->>F: GOP: set the video payload's mode
+    L->>H: boot_info v4 filled, the payloads as modules
+    H->>H: nucleus segments to 1 MiB, page tables, physmap
+    L->>F: GetMemoryMap (into a buffer taken before), ExitBootServices(key)
+    L->>N: cli, CR3, jump (RDI = boot_info)
+    N->>N: GDT, IDT, frames, VMM, ACPI from rsdp_addr, CPUs
+    N->>G: BURROW:NUCLEUS:OK, the screen handed over, the Go kernel mapped
+    G->>G: the GPT boot disk: partitions mounted by label (hda2..)
+```
+
+The image is GPT: a protective MBR, the tables, the FAT32 boot partition
+`BURROWBOOT` at 1 MiB, and for a USB stick the root and data volumes as more
+partitions (`make uefi-usb`). The BIOS images are the manifest disks they
+always were; every Go image has a UEFI twin from the same payload list.
+
+| On QEMU TCG, four CPUs, medians of three boots (`make boot-bench`) | BIOS (`go.img`) | UEFI (`go-uefi.img`) |
+|---|---|---|
+| before the first line on COM1 | 0.15 s (SeaBIOS writes nothing there) | 2.2 s |
+| the firmware after its first line | - | 1.9 s (OVMF's boot manager) |
+| Burrow's front half (to the nucleus) | 14.6 s (25 MB by ATA PIO, 1.75 MB/s) | 3.4 s (the firmware's block I/O, 8 MB/s) |
+| the nucleus | 0.42 s | 0.56 s |
+| the Go kernel mapped and started | 0.37 s | 1.44 s (BUG-0036) |
+| first line to `BURROW:GO:OK` | 15.4 s | 7.3 s |
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

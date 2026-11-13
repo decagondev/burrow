@@ -115,7 +115,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -293,6 +293,27 @@ uefi-smoke-usb-run: $(BUILD)/burrow-usb.img
 	cp $(USB_IMG) $(BUILD)/usb-test.img
 	SMOKE_NAME=unix-desktop-usb MEM=$(GO_MEM) $(OVMF_ENV) EXPECT=tests/smoke/expect/unix-desktop-usb.txt \
 		tests/smoke/unix-desktop.sh $(BUILD) $(BUILD)/usb-test.img - 600
+
+# W26-S06: how long a boot takes from the firmware's first line on COM1 to
+# BURROW:GO:OK, go.img under SeaBIOS and go-uefi.img under OVMF, three boots
+# each taken in turns (OVMF with a fresh variable store each time), stamped
+# by tests/smoke/bootbench.py and checked against tests/smoke/boot-budgets.py
+# (not in make test; needs the ovmf package).
+BOOT_BENCH_RUNS ?= 3
+BOOT_BENCH_QEMU = $(QEMU) -machine pc -cpu $(QEMU_CPU) -m $(GO_MEM) -smp $(SMP) -accel tcg,thread=multi -display none -no-reboot
+BOOT_BENCH_OUT = $(BUILD)/boot-bench.txt
+boot-bench: $(BUILD)/go.img $(BUILD)/go-uefi.img
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "BOOT BENCH needs $(OVMF_CODE): apt install ovmf"; exit 1; fi
+	rm -f $(BOOT_BENCH_OUT)
+	for n in $$(seq $(BOOT_BENCH_RUNS)); do \
+		python3 tests/smoke/bootbench.py bios $$n 120 $(BUILD) -- $(BOOT_BENCH_QEMU) \
+			-drive file=$(BUILD)/go.img,format=raw,if=ide,index=0,media=disk >> $(BOOT_BENCH_OUT) || { cat $(BOOT_BENCH_OUT); exit 1; }; \
+		cp "$(OVMF_VARS)" $(BUILD)/boot-bench-vars.fd; \
+		python3 tests/smoke/bootbench.py uefi $$n 120 $(BUILD) -- $(BOOT_BENCH_QEMU) \
+			-drive if=pflash,format=raw,unit=0,readonly=on,file=$(OVMF_CODE) -drive if=pflash,format=raw,unit=1,file=$(BUILD)/boot-bench-vars.fd \
+			-drive file=$(BUILD)/go-uefi.img,format=raw,if=ide,index=0,media=disk >> $(BOOT_BENCH_OUT) || { cat $(BOOT_BENCH_OUT); exit 1; }; \
+	done
+	python3 tests/smoke/boot-budgets.py $(BOOT_BENCH_OUT) $(BOOT_BENCH_RUNS)
 
 # W26-S03: the ktest suites that touch what the firmware leaves behind
 # (memory, interrupts, timers, the other CPUs), booted by OVMF through the

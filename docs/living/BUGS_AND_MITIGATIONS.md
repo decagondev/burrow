@@ -31,7 +31,15 @@ flowchart LR
 
 ## Open
 
-None (BUG-0033 closed in W25-S04: a test error, not a kernel bug).
+### BUG-0036: After OVMF the nucleus maps the Go kernel six times slower than after SeaBIOS
+- Found: 2026-11-13, W26-S06, `make boot-bench`: from `BURROW:NUCLEUS:OK` to the Go kernel took 1.44 s under UEFI and 0.37 s under a BIOS.
+- Severity: minor (1.1 s of a 7.3 s boot on QEMU TCG; nothing fails; real hardware not measured).
+- Symptom: `go_load.c`'s `map_go_elf`, which takes a zeroed frame and copies into it for each page, maps the 3 MB text in 150 ms and the 32 MB data and bss in 930 ms after OVMF, against 18 and 146 ms after SeaBIOS (`build/boot-bench-*.log`, the `go segment` lines' stamps). The same on one CPU and on four, and with 2 GiB as with 512 MiB.
+- Root cause: not found. Ruled out: the CPU count, the frames' place (the free list hands out the highest first, where OVMF ran, but 2 GiB moves them and changes nothing, and `pmm_init`, which writes into every free frame, takes 0.3 s on both paths), and the nucleus's GOP screen (it draws nothing after `screen: handed to the Go kernel`). Left to look at: what else differs between the paths once the nucleus runs, such as the page tables `loader/handoff.c` builds from the firmware's block and TCG's handling of the framebuffer's write-combining mapping.
+- Fix: none yet.
+- Mitigation: `make boot-bench` reports each part of a boot, so a change here shows.
+- Regression: `make boot-bench` (UEFI's budget, 10 s, has room for it today).
+- Lesson: pending.
 
 ## Closed
 

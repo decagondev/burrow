@@ -11,7 +11,7 @@ The exact contracts between boot components. If code and this document disagree,
 | 2 | 32 | stage2 slot (16 KiB, zero padded) | `mkimage` from `build/stage2.bin` |
 | 34.. | n | payloads in `-payload` order: `loader`, later `nucleus`, `kernel`, `initrd` | `mkimage` |
 
-The image is padded to at least 4 MiB. Inspect any image with `build/mkimage -inspect build/disk.img`.
+The image is padded to at least 4 MiB. Inspect any image with `build/mkimage -inspect build/disk.img`. This is the BIOS images' layout; the UEFI images are GPT disks (§8).
 
 ## 2. Manifest (LBA 1)
 
@@ -79,6 +79,8 @@ Defined in `include/burrow/boot_info.h` with `_Static_assert` offsets.
 | stage1 | stage2 | real 16 | `DL` = boot drive | `0x7C00` |
 | stage2 | loader | long 64 | `RDI` = &boot_info (SysV arg 1), interrupts OFF | `0x80000`, aligned per SysV at the call |
 | loader | nucleus (W4) | long 64 | `RDI` = &boot_info v2 (physmap-relative address) | nucleus boot stack |
+| UEFI firmware | `BOOTX64.EFI` (W26) | long 64, the firmware's paging | `RCX` = image handle, `RDX` = system table (Microsoft x64) | the firmware's |
+| `BOOTX64.EFI` | nucleus (W26-S03) | long 64, after `ExitBootServices`, interrupts OFF | `RDI` = &boot_info v4 (physmap-relative), as from the BIOS loader | nucleus boot stack |
 | nucleus | Go kernel (W6) | long 64, ring 0 | Linux process entry: `RSP` -> argc/argv/envp/auxv, `RDX` = 0 | built by `go_initial_stack.c` |
 
 ## 5. Failure codes
@@ -100,11 +102,14 @@ Every stage prints a one-letter code on COM1 and the screen (real mode only), th
 | stage2 | `K` | loader CRC mismatch | corrupted image / chunked read bug (REG-0001) |
 | stage2 | `V` | the `video` payload is corrupt, or VBE would not set a mode it listed (W21) | rebuild with `mkimage -video`; another VGA device |
 | loader | `PANIC: <text>` | see the message | `build/smoke-*.log` |
+| UEFI loader | `[efi] PANIC: the firmware owns A-B (<what>)` | a fixed page is the firmware's (PIT-94, REG-0011) | report the firmware; the fix is a movable `boot_info` |
+| UEFI loader | `[efi] PANIC: <name> CRC mismatch` | a payload file differs from `burrow/manifest` (REG-0010) | rebuild the image; the stick was written whole |
+| UEFI loader | `[efi] PANIC: <call> (status S)` | a firmware call failed (`GetMemoryMap`, `ExitBootServices`, `OpenVolume`, ...) | the status is EFI's (high bit set: an error) |
 | nucleus | `[nucleus] PANIC: <text>` | see the message | boot_info v2 fields; `make debug` + `add-symbol-file build/nucleus.elf` |
 
 ## 6. Serial markers
 
-Markers are the test interface of the boot chain. Format: `[component] message`, and the final success line `BURROW:<STAGE>:OK`. Markers are append-only: once a smoke expect-file lists a marker, changing its text is a breaking change requiring a DEVLOG entry. Current ordered lists: `tests/smoke/expect/boot_to_loader.txt` and `boot_to_nucleus.txt`; `make smoke` checks every expect file against the same boot.
+Markers are the test interface of the boot chain. Format: `[component] message`, and the final success line `BURROW:<STAGE>:OK`. Markers are append-only: once a smoke expect-file lists a marker, changing its text is a breaking change requiring a DEVLOG entry. Current ordered lists: `tests/smoke/expect/boot_to_loader.txt` and `boot_to_nucleus.txt`; `make smoke` checks every expect file against the same boot. The UEFI path's are `boot_to_efi.txt` (the UEFI loader to `BURROW:NUCLEUS:OK`) and `boot_to_go_uefi.txt`.
 
 ## 7. Nucleus GDT and TSS (W5)
 
@@ -121,3 +126,22 @@ The nucleus replaces stage2's GDT first thing (`nucleus/gdt.c`). The order is di
 | 0x30 | 64-bit TSS (16 bytes) | `SEL_TSS`, loaded with `ltr` |
 
 TSS: `RSP0` is the current thread's kernel stack top (ring 3 â†’ 0, W9). IST1 = every vector except #DF and NMI; IST2 = #DF; IST3 = NMI; 16 KiB each. FS and GS selectors are 0: their bases come from `FS_BASE`/`GS_BASE` MSRs.
+
+## 8. The UEFI path (W26)
+
+UEFI firmware boots a GPT disk, not the manifest disk of §1 ([ADR-0013](../03-decisions/ADR-0013-uefi-loader.md); `tools/mkimage/gpt.go`, `esp.go`, `pe.go`):
+
+| LBA | Contents | Written by |
+|---|---|---|
+| 0 | protective MBR: one partition of type `0xEE` over the disk, no boot code | `mkimage -gpt` |
+| 1 | GPT header (its CRC and the table's) | `mkimage -gpt` |
+| 2..33 | 128 partition entries of 128 bytes | `mkimage -gpt` |
+| 2048.. | partition 1, the EFI system partition: a FAT32 volume labelled `BURROWBOOT` (34 MiB at least) | `kernel/cmd/mkfat` from `mkimage -esp-dir` |
+| next MiB.. | partitions 2.. (W26-S05, `mkimage -gpt -part name=path`): data volumes as Linux file system data (`0FC63DAF-8483-4772-8E79-3D69D8477DE4`), each at the next MiB | `mkimage -gpt` |
+| last 33 | the backup table and header | `mkimage -gpt` |
+
+GUIDs come from the partitions' bytes, so the same inputs give the same disk. The boot partition holds `EFI/BOOT/BOOTX64.EFI` (the loader, a PE32+ with base relocations: `mkimage -efi-app` turns the static-PIE ELF into it), `burrow/manifest` (the §2 record with the BIOS layout's LBAs, which nobody uses, and every payload's CRC) and `burrow/<name>` for each payload.
+
+What the UEFI loader does, in order, and the markers it prints (`boot_to_efi.txt`), with the details in §3's notes: checks its relocations (`[efi] relocations ok`, `BURROW:EFI:OK`); claims the fixed pages (`[efi] claimed ...`); reads the memory map into E820 records and finds the RSDP (`[efi] memory map ok`, `[efi] acpi rsdp at ...`); reads the manifest and each payload with its CRC (`[efi] manifest ok`, `[efi] <name> image crc ok`, `[efi] payloads ok`); sets GOP's mode (`[efi] screen: gop mode ...`); hands the payloads to `loader/handoff.c` (`[efi] nucleus loaded`, `[efi] page tables ok`, `[efi] boot_info v4 ok`); leaves the boot services (`[efi] leaving boot services`, `[efi] boot services exited`); prints the machine's state as the firmware left it (`[efi] machine: cr0=... cr4=... efer=... apic_base=... pic masks=...`) and jumps (`[efi] jumping to nucleus`). The nucleus's markers are the BIOS path's, with `[nucleus] acpi: rsdp from boot_info at ...` and, with a GOP screen, `[nucleus] screen: text on the gop framebuffer` and `[nucleus] screen: handed to the Go kernel`.
+
+The Go kernel tells the two boot disks apart (`kernel/cmd/kernel/disks.go`): `hda` with a manifest in sector 1 is a BIOS boot disk; `hda` with a GPT and an EFI system partition is a UEFI one, its FAT volume named and never mounted (`[block] INFO: hda: GPT, boot partition "BURROWBOOT" (FAT32, LBA ...; not mounted)`), whose other partitions are mounted by label like separate disks, as `hda2`.. (`bootparts.go`), before the other disks.

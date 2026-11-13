@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-13 — W26 done: booting from UEFI (M26)
+
+**Did:** the wave in six slices. A UEFI application of our own, linked as a static PIE and turned into a PE32+ by `mkimage`, on a GPT disk with an EFI system partition (S01); the memory map, the RSDP and the payloads with their CRCs from the firmware, `boot_info` v4 (S02); the BIOS loader's back half shared as `loader/handoff.c`, the boot services left, the nucleus started on four CPUs (S03); the screen from GOP, with the loader's and the nucleus's lines drawn on it (S04); every demo on OVMF, `UEFI=1` for the run targets, a USB-stick image whose partitions the kernel mounts, REAL_HARDWARE.md (S05); `make boot-bench`, ARCHITECTURE.md §7.11, ADR-0013, BOOT_PROTOCOL.md §8 (S06). `make test` green on four CPUs and on one.
+
+**Surprise:** how little the nucleus cared: OVMF's machine needed no change to its start-up, and Doom, the network and X ran under OVMF with the BIOS smokes' own keys. The work was in the loader, the image and the tools. And the UEFI boot is twice as fast on QEMU, because the firmware reads the disk faster than our own PIO loop.
+
+**Learned:** ADR-0002's bet paid: with one `boot_info` as the only contract, a second front half was a loader's worth of work, not a kernel's. A bench that splits a boot into parts finds what a total hides (BUG-0036, 1.1 s that should not be there).
+
+**Next:** W27, a real PC's devices; or BUG-0036.
+
+## 2026-11-13 — W26-S06 M26
+
+**Did:** `make boot-bench`: `tests/smoke/bootbench.py` boots go.img (SeaBIOS) and go-uefi.img (OVMF) with the serial line on a pipe and stamps each line; `boot-budgets.py` checks the medians of three boots each: 15.4 s and 7.3 s from the first line to `BURROW:GO:OK` (budgets 20 and 10). ARCHITECTURE.md §7.11 with a sequence diagram, ADR-0013, BOOT_PROTOCOL.md §8 (the GPT disk, the UEFI loader's steps and markers, its panics), MEMORY_MAP.md's UEFI table, R-06 re-scored to 6, the wave closed. BUG-0035 (x11-smoke's markers raced) fixed in its own commit.
+
+**Surprise:** the BIOS path spends 14.6 of its 15.4 s in the loader reading 25 MB by PIO; and after OVMF, mapping the Go kernel takes 1.1 s where SeaBIOS's boot takes 0.19 (BUG-0036, open: not the CPUs, not the memory size, not the screen).
+
+**Next:** see the wave entry above.
+
 ## 2026-11-13 — W26-S05 Everything on UEFI, and a USB stick
 
 **Did:** UEFI twins of the busybox, Doom, dev and unix images from the same payload lists, and `UEFI=1` on every run target; `mkimage -gpt -part` puts data volumes beside the EFI system partition and `make uefi-usb` writes `build/burrow-usb.img` (the boot partition, the root, NETDATA, X11DATA), which the kernel mounts from its own partitions by label (`bootparts.go`); `uefi-smoke` runs Doom, the network and the desktop as burrow from the stick alone under OVMF; REAL_HARDWARE.md says how to write the stick and what a real PC still lacks.

@@ -17,5 +17,5 @@ Option 3 now. The loader and everything above it only depend on `struct boot_inf
 
 ## Consequences
 - 16-bit real-mode code to learn and debug (see DEBUGGING.md).
-- Machines without CSM need the UEFI path later.
+- Machines without CSM need the UEFI path later: W26 added it beside this one ([ADR-0013](ADR-0013-uefi-loader.md)).
 - Limine/GRUB stay available as a debugging fallback: if our boot breaks, boot the nucleus via Multiboot2 to isolate the problem (optional slice).
