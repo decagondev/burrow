@@ -11,6 +11,10 @@
 #include "io.h"
 #include "sched.h"
 #include "errno.h"
+#include "acpi.h"
+#include "ioapic.h"
+#include "irqroute.h"
+#include "percpu.h"
 
 #define VEC_TEST 0x40
 
@@ -113,14 +117,22 @@ int kt_irq_pending_before_wait(void) {
     return 0;
 }
 
-/* The ISR masks the line; only irq_ack lets the next interrupt in. */
+/* On the 8259 the ISR masks the line and only irq_ack lets the next
+ * interrupt in. On the I/O APIC an edge line is never masked once armed
+ * (a masked pin drops edges, W27-S01): the next edge is counted at once. */
 int kt_irq_masked_until_ack(void) {
     irq0_quiesce();
     pit_oneshot(PIT_TICKS_MS);
-    KT_CHECK(irq_wait(0) == 0);              /* now masked, not acked */
+    KT_CHECK(irq_wait(0) == 0);              /* 8259: masked now, not acked */
     uint64_t n = irq_count(0);
     pit_oneshot(PIT_TICKS_MS);
     thread_sleep_ns(5 * MS);
+    if (irq_uses_ioapic()) {
+        KT_CHECK(irq_count(0) == n + 1 && irq_pending(0));
+        KT_CHECK(irq_wait(0) == 0);
+        irq_ack(0);
+        return 0;
+    }
     KT_CHECK(irq_count(0) == n && !irq_pending(0));
     irq_ack(0);                              /* the 8259 latched the edge: delivered now */
     thread_sleep_ns(1 * MS);
@@ -145,6 +157,57 @@ int kt_irq_syscall(void) {
     KT_CHECK(sys1(0x1000, 2) == -EINVAL);    /* the cascade */
     KT_CHECK(sys1(0x1000, 16) == -EINVAL);
     KT_CHECK(sys1(0x1001, 1ll << 32) == -EINVAL);
+    KT_CHECK(irq_spurious() == 0);
+    return 0;
+}
+
+/* W27-S01: with an I/O APIC in the MADT, the ISA lines go through it: the
+ * PIT's line 0 is GSI 2 on QEMU (an override), the keyboard's line 1 is
+ * edge and active high, every pin starts masked until a driver arms it,
+ * and the 8259 hears nothing. */
+int kt_irq_ioapic_routes(void) {
+    if (!irq_uses_ioapic()) {                     /* no I/O APIC in the MADT, or kargs irq=pic */
+        kprintf("[ktest] irq: 8259 via lint0 (madt i/o apic at %llx)\n",
+                (unsigned long long)(acpi_machine() ? acpi_machine()->ioapic_pa : 0));
+        KT_CHECK((irq_route(0) & 0xFF) == IRQ_KIND_PIC && (irq_route(0) >> IRQ_ROUTE_SHIFT) == 0);
+        KT_CHECK((irq_route(11) & 0xFF) == IRQ_KIND_PIC);
+        return 0;
+    }
+    KT_CHECK(acpi_machine() && acpi_machine()->ioapic_pa);
+    long r0 = irq_route(0), r1 = irq_route(1);
+    KT_CHECK((r0 & 0xFF) == IRQ_KIND_IOAPIC && (r0 >> IRQ_ROUTE_SHIFT) == 2);
+    KT_CHECK((r1 & 0xFF) == IRQ_KIND_IOAPIC && (r1 >> IRQ_ROUTE_SHIFT) == 1);
+    KT_CHECK(!(r1 & (IRQ_ROUTE_LEVEL | IRQ_ROUTE_ACTIVE_LOW)));
+    KT_CHECK(irq_route(2) == -EINVAL && irq_route(16) == -EINVAL);
+    KT_CHECK(ioapic_read_entry(1) & IOREDTBL_MASKED);        /* nobody armed the keyboard */
+    KT_CHECK((ioapic_read_entry(2) & 0xFF) == VEC_IRQ_BASE); /* irq0_quiesce armed the PIT */
+    KT_CHECK(!(ioapic_read_entry(2) & IOREDTBL_MASKED));
+    kprintf("[ktest] irq: line 0 on gsi 2, line 1 on gsi 1, both edge\n");
+    return 0;
+}
+
+/* An MSI line: its message names this CPU and its vector; a self-IPI on
+ * that vector stands in for the device's write and wakes the waiter. */
+int kt_irq_msi_self(void) {
+    uint64_t addr;
+    uint32_t data;
+    long line = irq_alloc_msi(&addr, &data);
+    KT_CHECK(line >= (long)IRQ_MSI_FIRST && line < (long)(IRQ_MSI_FIRST + IRQ_MSI_LINES));
+    /* CPU 0's APIC, where irq_init sends every line: not this thread's
+     * CPU, which on -smp 4 may be any (W27-S01's suite saw it move). */
+    KT_CHECK(addr == (0xFEE00000ull | ((uint64_t)g_cpus[0].apic_id << 12)));
+    KT_CHECK(data == (uint32_t)(VEC_MSI_BASE + line - IRQ_MSI_FIRST));
+    KT_CHECK((irq_route((uint64_t)line) & 0xFF) == IRQ_KIND_MSI);
+    uint64_t flags = read_rflags();
+    cpu_sti();
+    lapic_self_ipi((uint8_t)data);
+    KT_CHECK(irq_wait((uint64_t)line) == 0);
+    KT_CHECK(irq_count((uint64_t)line) == 1 && !irq_pending((uint64_t)line));
+    lapic_self_ipi((uint8_t)data);                      /* no waiter: kept pending */
+    thread_sleep_ns(1 * MS);
+    KT_CHECK(irq_pending((uint64_t)line));
+    KT_CHECK(irq_wait((uint64_t)line) == 0 && irq_ack((uint64_t)line) == 0);
+    if (!(flags & RFLAGS_IF)) cpu_cli();
     KT_CHECK(irq_spurious() == 0);
     return 0;
 }

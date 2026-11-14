@@ -29,8 +29,9 @@ func (d *e1000Driver) Start(env *driver.Env) error {
 	if base == 0 {
 		return errors.New("BAR 0 is not memory")
 	}
-	if d.dev.IRQLine == 0 || d.dev.IRQLine >= 16 {
-		return fmt.Errorf("no usable interrupt line (%d)", d.dev.IRQLine)
+	vec, err := pci.Setup(env, d.dev, false) // MSI when the card has it (QEMU's 82540EM has not)
+	if err != nil {
+		return err
 	}
 	pci.EnableBusMaster(pci.PortConfig{IO: env.Ports32}, d.dev)
 	mem, err := env.MapMMIO(base, MMIOBytes)
@@ -41,16 +42,12 @@ func (d *e1000Driver) Start(env *driver.Env) error {
 	if err != nil {
 		return err
 	}
-	if env.Lines != nil {
-		env.Lines.Serve(int(d.dev.IRQLine), "e1000", nic.Interrupt) // a PCI line may be shared (W22-S01)
-	} else {
-		driver.Serve(env.IRQ(int(d.dev.IRQLine)), func() { nic.Interrupt() })
-	}
+	pci.Serve(env, vec, "e1000", nic.Interrupt) // an INTx line may be shared (W22-S01)
 	netdev.Register("eth0", nic)
 	link := "down"
 	if nic.LinkUp() {
 		link = "up"
 	}
-	env.Log.Infof("eth0: %v, link %s, irq %d, %d-entry rings", nic.MAC(), link, d.dev.IRQLine, RingEntries)
+	env.Log.Infof("eth0: %v, link %s, %v, %d-entry rings", nic.MAC(), link, vec, RingEntries)
 	return nil
 }

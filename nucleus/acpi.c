@@ -2,7 +2,8 @@
  * acpi_mem, no I/O. Finds the RSDP where UEFI firmware said (W26-S03), else
  * on a 16-byte boundary in the EBDA's first KiB or in 0xE0000-0xFFFFF, takes the XSDT when the RSDP is ACPI
  * 2.0+ and has one, else the RSDT, and reads the MADT (processors with the
- * enabled flag, the first I/O APIC, an APIC address override), the FADT
+ * enabled flag, the first I/O APIC, an APIC address override, the ISA
+ * interrupt source overrides since W27-S01), the FADT
  * (SCI, SMI command, PM1 control blocks, the DSDT, X_DSDT when there) and
  * the DSDT's \_S5 package, found by the usual scan for its AML (NameOp
  * "_S5_" PackageOp) rather than by an AML interpreter. Never trusts a
@@ -72,6 +73,7 @@ static const uint8_t *find_rsdp(const struct acpi_mem *m) {
 
 static void read_madt(const uint8_t *t, uint32_t len, struct acpi_info *out) {
     out->lapic_pa = rd32(t + 36);
+    for (uint32_t i = 0; i < ACPI_ISA_LINES; i++) out->isa_gsi[i] = i;
     for (uint32_t off = 44; off + 2 <= len;) {
         uint8_t type = t[off], n = t[off + 1];
         if (n < 2 || off + n > len) break;
@@ -80,6 +82,10 @@ static void read_madt(const uint8_t *t, uint32_t len, struct acpi_info *out) {
         else if (type == 1 && n >= 12 && !out->ioapic_pa) {
             out->ioapic_id = t[off + 2];
             out->ioapic_pa = rd32(t + off + 4);
+            out->ioapic_gsi_base = rd32(t + off + 8);
+        } else if (type == 2 && n >= 10 && t[off + 2] == 0 && t[off + 3] < ACPI_ISA_LINES) {
+            out->isa_gsi[t[off + 3]] = rd32(t + off + 4);      /* bus 0 = ISA */
+            out->isa_flags[t[off + 3]] = rd16(t + off + 8);
         } else if (type == 5 && n >= 12)
             out->lapic_pa = rd64(t + off + 4);
         off += n;

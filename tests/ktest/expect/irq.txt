@@ -8,4 +8,7 @@
 [ktest] irq_pending_before_wait ok
 [ktest] irq_masked_until_ack ok
 [ktest] irq_syscall ok
+[ktest] irq: line 0 on gsi 2, line 1 on gsi 1, both edge
+[ktest] irq_ioapic_routes ok
+[ktest] irq_msi_self ok
 BURROW:KTEST:OK

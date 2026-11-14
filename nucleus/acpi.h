@@ -11,6 +11,16 @@
 #define ACPI_MAX_CPUS 64u
 #define ACPI_SLP_EN   (1u << 13)   /* PM1 control: sleep enable */
 #define ACPI_SCI_EN   1u           /* PM1 control: ACPI mode on */
+#define ACPI_ISA_LINES 16u
+
+/* An interrupt source override's MPS INTI flags (W27-S01): polarity in bits
+ * 1:0, trigger in 3:2; 0 in either means "conforms to the bus". */
+#define ACPI_INTI_POL_MASK   3u
+#define ACPI_INTI_POL_HIGH   1u
+#define ACPI_INTI_POL_LOW    3u
+#define ACPI_INTI_TRIG_MASK  (3u << 2)
+#define ACPI_INTI_TRIG_EDGE  (1u << 2)
+#define ACPI_INTI_TRIG_LEVEL (3u << 2)
 
 /* acpi_mem maps len bytes of physical memory at pa for reading; 0 if not there. */
 struct acpi_mem {
@@ -26,6 +36,9 @@ struct acpi_info {
     uint64_t lapic_pa;                 /* the local APICs' address (an override wins) */
     uint64_t ioapic_pa;                /* the first I/O APIC, 0 if none */
     uint8_t  ioapic_id;
+    uint32_t ioapic_gsi_base;          /* its first global system interrupt */
+    uint32_t isa_gsi[ACPI_ISA_LINES];  /* each ISA line's GSI, overrides applied (W27-S01) */
+    uint16_t isa_flags[ACPI_ISA_LINES];/* and its INTI flags, 0 = the ISA default */
     uint16_t sci_irq;
     uint32_t smi_cmd;                  /* port to send acpi_enable to, 0 if ACPI is always on */
     uint8_t  acpi_enable;

@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-13 — W27-S01 The I/O APIC and MSI
+
+**Did:** the ISA lines through the I/O APIC, routed by the MADT's overrides (`nucleus/irqroute.c`, pure and host-tested; `ioapic.c`), the 8259 kept with kargs `irq=pic`; MSI lines from the nucleus (`nu_irq_alloc_msi`, `nu_irq_route`); PCI capabilities, MSI and MSI-X in `kernel/drivers/pci`, and `pci.Setup` choosing MSI-X, MSI or INTx for a driver; virtio on MSI-X. The console's `irqs`; `make q35-smoke` boots `q35` under OVMF; the irq ktests run on `q35` and once more with the 8259.
+
+**Surprise:** an I/O APIC throws away an edge that arrives on a masked pin; the 8259 kept it. The nucleus's rule since W7, "masked from the interrupt until the driver acks", would have lost keystrokes. Only level lines wait masked now (PIT-102). Also, the first full `make test` failed the irq suite once on four CPUs: `kt_irq_msi_self` compared the message's APIC with the test thread's own CPU, but the thread can move between CPUs, and every line goes to CPU 0. The check now names CPU 0.
+
+**Next:** S02, AHCI and NVMe, and partition tables on every disk.
+
 ## 2026-11-13 — BUG-0036 Writing where the firmware ran
 
 **Did:** found why the nucleus maps the Go kernel 1.1 s slower after OVMF: TSC stamps around each step put it all in zeroing new frames, a second zeroing was fast, and the slow frames were the ones OVMF's memory map called Boot Services Code. QEMU's TCG keeps such pages write-protected until every translation on them is gone, so each store pays. Closed with no change to Burrow; the docs that said "not found" say why.

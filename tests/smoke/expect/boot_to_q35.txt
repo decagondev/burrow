@@ -1,0 +1,32 @@
+# Ordered markers for go-uefi.img on QEMU's q35 machine under OVMF (make
+# q35-smoke, W27-S01). Append-only. The ISA lines go through the I/O APIC
+# with the MADT's overrides (the PIT on GSI 2, QEMU's PCI lines level), the
+# e1000 (no MSI capability) interrupts on its level INTx line through it and
+# hears an ARP reply, the data disk on virtio-blk interrupts by MSI-X and is
+# read, `irqs` lists the routes, and poweroff goes through ACPI.
+BURROW:EFI:OK
+[nucleus] irq: i/o apic 0 at fec00000, gsi 0-23,
+[nucleus] irq ok (isa lines 0-15 on vectors 20-2f, i/o apic; msi lines 16-47 on vectors 50-6f)
+BURROW:NUCLEUS:OK
+BURROW:GO:OK goroutine says 42
+BURROW:GO:SELFTEST:OK
+[e1000] INFO: eth0: 52:54:00:12:34:56, link up, irq 11,
+[ps2] INFO: keyboard ready on irq 1
+[virtioblk] INFO: vda 34 MiB, read-write, flush true, msi-x line 16
+[driver] INFO: irq 11: e1000
+[driver] INFO: irq 16: virtioblk
+[e1000] INFO: 10.0.2.2 is at
+[fat] INFO: vda: FAT32 volume "BURROWDATA" mounted at /mnt
+[console] INFO: ready: type on the keyboard
+burrow> irqs
+isa line 0: i/o apic gsi 2 edge high
+isa line 1: i/o apic gsi 1 edge high
+isa line 11: i/o apic gsi 11 level high
+irq 11 (i/o apic gsi 11 level high):
+irq 16 (msi vector 0x50):
+burrow> cat /mnt/hello.txt
+Hello from the FAT32 data disk
+burrow> run /bin/hello
+hello from ring 3
+burrow> poweroff
+[nucleus] acpi: powering off

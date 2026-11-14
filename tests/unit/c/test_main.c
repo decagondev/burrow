@@ -31,6 +31,7 @@ TEST(pmm_skips_frame_zero);
 TEST(regions_hint_or_first_fit); TEST(regions_first_fit_uses_gaps); TEST(regions_covers_neighbours);
 TEST(regions_release_splits_and_trims); TEST(regions_full_table);
 TEST(acpi_qemu_like); TEST(acpi_xsdt_ebda_override); TEST(acpi_bad_checksums); TEST(acpi_error_names); TEST(acpi_rsdp_from_firmware);
+TEST(irqroute_isa_defaults); TEST(irqroute_overrides); TEST(irqroute_elcr); TEST(irqroute_entry_and_msi);
 TEST(lattrace_sums_the_steps); TEST(lattrace_skips_bad_stamps);
 TEST(fbdesc_vbe_modes); TEST(fbdesc_refusals); TEST(fbdesc_gop_and_sources);
 TEST(gopmode_formats); TEST(gopmode_pick_and_fill);
@@ -74,6 +75,8 @@ int main(void) {
                         RUN(regions_full_table);
     puts("[acpi]");     RUN(acpi_qemu_like); RUN(acpi_xsdt_ebda_override); RUN(acpi_bad_checksums);
                         RUN(acpi_error_names); RUN(acpi_rsdp_from_firmware);
+    puts("[irqroute]"); RUN(irqroute_isa_defaults); RUN(irqroute_overrides); RUN(irqroute_elcr);
+                        RUN(irqroute_entry_and_msi);
     puts("[fbdesc]");   RUN(fbdesc_vbe_modes); RUN(fbdesc_refusals); RUN(fbdesc_gop_and_sources);
     puts("[gopmode]");  RUN(gopmode_formats); RUN(gopmode_pick_and_fill);
     puts("[textgrid]"); RUN(textgrid_lines); RUN(textgrid_controls);

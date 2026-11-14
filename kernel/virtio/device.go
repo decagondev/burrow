@@ -46,9 +46,11 @@ const (
 	ccDeviceFeature    = 0x04
 	ccDriverFeatureSel = 0x08
 	ccDriverFeature    = 0x0C
+	ccMSIXConfig       = 0x10 // W27-S01: the configuration change's MSI-X entry
 	ccStatus           = 0x14
 	ccQueueSelect      = 0x16
 	ccQueueSize        = 0x18
+	ccQueueMSIXVector  = 0x1A
 	ccQueueEnable      = 0x1C
 	ccQueueNotifyOff   = 0x1E
 	ccQueueDesc        = 0x20
@@ -67,12 +69,17 @@ const (
 	ISRConfig = 1 << 1
 
 	resetPolls = 1000
+	noVector   = 0xFFFF
 )
 
 // Device is a virtio device's transport.
 type Device struct {
 	Common, Notify, ISR, Config Regs
 	NotifyMultiplier            uint32
+	// MSIX: the transport turned MSI-X on with one entry (W27-S01): the
+	// configuration change and every queue use entry 0, and the ISR is not
+	// read (virtio 1.0 §4.1.4.5: with MSI-X it is not used).
+	MSIX bool
 }
 
 func (d *Device) status() uint8 { return d.Common.R8(ccStatus) }
@@ -90,6 +97,13 @@ func (d *Device) Negotiate(want uint64) (uint64, error) {
 	}
 	d.addStatus(StatusAcknowledge)
 	d.addStatus(StatusDriver)
+	if d.MSIX { // a reset forgot the vectors
+		d.Common.W16(ccMSIXConfig, 0)
+		if d.Common.R16(ccMSIXConfig) == noVector {
+			d.addStatus(StatusFailed)
+			return 0, errors.New("virtio: the device refused MSI-X entry 0 for its configuration")
+		}
+	}
 	d.Common.W32(ccDeviceFeatureSel, 0)
 	offered := uint64(d.Common.R32(ccDeviceFeature))
 	d.Common.W32(ccDeviceFeatureSel, 1)
@@ -132,6 +146,12 @@ func (d *Device) SetupQueue(q *Queue) error {
 	d.w64(ccQueueDriver, q.AvailPA())
 	d.w64(ccQueueDevice, q.UsedPA())
 	q.notifyOff = uint32(d.Common.R16(ccQueueNotifyOff)) * d.NotifyMultiplier
+	if d.MSIX {
+		d.Common.W16(ccQueueMSIXVector, 0)
+		if d.Common.R16(ccQueueMSIXVector) == noVector {
+			return errors.New("virtio: the device refused MSI-X entry 0 for a queue")
+		}
+	}
 	d.Common.W16(ccQueueEnable, 1)
 	return nil
 }
@@ -143,5 +163,11 @@ func (d *Device) Ready() { d.addStatus(StatusDriverOK) }
 func (d *Device) Kick(q *Queue) { d.Notify.W16(q.notifyOff, q.Index) }
 
 // ReadISR returns and clears the interrupt status (ISRQueue, ISRConfig):
-// 0 means the interrupt on a shared line was another device's.
-func (d *Device) ReadISR() uint8 { return d.ISR.R8(0) }
+// 0 means the interrupt on a shared line was another device's. With MSI-X
+// the line is the device's own and either may be why: both bits.
+func (d *Device) ReadISR() uint8 {
+	if d.MSIX {
+		return ISRQueue | ISRConfig
+	}
+	return d.ISR.R8(0)
+}

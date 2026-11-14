@@ -26,6 +26,7 @@ type sharedLine struct {
 	mu        sync.Mutex
 	names     []string
 	handlers  []Handler
+	count     int  // interrupts served (W27-S01: `irqs`)
 	unclaimed int  // interrupts no handler claimed
 	warned    bool // the first unclaimed one was logged
 }
@@ -68,6 +69,9 @@ func (ls *Lines) Serve(line int, name string, h Handler) {
 func (ls *Lines) dispatch(line int, sl *sharedLine) {
 	sl.mu.Lock()
 	hs := append([]Handler(nil), sl.handlers...)
+	sl.mu.Unlock()
+	sl.mu.Lock()
+	sl.count++
 	sl.mu.Unlock()
 	claimed := false
 	for _, h := range hs {
@@ -117,6 +121,35 @@ func (ls *Lines) String() string {
 		sl := ls.lines[n]
 		sl.mu.Lock()
 		fmt.Fprintf(&b, "irq %d: %s\n", n, strings.Join(sl.names, ", "))
+		sl.mu.Unlock()
+	}
+	return b.String()
+}
+
+// Report lists the lines in use, each with its route (route may be nil),
+// the interrupts served and its drivers:
+// "irq 11 (i/o apic gsi 11 level high): 3 interrupts: e1000".
+func (ls *Lines) Report(route func(line int) (Route, bool)) string {
+	ls.mu.Lock()
+	nums := make([]int, 0, len(ls.lines))
+	for n := range ls.lines {
+		nums = append(nums, n)
+	}
+	ls.mu.Unlock()
+	sort.Ints(nums)
+	var b strings.Builder
+	for _, n := range nums {
+		ls.mu.Lock()
+		sl := ls.lines[n]
+		ls.mu.Unlock()
+		where := ""
+		if route != nil {
+			if r, ok := route(n); ok {
+				where = " (" + r.String() + ")"
+			}
+		}
+		sl.mu.Lock()
+		fmt.Fprintf(&b, "irq %d%s: %d interrupts: %s\n", n, where, sl.count, strings.Join(sl.names, ", "))
 		sl.mu.Unlock()
 	}
 	return b.String()

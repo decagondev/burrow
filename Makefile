@@ -76,6 +76,9 @@ RUN_SOUND  = -audiodev $(RUN_AUDIO),id=snd0 -device AC97,audiodev=snd0
 # drive, and make tablet-smoke boots with the tablet.
 TABLET ?= 1
 TABLET_DEV = -device virtio-tablet-pci
+# W27-S01: virtio devices interrupt by MSI-X; tablet-smoke's own boot takes
+# the tablet without it (vectors=0), so it still proves W22's shared INTx line.
+TABLET_DEV_INTX = -device virtio-tablet-pci,vectors=0
 RUN_TABLET = $(if $(filter 1,$(TABLET)),$(TABLET_DEV))
 # W23-S04: the bus of the data disks; the boot disk stays IDE, which the
 # BIOS reads. The smokes' disks follow DISK_IF (ide; make virtio-smoke sets
@@ -115,7 +118,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: q35-smoke uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -327,6 +330,19 @@ uefi-ktest: $(patsubst %,$(BUILD)/uefi-ktest-%.img,$(UEFI_KTEST_SUITES))
 		SMP=$$n OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU="$(QEMU)" \
 		tests/smoke/smoke.sh $(BUILD)/uefi-ktest-$$s.img tests/ktest/expect/$$s.txt 90 || exit 1; done; done; fi
 
+# W27-S01: QEMU's q35 machine (ICH9: no IDE controller, PCI interrupts on
+# GSIs 16-23 and the PIRQ-routed ISA lines) under OVMF: the irq ktests on one
+# CPU and four, then go-uefi.img with the data disk on virtio-blk (MSI-X)
+# and an e1000 (its INTx line through the I/O APIC). The BIOS images stay on
+# pc: their loader reads the disk by IDE, which q35 has not (W27-S02).
+Q35_EXTRA = -drive file=$(BUILD)/data.img,format=raw,if=virtio -nic user,model=e1000
+q35-smoke: $(BUILD)/uefi-ktest-irq.img $(BUILD)/go-uefi.img $(BUILD)/data.img
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "Q35 SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
+	for n in 1 4; do SMOKE_NAME=q35-irq-$$n SMP=$$n MACHINE=q35 $(OVMF_ENV) \
+		tests/smoke/smoke.sh $(BUILD)/uefi-ktest-irq.img tests/ktest/expect/irq.txt 90 || exit 1; done && \
+	SMOKE_NAME=q35 MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) QEMU_EXTRA="$(Q35_EXTRA)" \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/boot_to_q35.txt 120 tests/smoke/keys/q35.keys; fi
+
 # W26-S01: the UEFI image against sfdisk, mtools and fsck.fat, the EFI
 # application against objdump (skips what is not installed).
 uefi-interop: $(BUILD)/uefi.img
@@ -464,7 +480,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke q35-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -483,7 +499,7 @@ UNIT_SRC := tests/unit/c/test_main.c $(wildcard tests/unit/c/test_*.c) \
 	$(filter-out common/serial.c,$(COMMON_C)) \
 	loader/manifest.c loader/memmap.c loader/palloc.c \
 	loader/image.c loader/elf_load.c loader/vmsetup.c loader/efi/efimap.c loader/efi/gopmode.c \
-	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c nucleus/lattrace.c
+	nucleus/pmm.c nucleus/regions.c nucleus/go_stack.c nucleus/acpi.c nucleus/fbdesc.c nucleus/lattrace.c nucleus/irqroute.c
 UNIT_SRC := $(sort $(UNIT_SRC))
 
 $(BUILD)/unit_tests: $(UNIT_SRC) $(wildcard tests/unit/c/*.h loader/*.h loader/efi/*.h nucleus/*.h) $(COMMON_H) | $(BUILD)
@@ -1070,10 +1086,14 @@ run-busybox: $(call run_img,go-busybox) $(RUN_FW_DEP) $(BUILD)/data.img
 run-doom: $(call run_img,go-doom) $(RUN_FW_DEP) $(BUILD)/doom-data.img
 	$(QEMU) $(call run_common,go-doom) -m $(GO_MEM) $(DOOM_DRIVE) -serial mon:stdio -display $(GO_DISPLAY)
 
-# W20-S06: every suite on one CPU and on four (smp only on four).
-ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES))
-	@for s in $(KTEST_SUITES); do for n in 1 4; do test $$s = smp -a $$n = 1 && continue; \
+# W20-S06: every suite on one CPU and on four (smp only on four). W27-S01:
+# the irq suite once more with kargs irq=pic, the 8259 kept (irq-pic.txt).
+ktest: $(patsubst %,$(BUILD)/ktest-%.img,$(KTEST_SUITES)) $(BUILD)/ktest-irq-pic.img
+	@for s in $(KTEST_SUITES) irq-pic; do for n in 1 4; do test $$s = smp -a $$n = 1 && continue; \
 		SMP=$$n QEMU="$(QEMU)" tests/smoke/smoke.sh $(BUILD)/ktest-$$s.img tests/ktest/expect/$$s.txt || exit 1; done; done
+$(BUILD)/ktest-irq-pic.img: tests/ktest/irq.txt $(BOOT_PARTS)
+	echo irq=pic > $(BUILD)/kargs-irq-pic.txt
+	$(MKIMAGE_BOOT) -payload ktest=$< -payload kargs=$(BUILD)/kargs-irq-pic.txt >/dev/null
 
 regress: $(BUILD)/disk.img $(BUILD)/go.img $(BUILD)/uefi.img
 	QEMU="$(QEMU)" tests/regression/run_all.sh $(BUILD)/disk.img
@@ -1111,7 +1131,7 @@ sound-smoke: $(BUILD)/go.img
 # through /dev/input/mice, xaccel), qtdemo's button and menu (Qt's evdev
 # "abs"). The X and Qt halves skip without their disks.
 tablet-smoke: $(BUILD)/go.img
-	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(TABLET_DEV)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet.txt 90 tests/smoke/keys/tablet.keys
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(TABLET_DEV_INTX)" 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/tablet.txt 90 tests/smoke/keys/tablet.keys
 	@if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ]; then 		$(MAKE) --no-print-directory tablet-smoke-x11; else echo "TABLET X11 SKIP (make x11 busybox)"; fi
 	@if [ -f $(BUILD)/qt-root/bin/qthello ]; then 		$(MAKE) --no-print-directory tablet-smoke-qt; else echo "TABLET QT SKIP (make qt)"; fi
 tablet-smoke-x11: $(BUILD)/go-dev.img $(BUILD)/x11-data.img

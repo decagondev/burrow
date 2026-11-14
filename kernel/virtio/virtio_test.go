@@ -49,6 +49,7 @@ type fakeDev struct {
 	driverFeat          uint64
 	kicks               int
 	queueAddr           [3]uint64
+	msixVectors         uint16 // MSI-X table entries; a vector past them reads back as none
 }
 
 func newFakeDev(offered uint64) *fakeDev {
@@ -75,6 +76,10 @@ func newFakeDev(offered uint64) *fakeDev {
 				le.PutUint16(c.b[ccQueueSize:], 0)
 			}
 			le.PutUint16(c.b[ccQueueNotifyOff:], 3)
+		case ccMSIXConfig, ccQueueMSIXVector:
+			if le.Uint16(c.b[o:]) >= f.msixVectors {
+				le.PutUint16(c.b[o:], noVector)
+			}
 		case ccQueueDesc + 4, ccQueueDriver + 4, ccQueueDevice + 4:
 			i := (o - ccQueueDesc) / 8
 			f.queueAddr[i] = uint64(le.Uint32(c.b[o-4:])) | uint64(le.Uint32(c.b[o:]))<<32
@@ -227,5 +232,38 @@ func TestFindCaps(t *testing.T) {
 	cs[0x75] = 0 // the list ends before the device structure
 	if _, err := FindCaps(read); err == nil {
 		t.Error("a list without a device structure was accepted")
+	}
+}
+
+// W27-S01: with MSI-X the configuration change and the queue take entry 0,
+// a device without the entry is refused, and the ISR is not read.
+func TestMSIXVectors(t *testing.T) {
+	f := newFakeDev(FeatureVersion1)
+	f.msixVectors = 1
+	d := f.device()
+	d.MSIX = true
+	if _, err := d.Negotiate(0); err != nil {
+		t.Fatal(err)
+	}
+	if v := le.Uint16(f.common.b[ccMSIXConfig:]); v != 0 {
+		t.Errorf("configuration vector %#x, want 0", v)
+	}
+	q, _ := NewQueue(0, 8, pagePA, make([]byte, 4096))
+	if err := d.SetupQueue(q); err != nil {
+		t.Fatal(err)
+	}
+	if v := le.Uint16(f.common.b[ccQueueMSIXVector:]); v != 0 {
+		t.Errorf("queue vector %#x, want 0", v)
+	}
+	reads := 0
+	f.isr.onRead = func(uint32) { reads++ }
+	if got := d.ReadISR(); got != ISRQueue|ISRConfig || reads != 0 {
+		t.Errorf("ReadISR = %#x after %d reads of the ISR", got, reads)
+	}
+	f = newFakeDev(FeatureVersion1) // no table entries
+	d = f.device()
+	d.MSIX = true
+	if _, err := d.Negotiate(0); err == nil || f.common.b[ccStatus]&StatusFailed == 0 {
+		t.Errorf("a refused vector: %v, status %#x", err, f.common.b[ccStatus])
 	}
 }

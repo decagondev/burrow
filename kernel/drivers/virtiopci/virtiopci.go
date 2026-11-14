@@ -3,11 +3,14 @@
 // capabilities found, each configuration structure mapped on whole pages.
 // Only the modern interface (PIT-74): a device without the capabilities is
 // refused. Never touches the device's queues or features: kernel/virtio does.
-// Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md.
+// Since W27-S01 the device interrupts by MSI-X when it can (one entry, for
+// its configuration and every queue), else on its INTx line.
+// Docs: docs/04-plan/waves/WAVE-23-proc-virtio.md; ADR-0014.
 package virtiopci
 
 import (
 	"fmt"
+	"sync"
 
 	"burrow/kernel/driver"
 	"burrow/kernel/drivers/pci"
@@ -15,6 +18,20 @@ import (
 )
 
 const pageBytes = 4096
+
+var (
+	mu      sync.Mutex
+	vectors = map[[3]uint8]pci.Vector{} // each opened device's interrupt
+)
+
+func key(d pci.Device) [3]uint8 { return [3]uint8{d.Bus, d.Dev, d.Fn} }
+
+// Vector is the interrupt Open gave dev.
+func Vector(dev pci.Device) pci.Vector {
+	mu.Lock()
+	defer mu.Unlock()
+	return vectors[key(dev)]
+}
 
 // Usable says whether env has what a virtio driver needs.
 func Usable(env *driver.Env) bool {
@@ -34,11 +51,9 @@ func FindAll(env *driver.Env, vendor uint16, ids ...uint16) []pci.Device {
 	return out
 }
 
-// Open makes dev a virtio.Device: bus master, capabilities, mapped regions.
+// Open makes dev a virtio.Device: bus master, capabilities, mapped regions,
+// its interrupt chosen (pci.Setup) before the driver resets it.
 func Open(env *driver.Env, dev pci.Device) (*virtio.Device, error) {
-	if dev.IRQLine == 0 || dev.IRQLine >= 16 {
-		return nil, fmt.Errorf("no usable interrupt line (%d)", dev.IRQLine)
-	}
 	cfg := pci.PortConfig{IO: env.Ports32}
 	pci.EnableBusMaster(cfg, dev)
 	caps, err := virtio.FindCaps(func(off uint8) uint32 { return cfg.Read32(dev.Bus, dev.Dev, dev.Fn, off) })
@@ -56,6 +71,14 @@ func Open(env *driver.Env, dev pci.Device) (*virtio.Device, error) {
 		}
 		*m.dst = mem
 	}
+	v, err := pci.Setup(env, dev, false)
+	if err != nil {
+		return nil, err
+	}
+	vd.MSIX = v.Kind == pci.MSIX
+	mu.Lock()
+	vectors[key(dev)] = v
+	mu.Unlock()
 	return vd, nil
 }
 
@@ -78,11 +101,7 @@ func mapRegion(env *driver.Env, dev pci.Device, r virtio.Region) (virtio.MMIO, e
 	return virtio.MMIO(mem[pa-lo : pa-lo+uint64(r.Length)]), nil
 }
 
-// Serve runs handler on dev's interrupt line, shared when env has lines.
+// Serve runs handler on dev's interrupt (Open chose it).
 func Serve(env *driver.Env, dev pci.Device, name string, handler func() bool) {
-	if env.Lines != nil {
-		env.Lines.Serve(int(dev.IRQLine), name, handler)
-		return
-	}
-	driver.Serve(env.IRQ(int(dev.IRQLine)), func() { handler() })
+	pci.Serve(env, Vector(dev), name, handler)
 }

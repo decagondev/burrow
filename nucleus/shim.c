@@ -87,6 +87,15 @@ static long nu_debug_exit(struct syscall_frame *f) {
 /* Blocks this thread (and only it) until the ISA line fires: ADR-0005. */
 static long nu_irq_wait(struct syscall_frame *f) { return irq_wait(SYSARG0(f)); }
 static long nu_irq_ack(struct syscall_frame *f)  { return irq_ack(SYSARG0(f)); }
+/* W27-S01: an MSI line; its message into out[0] (address) and out[1] (data). */
+static long nu_irq_alloc_msi(struct syscall_frame *f) {
+    uint64_t *out = (uint64_t *)SYSARG0(f), addr;
+    uint32_t data;
+    long line = irq_alloc_msi(&addr, &data);
+    if (line >= 0) { out[0] = addr; out[1] = data; }
+    return line;
+}
+static long nu_irq_route(struct syscall_frame *f) { return irq_route(SYSARG0(f)); }
 /* boot_info v2 into a Go buffer (same address space, trusted caller). */
 static long nu_bootinfo(struct syscall_frame *f) {
     uint64_t n = SYSARG1(f) < sizeof(struct boot_info) ? SYSARG1(f) : sizeof(struct boot_info);
@@ -189,6 +198,8 @@ static long nu_cpu_times(struct syscall_frame *f) {
 static const sys_fn g_nu_table[] = {
     [NU_irq_wait - NU_BASE] = nu_irq_wait,
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
+    [NU_irq_alloc_msi - NU_BASE] = nu_irq_alloc_msi,
+    [NU_irq_route - NU_BASE] = nu_irq_route,
     [NU_bootinfo - NU_BASE] = nu_bootinfo,
     [NU_mmio_map - NU_BASE] = nu_mmio_map,
     [NU_mem_info - NU_BASE] = nu_mem_info,

@@ -3,8 +3,6 @@
 package ac97
 
 import (
-	"fmt"
-
 	"burrow/kernel/driver"
 	"burrow/kernel/drivers/pci"
 	"burrow/kernel/sound"
@@ -27,8 +25,9 @@ func (d *ac97Driver) Probe(env *driver.Env) bool {
 }
 
 func (d *ac97Driver) Start(env *driver.Env) error {
-	if d.dev.IRQLine == 0 || d.dev.IRQLine >= 16 {
-		return fmt.Errorf("no usable interrupt line (%d)", d.dev.IRQLine)
+	vec, err := pci.Setup(env, d.dev, false)
+	if err != nil {
+		return err
 	}
 	pci.EnableIOBusMaster(pci.PortConfig{IO: env.Ports32}, d.dev)
 	p := Ports{IO8: env.Ports, IO16: env.Ports16, IO32: env.Ports32, NAM: d.dev.IOBase(0), NABM: d.dev.IOBase(1)}
@@ -36,11 +35,7 @@ func (d *ac97Driver) Start(env *driver.Env) error {
 	if err != nil {
 		return err
 	}
-	if env.Lines != nil {
-		env.Lines.Serve(int(d.dev.IRQLine), "ac97", card.Interrupt)
-	} else {
-		driver.Serve(env.IRQ(int(d.dev.IRQLine)), func() { card.Interrupt() })
-	}
+	pci.Serve(env, vec, "ac97", card.Interrupt)
 	if err := env.Dev.Register("dsp", sound.NewDSP(card), 0o666); err != nil {
 		return err
 	}
@@ -48,6 +43,6 @@ func (d *ac97Driver) Start(env *driver.Env) error {
 	if card.VRA() {
 		vra = "vra"
 	}
-	env.Log.Infof("ac97 at io %#x/%#x, codec ready, %d Hz (%s), irq %d", p.NAM, p.NABM, card.rate, vra, d.dev.IRQLine)
+	env.Log.Infof("ac97 at io %#x/%#x, codec ready, %d Hz (%s), %v", p.NAM, p.NABM, card.rate, vra, vec)
 	return nil
 }

@@ -30,8 +30,11 @@ type Env struct {
 	// W22-S01); a PCI driver registers its handler there rather than
 	// waiting on the line itself.
 	Lines *Lines
-	Log   *klog.Logger // StartAll gives each driver its own "[name]" child
-	Input chan<- byte  // console input: keyboards and serial lines write here
+	// AllocMSI, if set, takes a new MSI line from the nucleus: its number
+	// for IRQ and Lines, and the message the device writes (W27-S01).
+	AllocMSI func() (line int, addr uint64, data uint32, err error)
+	Log      *klog.Logger // StartAll gives each driver its own "[name]" child
+	Input    chan<- byte  // console input: keyboards and serial lines write here
 	// Scancodes, if set, sees every raw keyboard byte first (/dev/input/event0,
 	// W11); grabbed means a program holds the keyboard, so nothing goes to Input.
 	Scancodes func(sc byte) (grabbed bool)

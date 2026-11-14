@@ -60,6 +60,7 @@ type kernel struct {
 	env     []string  // added to every program's environment (a Qt disk's qt.env)
 	con     *console.Console
 	net     *netstack.Stack // TCP/IP (W17-S02); nil if it did not start
+	lines   *driver.Lines   // the PCI drivers' interrupt lines (`irqs`, W27-S01)
 }
 
 func main() {
@@ -105,12 +106,14 @@ func main() {
 	hooks := registerInput(dev, k.boot)
 	keys := &vtKeys{vt: vt.New(), evdev: hooks.scancodes} // the console's modes (W14-S08)
 	lines := driver.NewLines(func(line int) hal.IRQLine { return amd64.NewIRQ(line) }, log.With("driver"))
+	k.lines = lines
 	driver.StartAll(&driver.Env{
 		Ports:       amd64.Ports{},
 		Ports16:     amd64.Ports{},
 		Ports32:     amd64.Ports{},
 		IRQ:         func(line int) hal.IRQLine { return amd64.NewIRQ(line) },
 		Lines:       lines,
+		AllocMSI:    amd64.AllocMSI,
 		Log:         log,
 		Input:       input,
 		Dev:         dev,

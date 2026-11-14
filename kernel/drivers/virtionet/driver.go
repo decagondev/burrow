@@ -57,7 +57,7 @@ func (d *netDriver) Start(env *driver.Env) error {
 	if nic.LinkUp() {
 		link = "up"
 	}
-	env.Log.Infof("%s %s, link %s, irq %d", name, fmt.Sprint(macString(nic.MAC())), link, d.dev.IRQLine)
+	env.Log.Infof("%s %s, link %s, %v", name, fmt.Sprint(macString(nic.MAC())), link, virtiopci.Vector(d.dev))
 	return nil
 }
 

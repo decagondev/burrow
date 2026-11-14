@@ -26,6 +26,8 @@ static const struct ktest g_tests[] = {
     { "irq_pending_before_wait", kt_irq_pending_before_wait },
     { "irq_masked_until_ack", kt_irq_masked_until_ack },
     { "irq_syscall",        kt_irq_syscall },
+    { "irq_ioapic_routes",  kt_irq_ioapic_routes },
+    { "irq_msi_self",       kt_irq_msi_self },
     { "sched_ping_pong",    kt_sched_ping_pong },
     { "sched_preempts",     kt_sched_preempts },
     { "sched_sleep_and_fs_base", kt_sched_sleep_and_fs_base },

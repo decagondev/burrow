@@ -2,16 +2,39 @@
 
 package amd64
 
-import "syscall"
+import (
+	"syscall"
+	"unsafe"
+)
 
 // Nucleus-private calls for interrupt lines (NUCLEUS_ABI.md, nucleus/irq.c).
 const (
-	nrIRQWait = 0x1000
-	nrIRQAck  = 0x1001
+	nrIRQWait     = 0x1000
+	nrIRQAck      = 0x1001
+	nrIRQAllocMSI = 0x102E // W27-S01
+	nrIRQRoute    = 0x102F
 )
 
-// IRQ is the real hal.IRQLine for one ISA line (0-15, not 2). The nucleus
-// owns the interrupt: its ISR masks the line, sends EOI and wakes the thread
+// AllocMSI takes a new MSI line from the nucleus: its number (16 up) and
+// the message a device must write to raise it (W27-S01).
+func AllocMSI() (line int, addr uint64, data uint32, err error) {
+	var out [2]uint64
+	r, err := raw(nrIRQAllocMSI, uintptr(unsafe.Pointer(&out[0])))
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return int(r), out[0], uint32(out[1]), nil
+}
+
+// IRQRoute is where line goes, as the nucleus encodes it (driver.ParseRoute).
+func IRQRoute(line int) (uint64, error) {
+	r, err := raw(nrIRQRoute, uintptr(line))
+	return uint64(r), err
+}
+
+// IRQ is the real hal.IRQLine for one interrupt line: an ISA line (0-15,
+// not 2) or an MSI line (W27-S01). The nucleus owns the interrupt: its ISR
+// masks a level line, sends EOI and wakes the thread
 // blocked in Wait. Go code never runs in an interrupt handler (ADR-0005), so
 // a driver may allocate, block and take locks like any goroutine.
 //

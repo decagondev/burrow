@@ -1,0 +1,17 @@
+# Typed into the Go console of go-uefi.img on QEMU's q35 machine under OVMF
+# (make q35-smoke, W27-S01): the interrupt routes (I/O APIC, MSI-X), a file
+# read from the data disk on virtio-blk (MSI-X), programs, then poweroff.
+wait burrow>
+type irqs
+key ret
+wait irq 1
+type lspci
+key ret
+type cat /mnt/hello.txt
+key ret
+type run /bin/hello
+key ret
+type irqs
+key ret
+type poweroff
+key ret

@@ -4,8 +4,8 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 
 | Nr | Name | Args | Returns | Wave |
 |---|---|---|---|---|
-| 0x1000 | `nu_irq_wait` | irq (ISA line 0-15, not 2) | 0 when the IRQ fired (at once if it fired while nobody waited); `-EINVAL`, `-EBUSY` if another thread waits | W7 (done: `nucleus/irq.c`) |
-| 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line; the ISR masked it) | W7 (done) |
+| 0x1000 | `nu_irq_wait` | irq (ISA line 0-15, not 2; or an MSI line 16-47 from `nu_irq_alloc_msi`, W27) | 0 when the IRQ fired (at once if it fired while nobody waited); `-EINVAL`, `-EBUSY` if another thread waits | W7 (done: `nucleus/irq.c`) |
+| 0x1001 | `nu_irq_ack` | irq | 0 (unmasks the line if the ISR masked it: an 8259 line, or a level line on the I/O APIC; an edge line on the I/O APIC and an MSI line are never masked, W27) | W7 (done) |
 | 0x1002 | `nu_bootinfo` | buf, len | bytes copied of boot_info v2 (at most 128); the module table it points to is read through the physmap | W8 (done: `amd64.BootInfo`) |
 | 0x1003 | `nu_physmap_base` | — | physmap virtual base | W6 (done: `amd64.PhysmapBase`) |
 | 0x1004 | `nu_debug_exit` | code | ends a QEMU test run; where there is no debug-exit device, code 0x10 (the console's `poweroff`) turns the machine off through ACPI S5 (W20-S04), and the call returns 0 only if neither worked | W6 (done: `amd64.DebugExit`) |
@@ -34,6 +34,8 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x102A | `nu_cpu_times` | buf, max | the number of online CPUs written (at most max): 32 bytes each, {user, kernel, idle, switches}; idle is the CPU's idle thread's time | W23 |
 | 0x102B | `nu_lattrace` | op, nr, buf | 0, or -EINVAL for another op; op 0 traces user system call nr (its requests stamped with the TSC at the gate, taken by Go, answered, running again, on the way out) and clears the sums; op 1 stops; op 2 writes 64 bytes to buf: {on, nr, count, skipped, then the four steps' summed nanoseconds} (`/dev/lattrace`) | W25 |
 | 0x102C | `nu_vdso` | buf | 0, -ENODEV before `vdso_init`; writes {data page phys, code bytes, code pages, then each code page's phys} (at most 7 words): the vDSO's frames, which the Go kernel maps into every process as `[vvar]` and `[vdso]`; the data page is `struct vdso_data` (`include/burrow/vdso.h`) | W25 |
+| 0x102E | `nu_irq_alloc_msi` | buf | a new MSI line (16-47), and writes {address, data} of its message to buf: fixed delivery to the CPU that took the interrupts at boot, edge; `-ENOSPC` when all 32 are taken | W27 |
+| 0x102F | `nu_irq_route` | line | where the line goes: bits 7:0 the kind (1 the 8259, 2 an I/O APIC pin, 3 MSI), bit 8 level, bit 9 active low, bits 31:16 the 8259 line, the GSI or the vector; `-EINVAL` for a line that is not routed | W27 |
 | 0x102D | `nu_syscall_reply_wait` | tid, result, buf, max | as `nu_syscall_reply` then `nu_syscall_wait` in one crossing (a reply to a thread killed meanwhile is dropped); for the dispatcher after it answered a request itself | W25 |
 
 Rules: every new call gets a row here **before** code, a Go wrapper in `kernel/arch/amd64/nucleus.go`, and a nucleus self-test. Numbers are never reused.

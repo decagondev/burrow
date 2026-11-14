@@ -63,7 +63,21 @@ static uint32_t madt(uint64_t pa, int override) {
     g_mem[pa + off + 1] = 12;
     g_mem[pa + off + 2] = 7;
     put32(pa + off + 4, 0xFEC00000u);
+    put32(pa + off + 8, 0);               /* its first GSI */
     off += 12;
+    static const struct { uint8_t bus, src; uint32_t gsi; uint16_t flags; } ovr[] = {
+        {0, 0, 2, 0},                     /* QEMU's: the PIT on GSI 2 */
+        {0, 9, 9, 0x0D},                  /* the SCI, level, active high */
+        {1, 4, 20, 0x0F},                 /* not ISA: ignored */
+    };
+    for (unsigned k = 0; k < 3; k++, off += 10) {
+        g_mem[pa + off] = 2;              /* interrupt source override */
+        g_mem[pa + off + 1] = 10;
+        g_mem[pa + off + 2] = ovr[k].bus;
+        g_mem[pa + off + 3] = ovr[k].src;
+        put32(pa + off + 4, ovr[k].gsi);
+        put16(pa + off + 8, ovr[k].flags);
+    }
     if (override) {
         g_mem[pa + off] = 5;              /* local APIC address override */
         g_mem[pa + off + 1] = 12;
@@ -121,6 +135,11 @@ TEST(acpi_qemu_like) {
     CHECK(i.ioapic_id == 7 && i.sci_irq == 9 && i.smi_cmd == 0xB2 && i.acpi_enable == 0xF1);
     CHECK(i.pm1a_cnt == 0x604 && i.pm1b_cnt == 0);
     CHECK(i.has_s5 && i.slp_typa == 0 && i.slp_typb == 0);
+    CHECK(i.ioapic_gsi_base == 0);                       /* W27-S01: overrides */
+    CHECK(i.isa_gsi[0] == 2 && i.isa_flags[0] == 0);
+    CHECK(i.isa_gsi[9] == 9 && i.isa_flags[9] == 0x0D);
+    CHECK(i.isa_gsi[4] == 4 && i.isa_flags[4] == 0);    /* bus 1's override ignored */
+    CHECK(i.isa_gsi[1] == 1 && i.isa_gsi[15] == 15);
 }
 
 /* ACPI 2.0: the RSDP in the EBDA, an XSDT preferred over the RSDT, a

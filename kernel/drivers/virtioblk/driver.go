@@ -65,6 +65,6 @@ func start(env *driver.Env, dev pci.Device, name string) error {
 	if d.ReadOnly {
 		mode = "read-only"
 	}
-	env.Log.Infof("%s %d MiB, %s, flush %v, irq %d", name, d.Sectors()*sectorBytes>>20, mode, d.CanFlush, dev.IRQLine)
+	env.Log.Infof("%s %d MiB, %s, flush %v, %v", name, d.Sectors()*sectorBytes>>20, mode, d.CanFlush, virtiopci.Vector(dev))
 	return nil
 }

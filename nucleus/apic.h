@@ -31,5 +31,6 @@ void     lapic_write(uint32_t reg, uint32_t v);
 void     lapic_eoi(void);
 void     lapic_self_ipi(uint8_t vector);
 void     lapic_init_cpu(void);          /* on an AP (smp.c) */
+void     lapic_mask_lint0(void);        /* the I/O APIC took over from the 8259 (W27-S01) */
 void     lapic_send_ipi(uint8_t apic_id, uint32_t icr_lo);
 #endif

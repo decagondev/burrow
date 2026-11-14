@@ -50,9 +50,9 @@ func (d *inputDriver) Start(env *driver.Env) error {
 	}
 	virtiopci.Serve(env, d.dev, "virtioinput", tab.Interrupt)
 	if tab.HasAbs {
-		env.Log.Infof("%s, abs x %v y %v, irq %d", tab.Name, tab.X, tab.Y, d.dev.IRQLine)
+		env.Log.Infof("%s, abs x %v y %v, %v", tab.Name, tab.X, tab.Y, virtiopci.Vector(d.dev))
 	} else {
-		env.Log.Infof("%s, no absolute axes, irq %d", tab.Name, d.dev.IRQLine)
+		env.Log.Infof("%s, no absolute axes, %v", tab.Name, virtiopci.Vector(d.dev))
 	}
 	return nil
 }

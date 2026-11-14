@@ -6,3 +6,6 @@ irq_wait_pit
 irq_pending_before_wait
 irq_masked_until_ack
 irq_syscall
+# W27-S01: the I/O APIC and MSI
+irq_ioapic_routes
+irq_msi_self

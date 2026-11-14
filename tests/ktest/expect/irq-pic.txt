@@ -1,0 +1,17 @@
+# Ordered markers for the irq suite with kargs "irq=pic" (W27-S01): the
+# 8259 in virtual-wire mode although the MADT names an I/O APIC, as on a
+# machine without one. Append-only.
+[nucleus] lapic ok
+[nucleus] time ok
+[nucleus] irq ok (isa lines 0-15 on vectors 20-2f, 8259 via lint0
+[ktest] running suite
+[ktest] lapic_self_ipi ok
+[ktest] time_tick_rate ok
+[ktest] irq_wait_pit ok
+[ktest] irq_pending_before_wait ok
+[ktest] irq_masked_until_ack ok
+[ktest] irq_syscall ok
+[ktest] irq: 8259 via lint0 (madt i/o apic at fec00000)
+[ktest] irq_ioapic_routes ok
+[ktest] irq_msi_self ok
+BURROW:KTEST:OK

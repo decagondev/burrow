@@ -478,6 +478,12 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-98 | W26 | Firmware text on the serial line: the smokes fail on any `FAIL` or `PANIC` line | closed (S01: OVMF writes screen clears and two `BdsDxe` lines to COM1, nothing a smoke refuses) |
 | PIT-99 | W26 | The boot disk is FAT now: the Go kernel must not mount the ESP as a data disk | closed (S04: hda is never a data disk; `kernel/block/gpt` reads the boot disk's GPT and the kernel names the boot partition, `not mounted`; S05's one-disk stick finds its data partitions by label) |
 | PIT-100 | W26 | OVMF is slow on TCG: the firmware takes seconds before the loader | open (S01: about 5.4 s for the whole smoke on one CPU and on four; `uefi-smoke` waits 60) |
+| PIT-101 | W27 | Interrupt routing differs per machine: ISA overrides, level and active-low lines, PCI pins behind bridges | open (S01: the MADT's overrides decide, the ELCR when it says "conforms", a level line with no stated polarity is active low; MSI first; the routes printed at boot and by `irqs`; QEMU's `pc` and `q35` only so far) |
+| PIT-102 | W27 | An I/O APIC drops an edge that arrives on a masked pin, where the 8259 latched it | closed (S01: found in QEMU's `ioapic_set_irq` before it bit; edge lines are never masked once armed, only level lines wait masked for the ack; `kt_irq_masked_until_ack` checks both controllers) |
+| PIT-103 | W27 | DMA on real controllers: a missing barrier or a buffer above 4 GiB that a 32-bit controller cannot reach, which QEMU forgives | open |
+| PIT-104 | W27 | xHCI is a big specification: rings, cycle bits, contexts, port resets, timeouts | open |
+| PIT-105 | W27 | USB timing is real time: port resets and settle times the kernel must actually wait | open |
+| PIT-106 | W27 | A real PC is tested by someone else, with no serial port: every failure must say where it stopped, on the screen | open |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
 | PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |

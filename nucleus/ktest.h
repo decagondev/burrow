@@ -39,6 +39,8 @@ int kt_irq_wait_pit(void);
 int kt_irq_pending_before_wait(void);
 int kt_irq_masked_until_ack(void);
 int kt_irq_syscall(void);
+int kt_irq_ioapic_routes(void);   /* W27-S01 */
+int kt_irq_msi_self(void);
 
 /* ktest_sched.c */
 int kt_sched_ping_pong(void);
