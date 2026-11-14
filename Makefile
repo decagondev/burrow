@@ -90,7 +90,11 @@ RUN_DISK_IF ?= virtio
 comma := ,
 ide_drive = -drive file=$(1)$(comma)format=raw$(comma)if=ide$(comma)index=$(2)$(comma)media=disk
 virtio_drive = -drive file=$(1)$(comma)format=raw$(comma)if=virtio
-drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(call ide_drive,$(1),$(2)))
+# W27-S02: DISK_IF=ahci puts each data disk on an AHCI controller of its own
+# (sda, sdb, ... in command-line order), DISK_IF=nvme on an NVMe one (nvme0n1, ...).
+ahci_drive = -device ahci$(comma)id=ahci$(2) -drive file=$(1)$(comma)format=raw$(comma)if=none$(comma)id=sata$(2) -device ide-hd$(comma)drive=sata$(2)$(comma)bus=ahci$(2).0
+nvme_drive = -drive file=$(1)$(comma)format=raw$(comma)if=none$(comma)id=nvme$(2) -device nvme$(comma)serial=burrow$(2)$(comma)drive=nvme$(2)
+drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(if $(filter ahci,$(3)),$(call ahci_drive,$(1),$(2)),$(if $(filter nvme,$(3)),$(call nvme_drive,$(1),$(2)),$(call ide_drive,$(1),$(2)))))
 data_drive = $(call drive_on,$(1),$(2),$(DISK_IF))
 run_drive = $(call drive_on,$(1),$(2),$(RUN_DISK_IF))
 # W23-S05: the network card of the run targets: virtio-net since W23-S07
@@ -100,7 +104,7 @@ NIC ?= virtio
 NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
 RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
-xp = $(if $(filter virtio,$(DISK_IF)),$(BUILD)/virtio-expect/$(notdir $(1)),$(1))
+xp = $(if $(filter virtio ahci nvme,$(DISK_IF)),$(BUILD)/$(DISK_IF)-expect/$(notdir $(1)),$(1))
 # W26-S05: UEFI=1 boots a run target's UEFI twin (go-dev-uefi.img for
 # go-dev.img, uefi.img for disk.img) with OVMF, whose variables persist in
 # build/run-ovmf-vars.fd like a PC's. run_common is QEMU_COMMON with the
@@ -118,7 +122,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: q35-smoke uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: storage-smoke q35-smoke uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -480,7 +484,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke q35-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -555,7 +559,7 @@ doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # then tests/smoke/checkdisk.py checks the image file on the host, so the
 # bytes are known to have reached the disk.
 # kargs disktest=<disk>: hdb, or vda on virtio (W23-S04)
-DISKTEST_DISK = $(if $(filter virtio,$(DISK_IF)),vda,hdb)
+DISKTEST_DISK = $(if $(filter virtio,$(DISK_IF)),vda,$(if $(filter ahci,$(DISK_IF)),sda,$(if $(filter nvme,$(DISK_IF)),nvme0n1,hdb)))
 $(BUILD)/go-disktest-%.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=$* > $(BUILD)/kargs-disktest-$*.txt
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
@@ -1046,24 +1050,46 @@ virtio-net-smoke: $(BUILD)/go-dev-dhcp.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
 	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev-dhcp.img $(BUILD)/home-net.img 240
 # The disks' speed (W23-S04, not in make test): the kernel writes and reads
-# 64 MiB of a scratch disk at boot (kargs diskbench=), on IDE then virtio;
-# tests/smoke/disk-budgets.py wants virtio-blk no slower than IDE.
+# 64 MiB of a scratch disk at boot (kargs diskbench=), on IDE then virtio,
+# AHCI and NVMe (W27-S02); tests/smoke/disk-budgets.py wants each no slower than IDE.
 $(BUILD)/go-diskbench-%.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo diskbench=$* > $(BUILD)/kargs-diskbench-$*.txt
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-diskbench-$*.txt >/dev/null
-disk-bench: $(BUILD)/go-diskbench-hdb.img $(BUILD)/go-diskbench-vda.img
+disk-bench: $(BUILD)/go-diskbench-hdb.img $(BUILD)/go-diskbench-vda.img $(BUILD)/go-diskbench-sda.img $(BUILD)/go-diskbench-nvme0n1.img
 	rm -f $(BUILD)/bench.img && truncate -s 80M $(BUILD)/bench.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call ide_drive,$(BUILD)/bench.img,1)" \
 		tests/smoke/smoke.sh $(BUILD)/go-diskbench-hdb.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
 	cp $(BUILD)/smoke-disk-bench.log $(BUILD)/disk-bench-ide.log
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call virtio_drive,$(BUILD)/bench.img)" \
 		tests/smoke/smoke.sh $(BUILD)/go-diskbench-vda.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
-	python3 tests/smoke/disk-budgets.py $(BUILD)/disk-bench-ide.log $(BUILD)/smoke-disk-bench.log
+	cp $(BUILD)/smoke-disk-bench.log $(BUILD)/disk-bench-virtio.log
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call ahci_drive,$(BUILD)/bench.img,1)" \
+		tests/smoke/smoke.sh $(BUILD)/go-diskbench-sda.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
+	cp $(BUILD)/smoke-disk-bench.log $(BUILD)/disk-bench-ahci.log
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call nvme_drive,$(BUILD)/bench.img,1)" \
+		tests/smoke/smoke.sh $(BUILD)/go-diskbench-nvme0n1.img tests/smoke/expect/disk-bench.txt 300 tests/smoke/keys/disk-bench.keys
+	cp $(BUILD)/smoke-disk-bench.log $(BUILD)/disk-bench-nvme.log
+	python3 tests/smoke/disk-budgets.py $(BUILD)/disk-bench-ide.log $(BUILD)/disk-bench-virtio.log $(BUILD)/disk-bench-ahci.log $(BUILD)/disk-bench-nvme.log
 $(BUILD)/virtio-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
 	@mkdir -p $(dir $@)
 	python3 tests/smoke/virtio-expect.py $< $@
 	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/virtio-expect/$*.screen; fi
+$(BUILD)/ahci-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
+	@mkdir -p $(dir $@)
+	python3 tests/smoke/virtio-expect.py --if ahci $< $@
+	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/ahci-expect/$*.screen; fi
+$(BUILD)/nvme-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
+	@mkdir -p $(dir $@)
+	python3 tests/smoke/virtio-expect.py --if nvme $< $@
+	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/nvme-expect/$*.screen; fi
+
+# W27-S02: disk-smoke and dev-smoke with their data disks on AHCI (sda..),
+# then on NVMe (nvme0n1..), against expect files virtio-expect.py derives;
+# the boot disk stays on IDE.
+storage-smoke:
+	$(MAKE) --no-print-directory DISK_IF=ahci disk-smoke dev-smoke
+	$(MAKE) --no-print-directory DISK_IF=nvme disk-smoke dev-smoke
 
 # The Go console and drivers on simulated hardware, as a host program (kernel/hostsim).
 hostsim:

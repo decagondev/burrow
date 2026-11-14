@@ -27,9 +27,11 @@ import (
 	"burrow/kernel/console"
 	"burrow/kernel/driver"
 	_ "burrow/kernel/drivers/ac97" // drivers register themselves in init()
+	_ "burrow/kernel/drivers/ahci"
 	_ "burrow/kernel/drivers/ata"
 	_ "burrow/kernel/drivers/bga"
 	_ "burrow/kernel/drivers/e1000"
+	_ "burrow/kernel/drivers/nvme"
 	_ "burrow/kernel/drivers/pci"
 	_ "burrow/kernel/drivers/ps2"
 	_ "burrow/kernel/drivers/rtc"

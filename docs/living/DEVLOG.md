@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-14 — W27-S02 AHCI and NVMe
+
+**Did:** `drivers/ahci` and `drivers/nvme` register `sd*` and `nvme*n1` disks, host-tested against fake controllers with `blocktest`; `kernel/block/part` reads GPT, a whole-disk file system or an MBR on every disk, and the kernel finds its boot disk and mounts every volume by label whatever the interface. `make storage-smoke` runs disk-smoke and dev-smoke with the data disks on AHCI, then NVMe; `disk-bench` times all four interfaces; on `q35` the boot disk is now the AHCI one.
+
+**Surprise:** OVMF leaves the AHCI ports it booted from running, with its own command lists: a port has to be stopped (ST, then FRE, waiting for CR and FR) before its lists are moved. The NVMe fake first served doorbells while the driver held its lock, and the race detector caught the completion's phase bit read as a plain load: it is one atomic 32-bit load now, in the driver and the fake. Also BUG-0037: `virtio-net-smoke` once failed because `net-serve.sh` had picked one host port for both forwards; the two ports are now taken together. On `q35` the AHCI controller takes the first MSI line, so virtio-blk's moved to 17 (`boot_to_q35.txt`).
+
+**Next:** S03, xHCI with USB keyboards and mice.
+
 ## 2026-11-13 — W27-S01 The I/O APIC and MSI
 
 **Did:** the ISA lines through the I/O APIC, routed by the MADT's overrides (`nucleus/irqroute.c`, pure and host-tested; `ioapic.c`), the 8259 kept with kargs `irq=pic`; MSI lines from the nucleus (`nu_irq_alloc_msi`, `nu_irq_route`); PCI capabilities, MSI and MSI-X in `kernel/drivers/pci`, and `pci.Setup` choosing MSI-X, MSI or INTx for a driver; virtio on MSI-X. The console's `irqs`; `make q35-smoke` boots `q35` under OVMF; the irq ktests run on `q35` and once more with the 8259.
