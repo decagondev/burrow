@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-14 — W27-S03 xHCI and USB keyboards and mice
+
+**Did:** `drivers/xhci` and `kernel/usb`: the controller brought up and its root-hub ports enumerated, control, interrupt and bulk transfers, HID boot keyboards and mice bound to the PS/2 path (scancode set 1 into the console and `/dev/input/event0`, moves into `Env.Mouse`). `make usb-smoke` types a console and sh session, drives mousetest and paint, and runs x11-smoke's whole X session on `q35` with no PS/2 controller.
+
+**Surprise:** none in the controller: the first boot enumerated both devices and passed. QEMU's MSI-X can deliver a message for events an earlier interrupt already took, which `driver.Lines` reported as an interrupt nobody claimed; on a message-signalled vector the handler now always claims it. QEMU puts its USB 2 devices on ports 5 and up (the USB 3 ports come first) and reports them high speed.
+
+**Next:** S04, USB storage.
+
 ## 2026-11-14 — W27-S02 AHCI and NVMe
 
 **Did:** `drivers/ahci` and `drivers/nvme` register `sd*` and `nvme*n1` disks, host-tested against fake controllers with `blocktest`; `kernel/block/part` reads GPT, a whole-disk file system or an MBR on every disk, and the kernel finds its boot disk and mounts every volume by label whatever the interface. `make storage-smoke` runs disk-smoke and dev-smoke with the data disks on AHCI, then NVMe; `disk-bench` times all four interfaces; on `q35` the boot disk is now the AHCI one.

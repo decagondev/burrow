@@ -122,7 +122,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: storage-smoke q35-smoke uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: storage-smoke q35-smoke usb-smoke usb-smoke-x11 uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -347,6 +347,23 @@ q35-smoke: $(BUILD)/uefi-ktest-irq.img $(BUILD)/go-uefi.img $(BUILD)/data.img
 	SMOKE_NAME=q35 MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) QEMU_EXTRA="$(Q35_EXTRA)" \
 		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/boot_to_q35.txt 120 tests/smoke/keys/q35.keys; fi
 
+# W27-S03: q35 under OVMF with no PS/2 controller (i8042=off): the keyboard
+# and mouse are USB devices on QEMU's xHCI controller. usb.keys types into
+# the console and sh and drives mousetest and paint through them; then
+# x11-smoke's keys and expect file run unchanged on go-dev-uefi.img with the
+# X disk on virtio (skipped without make x11 busybox ports doom).
+USB_HID = -device qemu-xhci,id=xhci -device usb-kbd,bus=xhci.0 -device usb-mouse,bus=xhci.0
+USB_Q35 = SMOKE_NAME=$(1) MACHINE=q35,i8042=off MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV)
+usb-smoke: $(BUILD)/go-uefi.img $(BUILD)/data.img
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "USB SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
+	$(call USB_Q35,usb) QEMU_EXTRA="$(Q35_EXTRA) $(USB_HID)" \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/usb.txt 180 tests/smoke/keys/usb.keys && \
+	if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
+		$(MAKE) --no-print-directory usb-smoke-x11; else echo "USB SMOKE X11 SKIP (make x11 busybox ports doom)"; fi; fi
+usb-smoke-x11: $(BUILD)/go-dev-uefi.img $(BUILD)/x11-data.img
+	$(call USB_Q35,usb-x11) QEMU_EXTRA="$(call virtio_drive,$(BUILD)/x11-data.img) $(USB_HID)" \
+		tests/smoke/smoke.sh $(BUILD)/go-dev-uefi.img tests/smoke/expect/x11.txt 360 tests/smoke/keys/x11.keys
+
 # W26-S01: the UEFI image against sfdisk, mtools and fsck.fat, the EFI
 # application against objdump (skips what is not installed).
 uefi-interop: $(BUILD)/uefi.img
@@ -484,7 +501,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke usb-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 

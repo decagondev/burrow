@@ -1,0 +1,35 @@
+# Ordered markers for make usb-smoke (W27-S03): go-uefi.img on q35 under
+# OVMF with no PS/2 controller; the keyboard and mouse are USB devices on
+# QEMU's xHCI controller (MSI-X), enumerated and bound to the HID boot
+# drivers; everything typed and every mouse move in tests/smoke/keys/usb.keys
+# goes through them. Append-only.
+BURROW:GO:OK
+[pci] INFO: 00:03.0 1b36:000d usb controller (class 0c.03.30
+[driver] INFO: ps2: no device
+[xhci] INFO: controller 0: xHCI 1.00, 8 ports, 64 slots, 32-byte contexts, msi-x line
+[xhci] INFO: port 5: high-speed 0627:0001 "QEMU USB Keyboard"; interface 0: keyboard
+[xhci] INFO: port 6: high-speed 0627:0001 "QEMU USB Mouse"; interface 0: mouse
+[driver] INFO: started: [ahci bga e1000 pci rtc serial virtioblk xhci]
+[console] INFO: ready
+burrow> echo hello from the usb keyboar
+hello from the usb keyboard
+burrow> irqs
+isa line 1: i/o apic gsi 1 edge high
+interrupts: xhci
+burrow> cat /mnt/hello.txt
+Hello from the FAT32 data disk
+burrow> run /bin/spin
+spin: spinning until ^C
+run: /bin/spin: killed by signal 2
+burrow> sh
+$ echo SHI''FT "Q|W" ~!
+SHIFT Q|W ~!
+burrow> run /bin/mousetest
+mousetest: left down at 612,434
+mousetest: saw packets on /dev/input/mice
+mousetest: done at 612,434
+burrow> run /bin/paint
+paint: ready
+paint: 1 strokes, last colour ff0000
+burrow> poweroff
+[nucleus] acpi: powering off

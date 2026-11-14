@@ -491,8 +491,8 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-101 | W27 | Interrupt routing differs per machine: ISA overrides, level and active-low lines, PCI pins behind bridges | open (S01: the MADT's overrides decide, the ELCR when it says "conforms", a level line with no stated polarity is active low; MSI first; the routes printed at boot and by `irqs`; QEMU's `pc` and `q35` only so far) |
 | PIT-102 | W27 | An I/O APIC drops an edge that arrives on a masked pin, where the 8259 latched it | closed (S01: found in QEMU's `ioapic_set_irq` before it bit; edge lines are never masked once armed, only level lines wait masked for the ack; `kt_irq_masked_until_ack` checks both controllers) |
 | PIT-103 | W27 | DMA on real controllers: a missing barrier or a buffer above 4 GiB that a 32-bit controller cannot reach, which QEMU forgives | open |
-| PIT-104 | W27 | xHCI is a big specification: rings, cycle bits, contexts, port resets, timeouts | open |
-| PIT-105 | W27 | USB timing is real time: port resets and settle times the kernel must actually wait | open |
+| PIT-104 | W27 | xHCI is a big specification: rings, cycle bits, contexts, port resets, timeouts | open (S03: only what HID and storage need; rings, contexts and intervals host-tested; every command and control transfer has a timeout and polls the event ring while it waits; QEMU's qemu-xhci only so far) |
+| PIT-105 | W27 | USB timing is real time: port resets and settle times the kernel must actually wait | open (S03: power 20 ms, reset recovery 10 ms, SetAddress 2 ms slept; a port reset waits up to 500 ms; untried on real devices) |
 | PIT-106 | W27 | A real PC is tested by someone else, with no serial port: every failure must say where it stopped, on the screen | open |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |

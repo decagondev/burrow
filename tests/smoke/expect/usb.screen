@@ -1,0 +1,11 @@
+# Pixels of paint driven by the USB mouse (make usb-smoke, W27-S03;
+# tests/smoke/keys/usb.keys), as desk.screen checks it on PS/2. Append-only.
+# The palette along the top (black, then red), the white canvas, and a red
+# 5-pixel stroke along y=332 from x=96 to x=496.
+size  build/screen-usb-paint.ppm 1024 768
+pixel build/screen-usb-paint.ppm 32 32 #000000
+pixel build/screen-usb-paint.ppm 96 32 #ff0000
+pixel build/screen-usb-paint.ppm 1000 700 #ffffff
+pixel build/screen-usb-paint.ppm 100 332 #ff0000
+pixel build/screen-usb-paint.ppm 300 334 #ff0000
+pixel build/screen-usb-paint.ppm 490 330 #ff0000
