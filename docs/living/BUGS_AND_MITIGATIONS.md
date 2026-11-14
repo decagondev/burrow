@@ -35,6 +35,16 @@ None (BUG-0036 closed in its own commit after W26-S06: QEMU's, not Burrow's).
 
 ## Closed
 
+### BUG-0037: net-serve.sh could forward two host ports that were the same port (not a kernel bug)
+- Found: 2026-11-14, W27-S02's run of `make virtio-smoke`: `virtio-net-smoke`'s server half never reached `burrow>`.
+- Severity: minor (a flaky smoke; QEMU refused to start).
+- Symptom: `Could not set up host forwarding rule 'tcp:127.0.0.1:44215-:8080'` with `hostfwd=tcp:127.0.0.1:44215-:8080,hostfwd=tcp:127.0.0.1:44215-:8081` on QEMU's command line, then `sendkeys: 'burrow>' never appeared`.
+- Root cause: `tests/smoke/net-serve.sh` (and `net-bench.sh`) took each free port from its own `python3` process, which bound port 0, printed the port and closed the socket. The second process's kernel may hand the same ephemeral port out again, and it did.
+- Fix: `free2` binds both sockets in one process before printing either port, so the two ports differ.
+- Mitigation: free ports a test needs at once are taken together, while all of them are held.
+- Regression: `make virtio-smoke` and `make net-smoke` (each half picks two ports).
+- Lesson: "a free port" is free only while it is held.
+
 ### BUG-0036: After OVMF the nucleus mapped the Go kernel six times slower than after SeaBIOS (QEMU TCG, not Burrow)
 - Found: 2026-11-13, W26-S06, `make boot-bench`: from `BURROW:NUCLEUS:OK` to the Go kernel took 1.44 s under UEFI and 0.37 s under a BIOS.
 - Severity: minor (1.1 s of a 7.3 s boot on QEMU TCG; nothing failed; KVM and real hardware do not pay it).

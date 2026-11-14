@@ -8,8 +8,9 @@
 # Usage: tests/smoke/net-serve.sh <build-dir> <img> <home-img> [timeout]
 set -euo pipefail
 B="$1" IMG="$2" HOME_DISK="$3" TIMEOUT="${4:-240}"
-free() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
-P1=$(free) P2=$(free)
+# Two free loopback ports, taken while both are held, so they differ (BUG-0037).
+free2() { python3 -c 'import socket; s = [socket.socket() for _ in "ab"]; [x.bind(("127.0.0.1", 0)) for x in s]; print(*[x.getsockname()[1] for x in s])'; }
+read -r P1 P2 < <(free2)
 python3 tests/smoke/fetch.py "$P1" "$P2" workbench hello.c 50 > "$B/net-serve-fetch.log" 2>&1 &
 FETCH=$!
 trap 'kill $FETCH 2>/dev/null || true' EXIT

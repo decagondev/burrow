@@ -9,11 +9,12 @@
 # Usage: tests/smoke/net-bench.sh <build-dir> <img> [timeout]
 set -euo pipefail
 B="$1" IMG="$2" TIMEOUT="${3:-240}"
-free() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
+# Two free loopback ports, taken while both are held, so they differ (BUG-0037).
+free2() { python3 -c 'import socket; s = [socket.socket() for _ in "ab"]; [x.bind(("127.0.0.1", 0)) for x in s]; print(*[x.getsockname()[1] for x in s])'; }
 WWW="$B/net-www"
 mkdir -p "$WWW"
 python3 -c 'import random, sys; random.seed(10); sys.stdout.buffer.write(random.randbytes(10 << 20))' > "$WWW/ten.bin"
-PORT=$(free) FWD=$(free)
+read -r PORT FWD < <(free2)
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$WWW" > "$B/net-www.log" 2>&1 &
 SERVER=$!
 python3 tests/smoke/fetch.py bench "$FWD" initrd/etc motd 200 > "$B/net-bench-fetch.log" 2>&1 &
