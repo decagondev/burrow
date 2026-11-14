@@ -2,14 +2,17 @@
 // the first configuration and, for every interface a driver here knows,
 // starts that driver. HID boot keyboards feed driver.Env's keyboard path
 // (Scancodes first, then the console's input through drivers/ps2's
-// Decoder), boot mice driver.Env.Mouse. Each interface's reports are read
+// Decoder), boot mice driver.Env.Mouse; a mass storage interface becomes a
+// block device named uba, ubb, ... (W27-S04, storage.go). Each interface's reports are read
 // by a goroutine of its own that ends when its pipe fails (the device is
 // gone). Never blocks the caller on a report.
 package usb
 
 import (
 	"fmt"
+	"sync"
 
+	"burrow/kernel/block"
 	"burrow/kernel/driver"
 	"burrow/kernel/drivers/ps2"
 )
@@ -52,6 +55,9 @@ func bindInterface(env *driver.Env, d Device, ifc Interface) (string, error) {
 		return "keyboard", startHID(env, d, ifc, keyboardLoop(env))
 	case ifc.Class == ClassHID && ifc.SubClass == subclassBoot && ifc.Protocol == protocolMouse:
 		return "mouse", startHID(env, d, ifc, mouseLoop(env))
+	case ifc.Class == ClassStorage && ifc.SubClass == subclassSCSI && ifc.Protocol == protocolBOT:
+		what, err := startStorage(env, d, ifc)
+		return "storage" + what, err
 	}
 	return fmt.Sprintf("class %02x.%02x.%02x (no driver)", ifc.Class, ifc.SubClass, ifc.Protocol), nil
 }
@@ -120,4 +126,25 @@ func mouseLoop(env *driver.Env) func([]byte) {
 			env.Mouse(dx, dy, w, b)
 		}
 	}
+}
+
+var (
+	disksMu sync.Mutex
+	disks   int // ub disks named so far
+)
+
+// startStorage opens LUN 0 and registers it as the next ub disk.
+func startStorage(env *driver.Env, d Device, ifc Interface) (string, error) {
+	k, err := OpenStorage(d, ifc)
+	if err != nil {
+		return "", err
+	}
+	disksMu.Lock()
+	name := fmt.Sprintf("ub%c", 'a'+disks)
+	disks++
+	disksMu.Unlock()
+	block.Register(name, k)
+	mib := k.Sectors() * uint64(k.SectorSize()) >> 20
+	env.Log.Infof("%s: %d MiB in %d-byte blocks, %q", name, mib, k.SectorSize(), k.Model)
+	return " " + name, nil
 }

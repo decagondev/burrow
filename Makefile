@@ -94,7 +94,10 @@ virtio_drive = -drive file=$(1)$(comma)format=raw$(comma)if=virtio
 # (sda, sdb, ... in command-line order), DISK_IF=nvme on an NVMe one (nvme0n1, ...).
 ahci_drive = -device ahci$(comma)id=ahci$(2) -drive file=$(1)$(comma)format=raw$(comma)if=none$(comma)id=sata$(2) -device ide-hd$(comma)drive=sata$(2)$(comma)bus=ahci$(2).0
 nvme_drive = -drive file=$(1)$(comma)format=raw$(comma)if=none$(comma)id=nvme$(2) -device nvme$(comma)serial=burrow$(2)$(comma)drive=nvme$(2)
-drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(if $(filter ahci,$(3)),$(call ahci_drive,$(1),$(2)),$(if $(filter nvme,$(3)),$(call nvme_drive,$(1),$(2)),$(call ide_drive,$(1),$(2)))))
+# W27-S04: DISK_IF=usb puts each data disk on a usb-storage device behind an
+# xHCI controller of its own (uba, ubb, ...).
+usb_drive = -device qemu-xhci$(comma)id=usbx$(2) -drive file=$(1)$(comma)format=raw$(comma)if=none$(comma)id=usbd$(2) -device usb-storage$(comma)bus=usbx$(2).0$(comma)drive=usbd$(2)
+drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(if $(filter ahci,$(3)),$(call ahci_drive,$(1),$(2)),$(if $(filter nvme,$(3)),$(call nvme_drive,$(1),$(2)),$(if $(filter usb,$(3)),$(call usb_drive,$(1),$(2)),$(call ide_drive,$(1),$(2))))))
 data_drive = $(call drive_on,$(1),$(2),$(DISK_IF))
 run_drive = $(call drive_on,$(1),$(2),$(RUN_DISK_IF))
 # W23-S05: the network card of the run targets: virtio-net since W23-S07
@@ -104,7 +107,7 @@ NIC ?= virtio
 NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
 RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
-xp = $(if $(filter virtio ahci nvme,$(DISK_IF)),$(BUILD)/$(DISK_IF)-expect/$(notdir $(1)),$(1))
+xp = $(if $(filter virtio ahci nvme usb,$(DISK_IF)),$(BUILD)/$(DISK_IF)-expect/$(notdir $(1)),$(1))
 # W26-S05: UEFI=1 boots a run target's UEFI twin (go-dev-uefi.img for
 # go-dev.img, uefi.img for disk.img) with OVMF, whose variables persist in
 # build/run-ovmf-vars.fd like a PC's. run_common is QEMU_COMMON with the
@@ -122,7 +125,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: storage-smoke q35-smoke usb-smoke usb-smoke-x11 uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: storage-smoke q35-smoke usb-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -360,6 +363,15 @@ usb-smoke: $(BUILD)/go-uefi.img $(BUILD)/data.img
 		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/usb.txt 180 tests/smoke/keys/usb.keys && \
 	if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory usb-smoke-x11; else echo "USB SMOKE X11 SKIP (make x11 busybox ports doom)"; fi; fi
+	$(MAKE) --no-print-directory usb-smoke-storage
+# W27-S04: USB storage on pc: disk-smoke and dev-smoke with their data
+# disks on usb-storage (uba..), then go.img reads a stick, the stick is
+# pulled (device_del), its reads fail, and the kernel goes on.
+USB_STICK = -device qemu-xhci,id=xhci -drive file=$(BUILD)/usb-stick.img,format=raw,if=none,id=stick -device usb-storage,bus=xhci.0,drive=stick,id=stickdev
+usb-smoke-storage: $(BUILD)/go.img $(BUILD)/data.img
+	$(MAKE) --no-print-directory DISK_IF=usb disk-smoke dev-smoke
+	cp $(BUILD)/data.img $(BUILD)/usb-stick.img
+	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(USB_STICK)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/usb-unplug.txt 120 tests/smoke/keys/usb-unplug.keys
 usb-smoke-x11: $(BUILD)/go-dev-uefi.img $(BUILD)/x11-data.img
 	$(call USB_Q35,usb-x11) QEMU_EXTRA="$(call virtio_drive,$(BUILD)/x11-data.img) $(USB_HID)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev-uefi.img tests/smoke/expect/x11.txt 360 tests/smoke/keys/x11.keys
@@ -576,15 +588,18 @@ doom-bench: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 # then tests/smoke/checkdisk.py checks the image file on the host, so the
 # bytes are known to have reached the disk.
 # kargs disktest=<disk>: hdb, or vda on virtio (W23-S04)
-DISKTEST_DISK = $(if $(filter virtio,$(DISK_IF)),vda,$(if $(filter ahci,$(DISK_IF)),sda,$(if $(filter nvme,$(DISK_IF)),nvme0n1,hdb)))
+DISKTEST_DISK = $(if $(filter virtio,$(DISK_IF)),vda,$(if $(filter ahci,$(DISK_IF)),sda,$(if $(filter nvme,$(DISK_IF)),nvme0n1,$(if $(filter usb,$(DISK_IF)),uba,hdb))))
 $(BUILD)/go-disktest-%.img: $(BOOT_PARTS) $(BUILD)/kernel.elf $(BUILD)/initrd.tar
 	echo disktest=$* > $(BUILD)/kargs-disktest-$*.txt
 	$(MKIMAGE_GO) -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar \
 		-payload kargs=$(BUILD)/kargs-disktest-$*.txt >/dev/null
+# 120 s, not 60 (W27-S04): on one CPU permtest's ext2 commits over USB
+# mass storage take 65 s (AHCI 53 s); the markers are the assertion, this is
+# only the hang guard.
 disk-smoke: $(BUILD)/go-disktest-$(DISKTEST_DISK).img $(BUILD)/ext2.img $(BUILD)/user/permtest $(BUILD)/user/linktest $(call xp,tests/smoke/expect/disk.txt)
 	rm -f $(BUILD)/scratch.img && truncate -s 1M $(BUILD)/scratch.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call data_drive,$(BUILD)/scratch.img,1) $(call data_drive,$(BUILD)/ext2.img,2)" \
-		tests/smoke/smoke.sh $(BUILD)/go-disktest-$(DISKTEST_DISK).img $(call xp,tests/smoke/expect/disk.txt) 60 tests/smoke/keys/disk.keys
+		tests/smoke/smoke.sh $(BUILD)/go-disktest-$(DISKTEST_DISK).img $(call xp,tests/smoke/expect/disk.txt) 120 tests/smoke/keys/disk.keys
 	python3 tests/smoke/checkdisk.py $(BUILD)/scratch.img 64
 	@PATH="$$PATH:/usr/sbin:/sbin" e2fsck -fn $(BUILD)/ext2.img >/dev/null \
 		&& echo "EXT2 DISK PASS (e2fsck after permtest and linktest wrote to it)" \
@@ -1100,6 +1115,10 @@ $(BUILD)/nvme-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.p
 	@mkdir -p $(dir $@)
 	python3 tests/smoke/virtio-expect.py --if nvme $< $@
 	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/nvme-expect/$*.screen; fi
+$(BUILD)/usb-expect/%.txt: tests/smoke/expect/%.txt tests/smoke/virtio-expect.py
+	@mkdir -p $(dir $@)
+	python3 tests/smoke/virtio-expect.py --if usb $< $@
+	@if [ -f tests/smoke/expect/$*.screen ]; then cp tests/smoke/expect/$*.screen $(BUILD)/usb-expect/$*.screen; fi
 
 # W27-S02: disk-smoke and dev-smoke with their data disks on AHCI (sda..),
 # then on NVMe (nvme0n1..), against expect files virtio-expect.py derives;

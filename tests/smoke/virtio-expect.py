@@ -2,14 +2,15 @@
 """virtio-expect.py - an expect file for the same smoke on other disks
 (W23-S04, make virtio-smoke; W27-S02, make storage-smoke): the data disks
 that were IDE's hdb, hdc and hdd are virtio's vda, vdb and vdc, AHCI's sda,
-sdb and sdc, or NVMe's nvme0n1, nvme1n1 and nvme2n1, in the order QEMU's
+sdb and sdc, NVMe's nvme0n1, nvme1n1 and nvme2n1, or USB storage's uba, ubb and ubc
+(W27-S04), in the order QEMU's
 command line gives them. The disk driver's lines ("[virtioblk] INFO: vdY ",
-"[ahci] INFO: sdY: ", "[nvme] INFO: nvmeYn1: "), one per disk the file
+"[ahci] INFO: sdY: ", "[nvme] INFO: nvmeYn1: ", "[xhci] INFO: ubY: "), one per disk the file
 names, stand where its first disk line was (an "[ata] INFO: hdX: ..." probe
 line is dropped: the driver's took its place). The IDE expect files stay
 the one source; this writes a derived copy into build/, never into tests/.
 
-Usage: virtio-expect.py [--if virtio|ahci|nvme] <ide-expect.txt> <out.txt>
+Usage: virtio-expect.py [--if virtio|ahci|nvme|usb] <ide-expect.txt> <out.txt>
 """
 import re
 import sys
@@ -18,11 +19,13 @@ NAMES = {
     "virtio": {"hdb": "vda", "hdc": "vdb", "hdd": "vdc"},
     "ahci": {"hdb": "sda", "hdc": "sdb", "hdd": "sdc"},
     "nvme": {"hdb": "nvme0n1", "hdc": "nvme1n1", "hdd": "nvme2n1"},
+    "usb": {"hdb": "uba", "hdc": "ubb", "hdd": "ubc"},
 }
 DRIVER_LINE = {
     "virtio": "[virtioblk] INFO: %s \n",
     "ahci": "[ahci] INFO: %s: \n",
     "nvme": "[nvme] INFO: %s: \n",
+    "usb": "[xhci] INFO: %s: \n",
 }
 
 

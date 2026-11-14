@@ -21,6 +21,8 @@ The keys file is a small script, one step per line ('#' comments):
                     input-send-event) on guest pixel (x, y): the centre of that
                     pixel's share of the tablet's 0-32767, so the guest's
                     scaling, value * size / 32768, gives (x, y) back exactly
+    monitor <cmd>   one QEMU monitor command (W27-S04: device_del unplugs a
+                    USB stick by its id)
 smoke.sh runs this in the background next to QEMU; a step that times out
 exits 1 and smoke.sh then fails on its missing markers.
 """
@@ -214,6 +216,9 @@ def main():
                         {'type': 'abs', 'data': {'axis': 'x', 'value': abs_value(x, screen[0])}},
                         {'type': 'abs', 'data': {'axis': 'y', 'value': abs_value(y, screen[1])}}]})
                     time.sleep(ABS_DELAY_S)
+                elif op == 'monitor':
+                    s.sendall(f'{arg}\n'.encode())
+                    time.sleep(0.5)
                 elif op == 'sleep':
                     time.sleep(float(arg))
                 elif op == 'screendump':

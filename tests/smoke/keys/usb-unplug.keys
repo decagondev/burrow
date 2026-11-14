@@ -1,0 +1,19 @@
+# Typed into go.img's console with the data disk on a USB stick (make
+# usb-smoke, W27-S04): the stick is read, pulled out through QEMU's monitor
+# (device_del), read again, which fails, and the kernel goes on running
+# programs.
+wait burrow>
+type disks
+key ret
+type cat /mnt/hello.txt
+key ret
+wait Hello from the FAT32
+monitor device_del stickdev
+sleep 2
+type ls /mnt/docs
+key ret
+type run /bin/hello
+key ret
+wait hello from ring
+type poweroff
+key ret

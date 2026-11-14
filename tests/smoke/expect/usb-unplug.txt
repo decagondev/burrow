@@ -1,0 +1,17 @@
+# Ordered markers for the USB stick pulled out of a running Burrow (make
+# usb-smoke, W27-S04; tests/smoke/keys/usb-unplug.keys): go.img with its
+# data disk on usb-storage behind QEMU's xHCI. The stick is read, removed
+# with device_del, and the next read fails with an error, not a panic or a
+# hang; the kernel goes on. Append-only.
+[xhci] INFO: uba: 34 MiB in 512-byte blocks, "QEMU QEMU HARDDISK"
+[xhci] INFO: port 1: super-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage uba
+[fat] INFO: uba: FAT32 volume "BURROWDATA" mounted at /mnt (read-write)
+burrow> disks
+uba    69632 sectors of 512 bytes
+burrow> cat /mnt/hello.txt
+Hello from the FAT32 data disk
+burrow> ls /mnt/docs
+ls: open mnt/docs: usb storage: block
+burrow> run /bin/hello
+hello from ring 3
+burrow> poweroff

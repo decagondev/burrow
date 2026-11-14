@@ -1,6 +1,6 @@
 // Package usb is the USB stack above a host controller (W27-S03): the
 // standard requests, descriptors, and the class drivers a device is bound
-// to (HID boot keyboards and mice here; mass storage in S04). A host
+// to (HID boot keyboards and mice; mass storage since S04). A host
 // controller driver (drivers/xhci) enumerates a device, gives it an
 // address, and hands it over as a Device: control transfers on endpoint 0
 // and Pipes for its other endpoints. This package never touches a

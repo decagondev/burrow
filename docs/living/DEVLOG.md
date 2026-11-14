@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-14 — W27-S04 USB storage
+
+**Did:** mass storage over `kernel/usb` (the bulk-only transport carrying SCSI) as `ub*` disks, with stall and reset recovery, host-tested against a fake stick; `DISK_IF=usb` for the smokes; `usb-smoke-storage` runs disk-smoke and dev-smoke's edit, compile and reboot on usb-storage, and pulls a mounted stick out.
+
+**Surprise:** none in the transport. A pulled stick makes no transfer event at all on QEMU, so its next read fails only when the bulk transfer's 10 s timeout runs out; acting on the port's status change would fail it at once, if a real machine shows the wait matters. And on one CPU disk-smoke over USB took 65 s, past its 60 s hang guard (AHCI took 53 s): permtest's ext2 commits are many small writes, each a command, data and status transfer; the guard is 120 s now.
+
+**Next:** S05, one stick on `q35` and on a real PC.
+
 ## 2026-11-14 — W27-S03 xHCI and USB keyboards and mice
 
 **Did:** `drivers/xhci` and `kernel/usb`: the controller brought up and its root-hub ports enumerated, control, interrupt and bulk transfers, HID boot keyboards and mice bound to the PS/2 path (scancode set 1 into the console and `/dev/input/event0`, moves into `Env.Mouse`). `make usb-smoke` types a console and sh session, drives mousetest and paint, and runs x11-smoke's whole X session on `q35` with no PS/2 controller.
