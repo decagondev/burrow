@@ -101,8 +101,10 @@ func start(env *driver.Env, dev pci.Device, index int) error {
 		handler = func() bool { h.Interrupt(); return true }
 	}
 	pci.Serve(env, vec, "xhci", handler)
-	env.Log.Infof("controller %d: xHCI %x.%02x, %d ports, %d slots, %d-byte contexts, %v",
+	ctl := fmt.Sprintf("controller %d: xHCI %x.%02x, %d ports, %d slots, %d-byte contexts, %v",
 		index, h.Version>>8, h.Version&0xFF, h.Ports, h.Slots, int(h.ctx), vec)
+	env.Log.Infof("%s", ctl)
+	usb.Note(ctl)
 	for port := 1; port <= h.Ports; port++ {
 		if h.Connected(port) {
 			attach(env, h, port)
@@ -116,6 +118,7 @@ func attach(env *driver.Env, h *Controller, port int) {
 	d, err := h.Enumerate(port)
 	if err != nil {
 		env.Log.Warnf("port %d: %v", port, err)
+		usb.Note(fmt.Sprintf("port %d: not enumerated: %v", port, err))
 		return
 	}
 	bound, err := usb.Bind(env, d, d.Config)
@@ -126,5 +129,7 @@ func attach(env *driver.Env, h *Controller, port int) {
 	if err != nil {
 		what = "; " + err.Error()
 	}
-	env.Log.Infof("port %d: %v %04x:%04x %q%s", port, d.Speed, d.Desc.Vendor, d.Desc.Product, d.Product, what)
+	line := fmt.Sprintf("port %d: %v %04x:%04x %q%s", port, d.Speed, d.Desc.Vendor, d.Desc.Product, d.Product, what)
+	env.Log.Infof("%s", line)
+	usb.Note(line) // the hardware report (W27-S05)
 }

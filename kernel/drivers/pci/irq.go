@@ -41,7 +41,16 @@ func (v Vector) String() string {
 
 // Setup gives d its interrupt: MSI-X entry 0 (with noMSIX false), MSI, or
 // INTx. An INTx line outside 1-15 is an error: the firmware routed nothing.
+// The function is claimed for the driver env.Log names (claims.go).
 func Setup(env *driver.Env, d Device, noMSIX bool) (Vector, error) {
+	v, err := setup(env, d, noMSIX)
+	if err == nil && env.Log != nil {
+		ClaimFor(d, env.Log.Subsystem(), v.String())
+	}
+	return v, err
+}
+
+func setup(env *driver.Env, d Device, noMSIX bool) (Vector, error) {
 	cfg := PortConfig{IO: env.Ports32}
 	caps := Capabilities(cfg, d)
 	if env.AllocMSI != nil {

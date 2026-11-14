@@ -36,6 +36,9 @@ func (l *Logger) With(subsystem string) *Logger {
 	return &Logger{out: lockedWriter{l}, min: l.min, subsystem: subsystem}
 }
 
+// Subsystem is the name With gave this logger ("" for a root logger).
+func (l *Logger) Subsystem() string { return l.subsystem }
+
 func (l *Logger) Logf(lv Level, format string, args ...any) {
 	if lv < l.min {
 		return

@@ -1,0 +1,24 @@
+# The initrd-only stick (W27-S05, make usb-initrd), booted by OVMF on q35
+# from usb-storage with no PS/2 controller (make usb-desktop-smoke's first
+# half): the hardware report is on the screen before the prompt; busybox and
+# Doom come from the initrd, so no disk driver is needed. Doom's title, then
+# Quit Game from its menu (Escape, up wraps to the last item, Enter, y).
+wait burrow>
+type run /bin/busybox ls /opt/doom
+key ret
+wait freedoom1.wad
+type run /bin/doom -iwad /opt/doom/freedoom1.wad
+key ret
+wait Auto-scaling
+waitpixel 250 560 #ff801c
+screendump build/screen-usb-initrd-title.ppm
+key esc
+sleep 1
+key up
+sleep 1
+key ret
+sleep 1
+type y
+wait burrow>
+type poweroff
+key ret

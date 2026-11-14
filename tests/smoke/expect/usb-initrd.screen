@@ -1,0 +1,9 @@
+# Pixels of Doom's title from the initrd-only stick (make usb-desktop-smoke's
+# first half, tests/smoke/keys/usb-initrd.keys), as doom.screen checks it.
+# Append-only.
+size  build/screen-usb-initrd-title.ppm 1024 768
+pixel build/screen-usb-initrd-title.ppm 0 0 #000000
+pixel build/screen-usb-initrd-title.ppm 191 184 #000000
+pixel build/screen-usb-initrd-title.ppm 192 184 #8b0101
+pixel build/screen-usb-initrd-title.ppm 250 560 #ff801c
+pixel build/screen-usb-initrd-title.ppm 831 583 #440101

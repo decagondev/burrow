@@ -1,17 +1,15 @@
 # Burrow on a real PC
 
-Since W26 Burrow boots from UEFI firmware as well as from a BIOS, and `make uefi-usb` writes one disk image that a USB stick can carry. This guide explains how to put that image on a stick and what to expect from a real PC today. The short version: the firmware path works, and you should see Burrow's own lines on the screen. But Burrow's drivers are still the ones for QEMU's `pc` machine, so on most PCs built in the last decade the kernel will start without finding its keyboard or its disks. Those drivers are [W27](../04-plan/waves/WAVE-27-real-pc.md)'s job. [WAVE-26-uefi.md](../04-plan/waves/WAVE-26-uefi.md) has the design, and [BOOT_PROTOCOL.md](../02-architecture/BOOT_PROTOCOL.md) has what the UEFI loader does.
+Burrow boots from UEFI firmware as well as from a BIOS (W26), and since W27 it drives the devices a PC of the last decade has: interrupts through the I/O APIC and MSI, SATA disks behind AHCI, NVMe disks, and USB keyboards, mice and sticks behind an xHCI controller. Two images can go on a USB stick. This guide explains how to make them, how to boot one, and what to send back. Everything here is tested on QEMU's `q35` machine with OVMF and no legacy devices (`make usb-desktop-smoke`); a real PC is the next test, and your report is how it happens. [WAVE-27-real-pc.md](../04-plan/waves/WAVE-27-real-pc.md) has the design, [WAVE-26-uefi.md](../04-plan/waves/WAVE-26-uefi.md) and [BOOT_PROTOCOL.md](../02-architecture/BOOT_PROTOCOL.md) the UEFI loader.
 
-## Make the image
+## Which image
 
-From the repository, in WSL or Linux:
+| Image | Make it with | What it needs from the PC | What you get |
+|---|---|---|---|
+| `build/burrow-initrd-usb.img` (about 100 MiB) | `make busybox doom usb-initrd` | the firmware, the screen and a USB keyboard | the Go console, busybox and Doom, all in the initrd: no disk driver at all. The hardware report is printed on the screen before the prompt. **Try this one first.** |
+| `build/burrow-usb.img` (about 260 MiB) | `make busybox x11 net-ports browser uefi-usb` | the above, and the stick read as a disk (USB storage) | a login on an ext2 root from the stick, the X desktop, the network ports. The hardware report is saved in `/var/log/hw.txt`. |
 
-```sh
-make busybox x11 net-ports browser   # once: the root's busybox, the X disk, the network ports, NetSurf
-make uefi-usb                        # build/burrow-usb.img
-```
-
-`build/burrow-usb.img` (about 260 MiB) is a GPT disk with these partitions:
+`build/burrow-usb.img` is a GPT disk with these partitions:
 
 | Partition | Label | What it holds |
 |---|---|---|
@@ -20,9 +18,11 @@ make uefi-usb                        # build/burrow-usb.img
 | 3 | `NETDATA` (FAT32) | `/opt/net`: curl, dropbear, NetSurf (when `make net-ports browser` ran) |
 | 4 | `X11DATA` (FAT32) | `/opt/x11`: the X server, dwm, st, dmenu (when `make x11` ran) |
 
-The kernel mounts the boot disk's partitions by label, just as it mounts separate disks (`kernel/cmd/kernel/bootparts.go`). It names the boot partition in the log and never mounts it.
+`build/burrow-initrd-usb.img` has only the first partition; its initrd also holds `/bin/busybox`, `/bin/doom` and `/opt/doom/freedoom1.wad`, and its kargs say `hwreport`.
 
-Try it in QEMU first. `make run-usb` boots the image with OVMF and no other disk, in a window. Log in as `burrow` (password `burrow`) and run `startx`. The UEFI twins of the other run targets work the same way: `make run-unix UEFI=1`, `make run-dev UEFI=1`, `make run-doom UEFI=1`. They need the `ovmf` package.
+The kernel reads the partitions of every disk it finds, whatever its interface (IDE, SATA, virtio, NVMe or USB), and mounts each volume by its label (`kernel/block/part`, `kernel/cmd/kernel/bootparts.go`). The boot partition, and any disk's EFI system partition, is named in the log and never mounted. **A FAT32 or ext2 volume with any other label is mounted at `/mnt`, read-write**, wherever it is: if the PC has an internal disk with such a volume whose data matters, don't run programs that write to `/mnt` (NTFS and other file systems are not mounted at all).
+
+Try them in QEMU first. `make run-usb` boots `burrow-usb.img` with OVMF in a window: log in as `burrow` (password `burrow`) and run `startx`. `make usb-desktop-smoke` boots both images the way a modern PC would see them: `q35`, the stick on USB storage, a USB keyboard and mouse, no PS/2. They need the `ovmf` package.
 
 ## Write it to a stick
 
@@ -31,13 +31,13 @@ Use a stick of 512 MB or more. **Everything on the stick is erased.**
 - **Linux or WSL with the stick passed through:** find the stick's whole-disk device with `lsblk` (for example `/dev/sdb`, not `/dev/sdb1`). Make sure it is the stick, then run:
 
   ```sh
-  sudo dd if=build/burrow-usb.img of=/dev/sdX bs=4M conv=fsync status=progress
+  sudo dd if=build/burrow-initrd-usb.img of=/dev/sdX bs=4M conv=fsync status=progress
   ```
 
 - **Windows:** use [Rufus](https://rufus.ie) and pick **DD Image mode** when it asks. balenaEtcher also writes the image as it is.
 - **Don't use Ventoy.** Ventoy boots an image as a file inside its own partition, so the firmware does start Burrow's loader. But the kernel sees Ventoy's disk, not Burrow's partitions, and finds no root and no data volumes.
 
-The image has no BIOS boot code: its MBR is only GPT's protective one. To boot Burrow on a BIOS-only PC, write `build/go.img` or another BIOS image instead.
+The images have no BIOS boot code: their MBR is only GPT's protective one. To boot Burrow on a BIOS-only PC, write `build/go.img` or another BIOS image instead.
 
 ## Boot it
 
@@ -46,36 +46,31 @@ The image has no BIOS boot code: its MBR is only GPT's protective one. To boot B
 
 ## What to expect
 
-These lines appear on the screen as well as on COM1 (W26-S04). Most PCs have no serial port, so a photo of the screen is the report.
+Everything below appears on the screen as well as on COM1. Most PCs have no serial port, so the screen is the report.
 
-1. **The loader's lines:** `[efi] ...`, then the firmware's memory map, the ACPI tables, each payload's CRC and the screen's mode through GOP. The loader picks 1024x768 if the screen offers it, and otherwise keeps the firmware's mode. If it stops here with `[efi] PANIC: the firmware owns ...`, that firmware keeps a page Burrow needs at a fixed address (PIT-94); please report it.
-2. **The nucleus's lines:** `[nucleus] ... ok` for each part, the CPUs coming online and `BURROW:NUCLEUS:OK`. A crash here leaves `[trap] ...` or `PANIC` and the registers on the screen.
-3. **The Go kernel:** the console's banner on the framebuffer. From here on, what works depends on the hardware:
+1. **The loader's lines:** `[efi] ...`, then the firmware's memory map, the ACPI tables, each payload's CRC and the screen's mode through GOP. The loader picks 1024x768 if the screen offers it, and otherwise keeps the firmware's mode. If it stops here with `[efi] PANIC: the firmware owns ...`, that firmware keeps a page Burrow needs at a fixed address (PIT-94).
+2. **The nucleus's lines:** `[nucleus] ... ok` for each part, among them `[nucleus] irq: i/o apic ...` with the interrupt routes the ACPI tables gave, the CPUs coming online, and `BURROW:NUCLEUS:OK`. A crash here leaves `[trap] ...` or `PANIC` and the registers on the screen.
+3. **The Go kernel:** the drivers' lines (`[xhci] INFO: port N: ...` for each USB device, `[ahci]`, `[nvme]`), the volumes it mounted, then the hardware report (the initrd stick) and the prompt: `burrow>` on the initrd stick, `burrow login:` on the full one.
 
-| A real PC usually has | Burrow today | So |
-|---|---|---|
-| A USB keyboard and mouse (xHCI) | PS/2 only (`drivers/ps2`) | You can't type, unless the firmware still emulates a PS/2 keyboard after the boot services end. Some do, most don't. |
-| The stick itself, a USB disk | IDE (`drivers/ata`) and virtio only | No root and no data volumes. The kernel keeps the initrd it already has in memory as `/`. That initrd has no `/bin/login`, so the Go console's `burrow>` prompt comes up instead of a login. |
-| SATA through AHCI, or NVMe | IDE only, or a SATA controller in "IDE"/"legacy" mode | Internal disks aren't seen, and Burrow never writes to them. |
-| Interrupts through the I/O APIC and MSI | the 8259 in virtual-wire mode | Devices that interrupt only by message are silent. Most chipsets still have a working 8259 for the legacy lines. |
-| An Intel e1000e, Realtek or Wi-Fi network card | e1000 (8254x) and virtio-net | No network. |
-| HD Audio | AC'97 | No sound. |
-| No serial port | COM1 for the log | The log is only on the screen. |
+The console's `hw` command prints the hardware report again at any time; `irqs` lists every interrupt line and how many interrupts each driver took.
 
-The screen (GOP's framebuffer), the CPUs (ACPI's MADT), the timers, the real-time clock, and powering off through ACPI need nothing a modern PC lacks. Expect the boot to reach the Go console's banner and stop there, waiting for a keyboard it can't hear.
+What Burrow drives, and what it does not yet:
+
+| A real PC has | Burrow since W27 |
+|---|---|
+| The I/O APIC, MSI and MSI-X | yes: the ISA lines through the I/O APIC (the MADT's overrides), PCI devices by MSI-X or MSI where they have it |
+| A USB keyboard and mouse (xHCI) | yes: HID boot protocol on the xHCI's root ports; no USB hubs yet, so plug them into the PC itself, not a hub or a keyboard's own ports |
+| The stick, a USB disk | yes: USB mass storage (bulk-only, SCSI), `uba`, `ubb`, ... |
+| SATA through AHCI, NVMe | yes: `sda`.., `nvme0n1`.., their FAT32 and ext2 volumes mounted by label (see above) |
+| PS/2, IDE | yes, as before |
+| An Intel e1000e/igc, Realtek or Wi-Fi network card | no: the report lists it as "no driver" |
+| HD Audio | no (AC'97 only) |
+| A GPU | the firmware's framebuffer (GOP) only |
 
 ## What to send back
 
-Please report:
+1. **A photo of the screen** where it stopped, or of the hardware report (the initrd stick prints it before `burrow>`; type `hw` to see it again, and scroll with the photo in parts if it is long).
+2. From the full stick, if it booted: **the file `/var/log/hw.txt`** on its `BURROWROOT` partition (any Linux can read the ext2 volume), or a photo of `hw`'s output.
+3. The PC's make and model, and the firmware's version if the setup shows it.
 
-- a photo of the screen where it stopped;
-- the PC's make and model;
-- the firmware's version, if the setup shows it.
-
-Lines that matter most are:
-
-- `[efi] PANIC`, `[trap]` or `PANIC`;
-- the last `[nucleus]` line;
-- the `[efi] screen:` line.
-
-W27 adds the I/O APIC and MSI, AHCI, NVMe, and USB keyboards, mice and storage. It also adds a first-boot report that lists what the kernel found.
+The report names the firmware, the CPUs, the interrupt controller, every PCI function with its driver or "no driver", every USB device and controller, the disks, the mounts and each interrupt line's count. Lines that matter most when something failed are `[efi] PANIC`, `[trap]` or `PANIC`, the last `[nucleus]` line, `[xhci] WARN` lines (a port that did not enumerate), and the report's "no driver" lines.

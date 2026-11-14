@@ -32,6 +32,7 @@ const (
 	mbrEntryBytes  = 16
 	mbrStatusBoot  = 0x80
 	typeProtective = 0xEE
+	typeESP        = 0xEF // an EFI system partition on an MBR disk: never a volume (PIT-99)
 )
 
 var extended = map[byte]bool{0x05: true, 0x0F: true, 0x85: true}
@@ -116,7 +117,7 @@ func readMBR(disk string, d block.Device) ([]Volume, bool) {
 		if typ == typeProtective || first == 0 || first+count > d.Sectors() {
 			return nil, false
 		}
-		if extended[typ] {
+		if extended[typ] || typ == typeESP {
 			continue
 		}
 		p := gpt.Partition{Number: i + 1, First: first, Last: first + count - 1}

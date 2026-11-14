@@ -100,6 +100,19 @@ func TestFindMBR(t *testing.T) {
 	}
 }
 
+// W27-S05: an MBR disk's EFI system partition (type 0xEF, as some
+// installers write one) is skipped like GPT's, never mounted.
+func TestFindMBRSkipsESP(t *testing.T) {
+	img := mbrDisk(4096, [][4]uint32{{0x80, 0xEF, 2048, 1024}, {0, 0x83, 3072, 512}})
+	l, err := Find("sda", block.NewRAM(img, ss), func(block.Device) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Kind != MBR || len(l.Volumes) != 1 || l.Volumes[0].Name != "sda2" {
+		t.Fatalf("layout = %+v", l)
+	}
+}
+
 // A FAT volume's boot sector ends in 55 AA too: the caller's probe says it
 // is a file system, so it is one volume, not an MBR.
 func TestFindWholeDisk(t *testing.T) {

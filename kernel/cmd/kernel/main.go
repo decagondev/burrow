@@ -150,6 +150,7 @@ func main() {
 			log.Warnf("/dev/fb0: %v", err)
 		}
 	}
+	k.writeHWReport(log.With("hw"), out) // W27-S05: /var/log/hw.txt, and the screen with kargs hwreport
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
 	k.mountProc(log.With("procfs"))
 	k.tty, k.input = tty.New(out, rows, cols), input

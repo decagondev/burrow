@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-14 — W27-S05 One stick, on q35 and on a real PC
+
+**Did:** the M27 stick boots on `q35` with OVMF from usb-storage alone, with no PS/2 and no other disk, and the desktop runs from its partitions as burrow (`make usb-desktop-smoke`). A hardware report (firmware, CPUs, interrupts, every PCI function and its driver or none, USB, disks, mounts) goes to `/var/log/hw.txt`, the console's `hw` and, with kargs `hwreport`, the screen. `make usb-initrd` writes a stick that needs no disk driver: busybox and Doom in the initrd. REAL_HARDWARE.md rewritten for W27.
+
+**Surprise:** the boot partition of `mkfat`'s default size (34 MiB) cannot hold Doom's WAD, and `mkfat` panics with "image full" rather than saying so; `uefi_image` takes a size now. The report found its first "no driver" at once: `q35`'s own network card is an e1000e (8086:10d3), which Burrow does not drive. And writing REAL_HARDWARE.md showed that an MBR's EFI system partition would have been mounted: it is skipped like GPT's now.
+
+**Next:** S06, M27.
+
 ## 2026-11-14 — W27-S04 USB storage
 
 **Did:** mass storage over `kernel/usb` (the bulk-only transport carrying SCSI) as `ub*` disks, with stall and reset recovery, host-tested against a fake stick; `DISK_IF=usb` for the smokes; `usb-smoke-storage` runs disk-smoke and dev-smoke's edit, compile and reboot on usb-storage, and pulls a mounted stick out.

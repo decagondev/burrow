@@ -7,6 +7,8 @@
 # types the file's steps into the guest's PS/2 keyboard while it runs.
 # QEMU_EXTRA adds QEMU arguments (make go-smoke attaches build/data.img);
 # MACHINE picks QEMU's machine (pc; q35 for make q35-smoke, W27-S01);
+# BOOT_IF=usb puts <disk.img> on a USB stick (usb-storage behind an xHCI
+# controller of its own, the firmware's boot device) instead of IDE (W27-S05);
 # MEM is the guest's RAM (default 128M; the Go images use 512M, W14-S01).
 # SMP is the guest's CPU count (W20-S07; the Makefile exports 4 since S08,
 # unset here means one), on multi-threaded TCG.
@@ -54,9 +56,15 @@ fi
 DEBUG_EXIT=(-device isa-debug-exit,iobase=0xf4,iosize=0x04); WANT_STATUS=33
 if [ "${POWEROFF:-}" = acpi ]; then DEBUG_EXIT=(); WANT_STATUS=0; fi
 
+BOOT=(-drive "file=$IMG,format=raw,if=ide,index=0,media=disk")
+if [ "${BOOT_IF:-ide}" = usb ]; then
+  BOOT=(-device qemu-xhci,id=bootxhci -drive "file=$IMG,format=raw,if=none,id=bootstick"
+        -device usb-storage,bus=bootxhci.0,drive=bootstick,bootindex=0)
+fi
+
 set +e
 timeout "$TIMEOUT" "$QEMU" -machine "${MACHINE:-pc}" -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" -smp "${SMP:-1}" -accel tcg,thread=multi \
-  "${FIRMWARE[@]}" -drive "file=$IMG,format=raw,if=ide,index=0,media=disk" \
+  "${FIRMWARE[@]}" "${BOOT[@]}" \
   "${DEBUG_EXIT[@]}" \
   "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot
 STATUS=$?

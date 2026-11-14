@@ -190,6 +190,9 @@ func (d *display) Start(env *driver.Env) error {
 	if err != nil {
 		return fmt.Errorf("map %#x: %w", m.Phys, err)
 	}
+	if d.bga {
+		pci.ClaimFor(d.dev, "bga", fmt.Sprintf("display, %dx%d", m.Width, m.Height)) // the hardware report (W27-S05)
+	}
 	fb, err := gfx.New(mem, m.Width, m.Height, m.Pitch, m.Format)
 	if err != nil {
 		return err

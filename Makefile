@@ -125,7 +125,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: storage-smoke q35-smoke usb-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -246,7 +246,7 @@ $(BUILD)/efi/BOOTX64.EFI: $(BUILD)/efi/loader.elf $(BUILD)/mkimage
 # $(call uefi_image,name,payload flags): build/<name>.img from its boot partition
 define uefi_image
 	$(BUILD)/mkimage -esp-dir $(BUILD)/esp/$(1) -efi $(BUILD)/efi/BOOTX64.EFI $(2) >/dev/null
-	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/esp/$(1).fat -label BURROWBOOT ../$(BUILD)/esp/$(1)
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/esp/$(1).fat -label BURROWBOOT $(if $(3),-size $(3)) ../$(BUILD)/esp/$(1)
 	$(BUILD)/mkimage -gpt $(BUILD)/esp/$(1).fat -o $(BUILD)/$(1).img >/dev/null
 endef
 
@@ -262,7 +262,7 @@ $(BUILD)/go-uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD
 # go-unix), each from its BIOS image's payload list (GO_*_PAYLOADS), the
 # nucleus and the video request; $(call uefi_go_image,name,payloads).
 UEFI_PARTS := $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/mkimage $(BUILD)/kernel.elf $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
-uefi_go_image = $(call uefi_image,$(1),-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf $(2))
+uefi_go_image = $(call uefi_image,$(1),-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf $(2),$(3))
 
 # W26-S01: OVMF runs the UEFI loader (tests/smoke/expect/boot_to_efi.txt);
 # skips without the ovmf package. S03: on to BURROW:NUCLEUS:OK, then again
@@ -303,6 +303,47 @@ uefi-smoke-usb-run: $(BUILD)/burrow-usb.img
 	cp $(USB_IMG) $(BUILD)/usb-test.img
 	SMOKE_NAME=unix-desktop-usb MEM=$(GO_MEM) $(OVMF_ENV) EXPECT=tests/smoke/expect/unix-desktop-usb.txt \
 		tests/smoke/unix-desktop.sh $(BUILD) $(BUILD)/usb-test.img - 600
+
+# W27-S05: the M27 stick: build/burrow-usb.img booted by OVMF on q35 from a
+# usb-storage stick alone (smoke.sh's BOOT_IF=usb) with no PS/2 controller:
+# the USB keyboard logs burrow in, the unix-desktop session runs from the
+# stick's root, net and X partitions, and the host checks it over ssh.
+# Its first half boots the initrd-only stick (make usb-initrd) the same way:
+# the hardware report on the screen, busybox, Doom's title from the initrd.
+usb-desktop-smoke:
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "USB DESKTOP SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; \
+	elif [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then $(MAKE) --no-print-directory usb-initrd-smoke; \
+	else echo "USB INITRD SMOKE SKIP (make busybox doom)"; fi
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then :; \
+	elif [ -f $(BUILD)/net-root/bin/netsurf ] && [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && command -v ssh >/dev/null; then $(MAKE) --no-print-directory usb-desktop-smoke-run; \
+	else echo "USB DESKTOP SMOKE SKIP (make x11 busybox net-ports browser, and an ssh client on the host)"; fi
+usb-desktop-smoke-run: $(BUILD)/burrow-usb.img
+	cp $(BUILD)/burrow-usb.img $(BUILD)/usb-desktop.img
+	SMOKE_NAME=usb-desktop MACHINE=q35,i8042=off BOOT_IF=usb MEM=$(GO_MEM) $(OVMF_ENV) QEMU_MORE="$(USB_HID)" \
+		EXPECT=tests/smoke/expect/usb-desktop.txt tests/smoke/unix-desktop.sh $(BUILD) $(BUILD)/usb-desktop.img - 900
+usb-initrd-smoke: $(BUILD)/burrow-initrd-usb.img
+	cp $(BUILD)/burrow-initrd-usb.img $(BUILD)/usb-initrd-test.img
+	SMOKE_NAME=usb-initrd MACHINE=q35,i8042=off BOOT_IF=usb MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) QEMU_EXTRA="$(USB_HID)" \
+		tests/smoke/smoke.sh $(BUILD)/usb-initrd-test.img tests/smoke/expect/usb-initrd.txt 240 tests/smoke/keys/usb-initrd.keys
+
+# W27-S05: make usb-initrd writes build/burrow-initrd-usb.img, a first "does
+# it boot" stick for a real PC: one GPT disk with the boot partition only,
+# whose initrd holds busybox, Doom and the Freedoom WAD (/opt/doom), so the
+# console, busybox and Doom need no disk driver at all; kargs hwreport puts
+# the hardware report on the screen (docs/06-guides/REAL_HARDWARE.md).
+$(BUILD)/initrd-usb.tar: $(BUILD)/initrd.tar $(BUILD)/busybox $(BUILD)/doom-root/doom $(BUILD)/doom-root/freedoom1.wad
+	rm -rf $(BUILD)/initrd-usb-root && cp -R $(BUILD)/initrd-root $(BUILD)/initrd-usb-root
+	cp $(BUILD)/busybox $(BUILD)/initrd-usb-root/bin/busybox
+	cp $(BUILD)/doom-root/doom $(BUILD)/initrd-usb-root/bin/doom
+	mkdir -p $(BUILD)/initrd-usb-root/opt/doom && cp $(BUILD)/doom-root/freedoom1.wad $(BUILD)/initrd-usb-root/opt/doom/
+	python3 scripts/mkinitrd.py $(BUILD)/initrd-usb-root $@  # modes by content (W19-S04)
+$(BUILD)/kargs-hwreport.txt: | $(BUILD)
+	echo hwreport > $@
+GO_USB_INITRD_PAYLOADS = -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd-usb.tar -payload kargs=$(BUILD)/kargs-hwreport.txt
+$(BUILD)/burrow-initrd-usb.img: $(UEFI_PARTS) $(BUILD)/initrd-usb.tar $(BUILD)/kargs-hwreport.txt
+	$(call uefi_go_image,burrow-initrd-usb,$(GO_USB_INITRD_PAYLOADS),96)
+	@echo "wrote $@ ($$(du -m $@ | cut -f1) MiB): the boot partition, with busybox and Doom in the initrd"
+usb-initrd: $(BUILD)/burrow-initrd-usb.img
 
 # W26-S06: how long a boot takes from the firmware's first line on COM1 to
 # BURROW:GO:OK, go.img under SeaBIOS and go-uefi.img under OVMF, three boots
@@ -513,7 +554,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke usb-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 

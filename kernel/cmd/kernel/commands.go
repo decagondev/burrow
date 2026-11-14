@@ -44,6 +44,8 @@ func addCommands(con *console.Console, k *kernel) {
 		}})
 	con.Add(console.Command{Name: "irqs", Help: "interrupt lines: each ISA line's route, then the PCI drivers' lines",
 		Run: func(_ []string, out io.Writer) { listIRQs(k, out) }})
+	con.Add(console.Command{Name: "hw", Help: "the hardware report: firmware, CPUs, PCI functions and their drivers, USB, disks, mounts",
+		Run: func(_ []string, out io.Writer) { io.WriteString(out, k.hwReport()) }})
 	con.Add(console.Command{Name: "net", Help: "network interfaces, addresses, routes and counters",
 		Run: func(_ []string, out io.Writer) {
 			if k.net == nil {

@@ -8,7 +8,9 @@
 # and ends it. The host's keys live on a Linux file system: OpenSSH refuses a
 # private key /mnt/c shows as everyone's. W26-S05: <root.img> "-" attaches
 # no disks (the USB stick carries the root and the data volumes as
-# partitions of <img>), and EXPECT names another expect file.
+# partitions of <img>), and EXPECT names another expect file. W27-S05:
+# QEMU_MORE joins QEMU's arguments (make usb-desktop-smoke: the USB
+# keyboard and mouse).
 #
 # Usage: tests/smoke/unix-desktop.sh <build-dir> <img> <root.img|-> [timeout]
 set -euo pipefail
@@ -20,7 +22,7 @@ HOST=$!
 trap 'kill $HOST 2>/dev/null || true' EXIT
 DISKS="-drive file=$ROOT,format=raw,if=ide,index=1,media=disk -drive file=$B/net-data.img,format=raw,if=ide,index=2,media=disk -drive file=$B/x11-data.img,format=raw,if=ide,index=3,media=disk"
 [ "$ROOT" = - ] && DISKS=""
-QEMU_EXTRA="$DISKS -nic user,model=${NIC_MODEL:-e1000},hostfwd=tcp:127.0.0.1:$P-:22" \
+QEMU_EXTRA="$DISKS ${QEMU_MORE:-} -nic user,model=${NIC_MODEL:-e1000},hostfwd=tcp:127.0.0.1:$P-:22" \
   tests/smoke/smoke.sh "$IMG" "${EXPECT:-tests/smoke/expect/unix-desktop.txt}" "$TIMEOUT" tests/smoke/keys/unix-desktop.keys
 status=0
 wait $HOST || status=$?

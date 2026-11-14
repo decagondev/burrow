@@ -1,0 +1,27 @@
+# Ordered markers for the initrd-only stick (W27-S05, make usb-initrd;
+# booted by make usb-desktop-smoke's first half, tests/smoke/keys/usb-initrd.keys):
+# OVMF loads the initrd with busybox, Doom and the WAD from the boot
+# partition of a usb-storage stick on q35 with no PS/2 controller; kargs
+# hwreport puts the hardware report on the screen before the prompt (in
+# /tmp: the initrd's root is read-only); no disk is mounted. Append-only.
+[efi] initrd image crc ok
+BURROW:GO:OK
+[xhci] INFO: port 1: super-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage uba
+[block] INFO: uba: GPT, boot partition "BURROWBOOT"
+[hw] INFO: report in /tmp/hw.txt
+Burrow hardware report,
+CPUs online, interrupts through the I/O APIC
+pci:
+usb controller (class 0c.03.30, irq 11): xhci, msi-x line
+sata controller (class 01.06.01, irq 10): ahci, msi line
+usb:
+port 5: high-speed 0627:0001 "QEMU USB Keyboard"; interface 0: keyboard
+disks:
+mounts:
+  /: tarfs, read-only
+interrupts:
+burrow> run /bin/busybox ls /opt/doom
+freedoom1.wad
+burrow> run /bin/doom -iwad /opt/doom/freedoom1.wad
+I_InitGraphics: Auto-scaling factor: 2
+burrow> poweroff
