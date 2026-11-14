@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-14 — W27 done: a real PC's devices (M27)
+
+**Did:** the wave in six slices. The ISA lines through the I/O APIC by the MADT's overrides, MSI and MSI-X for PCI devices, virtio on MSI-X, `irqs`, `q35-smoke` (S01); AHCI and NVMe disks, partitions on every disk, the boot disk on any interface, `storage-smoke` (S02); xHCI and a USB stack with HID boot keyboards and mice on the PS/2 path, `usb-smoke` with an X session (S03); USB mass storage, a stick pulled while mounted (S04); the M27 stick booting on `q35` from USB alone with the desktop, the hardware report, the initrd-only stick, REAL_HARDWARE.md (S05); `disk-bench` on four interfaces, ARCHITECTURE.md §7.12, ADR-0014, R-06 (S06). `make test` green on four CPUs and on one.
+
+**Surprise:** how much QEMU's devices forgave and how little the kernel above them cared: once the I/O APIC kept edges, every driver got its interrupts by message without a change to ADR-0005's model, the xHCI driver enumerated QEMU's keyboard and mouse on its first boot, and the X session ran over USB with x11-smoke's own keys. The wave's failures were in tests: a ktest that assumed its thread stayed on one CPU, a port picker that could pick one port twice (BUG-0037), a hang guard too short for USB storage on one CPU, and a marker that named four CPUs.
+
+**Learned:** a contract that already exists is the cheapest driver: the USB keyboard speaks scancode set 1 and the console, evdev and the hang dump never knew. And a report beats a log for someone else's machine: the first one named a card Burrow does not drive (q35's e1000e) before anyone asked.
+
+**Next:** a real PC's report, then W28 for what it needs.
+
+## 2026-11-14 — W27-S06 M27
+
+**Did:** the new smokes in `make test` on both CPU counts, `disk-bench` on IDE, virtio, AHCI and NVMe, ARCHITECTURE.md §7.12, ADR-0014, RISKS.md R-06 re-scored, this wave's entry.
+
+**Surprise:** NVMe is the fastest disk on QEMU (162 MiB/s read against virtio's 124): its queue takes several commands at once.
+
+**Next:** see the wave entry above.
+
 ## 2026-11-14 — W27-S05 One stick, on q35 and on a real PC
 
 **Did:** the M27 stick boots on `q35` with OVMF from usb-storage alone, with no PS/2 and no other disk, and the desktop runs from its partitions as burrow (`make usb-desktop-smoke`). A hardware report (firmware, CPUs, interrupts, every PCI function and its driver or none, USB, disks, mounts) goes to `/var/log/hw.txt`, the console's `hw` and, with kargs `hwreport`, the screen. `make usb-initrd` writes a stick that needs no disk driver: busybox and Doom in the initrd. REAL_HARDWARE.md rewritten for W27.

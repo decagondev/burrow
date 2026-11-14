@@ -586,6 +586,68 @@ always were; every Go image has a UEFI twin from the same payload list.
 | the Go kernel mapped and started | 0.37 s | 1.44 s (BUG-0036: TCG's first stores into frames that held OVMF's code) |
 | first line to `BURROW:GO:OK` | 15.4 s | 7.3 s |
 
+### 7.12 A real PC's devices (Wave 27)
+
+Interrupts keep ADR-0005's shape on every route (ADR-0014): the nucleus masks
+what must be masked, acknowledges, marks the line pending and wakes the one
+goroutine waiting on it. What changed is where a line comes from. ISA lines
+0-15 go through the I/O APIC when the MADT names one, by its overrides (on
+QEMU the PIT is GSI 2, the PCI lines 5, 9, 10 and 11 level-triggered); only
+level lines stay masked until the driver's ack, because an I/O APIC drops an
+edge on a masked pin. PCI functions get MSI-X or MSI where they have it, on
+lines 16-47, and fall back to their INTx line through `driver.Lines`. The 8259
+in virtual wire stays for a machine with no I/O APIC, or kargs `irq=pic`.
+
+```mermaid
+flowchart LR
+    subgraph dev["Devices"]
+        PIT["PIT, keyboard, serial: ISA lines"]
+        INTX["e1000, AC'97: INTx"]
+        MSIX["virtio, AHCI, NVMe, xHCI: MSI or MSI-X"]
+    end
+    PIT --> IOAPIC["I/O APIC: the MADT's overrides"]
+    INTX --> IOAPIC
+    IOAPIC --> LAPIC["local APIC of CPU 0"]
+    MSIX -->|"a message write"| LAPIC
+    LAPIC --> ISR["nucleus irq.c: mask a level line, EOI, pending, wake"]
+    ISR --> G["the line's goroutine: driver.Lines or driver.Serve"]
+    G -->|"irq_ack"| ISR
+```
+
+The USB stack is two layers. `drivers/xhci` is the host controller: one page
+per ring (the command ring, each endpoint's transfer ring, the event ring on
+interrupter 0), contexts in DMA pages, root-hub ports reset and enumerated.
+It hands each device to `kernel/usb` as a `usb.Device` (control transfers) and
+opens `usb.Pipe`s (interrupt and bulk) for the class drivers `usb.Bind`
+starts: a HID boot keyboard's reports become scancode set 1 bytes on the PS/2
+path, a boot mouse's go to `Env.Mouse`, a mass storage interface (bulk-only
+transport, SCSI) becomes a `ub*` block device.
+
+```mermaid
+flowchart TB
+    X["drivers/xhci: rings, contexts, ports, event ring on MSI-X"] --> D["usb.Device and usb.Pipe"]
+    D --> B["usb.Bind: SET_CONFIGURATION, one driver per interface"]
+    B --> K["HID keyboard: set 1 scancodes"] --> P["Env.Scancodes, ps2.Decoder, the console, /dev/input/event0"]
+    B --> M["HID mouse"] --> E["Env.Mouse: /dev/input/event1, /dev/input/mice"]
+    B --> S["mass storage: BOT + SCSI"] --> U["ub* block.Writer, mounted by label"]
+```
+
+Every disk, whatever its driver (`hd*` IDE, `sd*` AHCI, `vd*` virtio,
+`nvme*n1` NVMe, `ub*` USB), is read for a GPT, a file system on the whole
+disk or an MBR (`kernel/block/part`), and each volume is mounted by its
+label; the boot disk is the first with Burrow's manifest or an EFI system
+partition, whose other partitions come first. A hardware report of what was
+found (every PCI function with its driver or none, the USB devices, the disks,
+the routes) is written to `/var/log/hw.txt` and printed by `hw`, and on the
+screen with kargs `hwreport`, for the tester of a real PC.
+
+| `make disk-bench`: 64 MiB written, then read, on QEMU TCG (one boot each) | write | read |
+|---|---|---|
+| IDE (`hdb`, PIO) | 2.1 MiB/s | 7.6 MiB/s |
+| virtio-blk (`vda`) | 118.5 MiB/s | 124.2 MiB/s |
+| AHCI (`sda`) | 100.0 MiB/s | 114.1 MiB/s |
+| NVMe (`nvme0n1`) | 137.9 MiB/s | 162.0 MiB/s |
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

@@ -17,3 +17,4 @@ An ADR records one significant decision: context, options, choice, consequences.
 | [0011](ADR-0011-smp.md) | Per-CPU state through GS, and how the other CPUs start | Accepted |
 | [0012](ADR-0012-vdso-dispatcher.md) | A vDSO, and the dispatcher answers what never blocks | Accepted |
 | [0013](ADR-0013-uefi-loader.md) | A UEFI loader of our own beside the BIOS chain | Accepted |
+| [0014](ADR-0014-modern-devices.md) | The I/O APIC and MSI beside virtual wire; one USB stack for HID and storage | Accepted |
