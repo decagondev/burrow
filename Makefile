@@ -126,7 +126,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: nic-smoke nic-smoke-run usb-smoke-hub reboot-smoke reboot-smoke-pc hda-smoke hda-smoke-doom hda-smoke-doom-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: nic-smoke nic-smoke-run usb-smoke-hub q35-full-smoke q35-full-smoke-run reboot-smoke reboot-smoke-pc hda-smoke hda-smoke-doom hda-smoke-doom-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -425,6 +425,32 @@ usb-smoke-storage: $(BUILD)/go.img $(BUILD)/data.img
 	$(MAKE) --no-print-directory DISK_IF=usb disk-smoke dev-smoke
 	cp $(BUILD)/data.img $(BUILD)/usb-stick.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(USB_STICK)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/usb-unplug.txt 120 tests/smoke/keys/usb-unplug.keys
+# W28-S05, the M28 demo: q35 under OVMF with its own devices and no PS/2
+# controller boots go-m28-uefi.img (go-doom-uefi's payloads, kargs
+# net=dhcp) from a stick behind a USB hub, with the keyboard and mouse on
+# the same hub, Doom's WAD on an NVMe disk and an ICH9 HD Audio controller
+# recording; m28.keys reads the hardware report and the network the e1000e
+# took by DHCP, plays Doom, restarts through the FADT's reset register and
+# powers off. checkwav.py hears Doom; checkhw.py wants a driver for every
+# PCI function but the bridges and the SMBus.
+M28_WAV := $(BUILD)/m28.wav
+M28_DEVICES = -device usb-kbd,bus=bootxhci.0,port=1.2 -device usb-mouse,bus=bootxhci.0,port=1.3 \
+	-drive file=$(BUILD)/doom-data.img,format=raw,if=none,id=m28nvme -device nvme,drive=m28nvme,serial=burrow-m28 \
+	-audiodev wav,id=snd0,path=$(M28_WAV) -device ich9-intel-hda -device hda-output,audiodev=snd0
+$(BUILD)/go-m28-uefi.img: $(UEFI_PARTS) $(BUILD)/initrd-doom.tar
+	echo net=dhcp > $(BUILD)/kargs-m28.txt
+	$(call uefi_go_image,go-m28-uefi,$(GO_DOOM_PAYLOADS) -payload kargs=$(BUILD)/kargs-m28.txt)
+q35-full-smoke:
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "Q35 FULL SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; \
+	elif [ ! -f $(BUILD)/doom-root/doom ]; then echo "Q35 FULL SMOKE SKIP (make doom)"; \
+	else $(MAKE) --no-print-directory q35-full-smoke-run; fi
+q35-full-smoke-run: $(BUILD)/go-m28-uefi.img $(BUILD)/doom-data.img
+	rm -f $(M28_WAV)
+	ALLOW_REBOOT=1 BOOT_IF=usbhub SMOKE_NAME=m28 MACHINE=q35,i8042=off MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) \
+		QEMU_EXTRA="$(M28_DEVICES)" tests/smoke/smoke.sh $(BUILD)/go-m28-uefi.img tests/smoke/expect/m28.txt 600 tests/smoke/keys/m28.keys
+	python3 tests/smoke/checkwav.py $(M28_WAV) sounds 4
+	python3 tests/smoke/checkhw.py $(BUILD)/smoke-m28.log
+
 # W28-S02: hubs. QEMU's usb-hub (full speed) on a root port carries the
 # keyboard, a second hub with the mouse behind it, and a stick; the console
 # session, the stick's file and mousetest go through them, then the stick is
@@ -579,7 +605,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke hda-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke reboot-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke hda-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke q35-full-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke reboot-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -984,10 +1010,12 @@ smp-bench: $(BUILD)/go.img
 	python3 tests/smoke/smp-budgets.py $(BUILD)/smoke-smp-bench-1.log $(BUILD)/smoke-smp-bench-4.log
 # How fast the network is (W17-S06, not in make test): a 10 MB download
 # from the host with gofetch and short connections to busybox httpd,
-# against the budgets in tests/smoke/net-budgets.py.
+# against the budgets in tests/smoke/net-budgets.py; on the e1000, virtio-net
+# and (W28-S05) the e1000e.
 net-bench: $(BUILD)/go-dev.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=e1000 tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
 	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=e1000e tests/smoke/net-bench.sh $(BUILD) $(BUILD)/go-dev.img 240
 # The workbench on the network (W17-S06): run-dev's image and home disk,
 # QEMU's user network (the host is 10.0.2.2, DNS 10.0.2.3, the internet
 # beyond if the host has it) and the host's port 8080 forwarded to 8080 in

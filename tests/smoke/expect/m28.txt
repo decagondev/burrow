@@ -1,0 +1,42 @@
+# Ordered markers for the M28 demo (make q35-full-smoke, W28-S05; keys
+# tests/smoke/keys/m28.keys). Append-only. q35 under OVMF with no PS/2
+# controller boots go-m28-uefi.img from a stick behind a USB hub (OVMF's
+# own entry for the removable disk); the kernel finds the stick, the
+# keyboard and the mouse on the hub's ports, takes an address by DHCP on
+# q35's e1000e, mounts Doom's WAD from an NVMe disk, plays Doom with its
+# sound on the ICH9's HD Audio, restarts through the FADT's reset register
+# into a second boot from the same stick, and powers off through ACPI.
+BURROW:EFI:OK
+BURROW:GO:OK goroutine says 42
+[e1000] INFO: eth0: 82574L, 52:54:00:12:34:56, link up, msi line
+[hdaudio] INFO: /dev/dsp: codec 0 1af40012, pin 3 (line out) <- dac 2, msi line
+[nvme] INFO: nvme0n1: 48 MiB in 512-byte blocks
+[xhci] INFO: port 5.1: full-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage uba
+[xhci] INFO: port 5.2: full-speed 0627:0001 "QEMU USB Keyboard"; interface 0: keyboard
+[xhci] INFO: port 5.3: full-speed 0627:0001 "QEMU USB Mouse"; interface 0: mouse
+[xhci] INFO: port 5: full-speed 0409:55aa "QEMU USB Hub"; interface 0: hub, 8 ports
+[driver] INFO: started: [ahci bga e1000 hdaudio nvme pci rtc serial xhci]
+[net] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease
+[e1000] INFO: 10.0.2.2 is at
+[fat] INFO: nvme0n1: FAT32 volume "DOOMDATA" mounted at /mnt
+[console] INFO: ready: type on the keyboard
+burrow> hw
+pci:
+8086:10d3 ethernet (class 02.00.00, irq
+8086:293e device (class 04.03.00, irq
+usb:
+  port 5: full-speed 0409:55aa "QEMU USB Hub"; interface 0: hub, 8 ports
+mounts:
+burrow> net
+    inet 10.0.2.15/24
+burrow> run /bin/doom -iwad /mnt/freedoom1.wad
+i_burrowsound: /dev/dsp at 22050 Hz, 8 channels mixed
+I_InitGraphics: Auto-scaling factor: 2
+burrow> reboot
+[power] INFO: reboot from register
+[nucleus] reset: the FADT's reset register (io cf9 =
+BURROW:EFI:OK
+BURROW:GO:OK goroutine says 42
+[xhci] INFO: port 5.1: full-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage uba
+burrow> poweroff
+[nucleus] acpi: powering off

@@ -1,0 +1,47 @@
+# The M28 demo, typed through a USB keyboard behind a hub into
+# go-m28-uefi.img on q35 under OVMF with no PS/2 controller (make
+# q35-full-smoke, W28-S05): the hardware report, the network the e1000e
+# took by DHCP, Doom from the NVMe disk with its sound on HD Audio (a
+# pistol shot, as doom.keys fires it), then a restart through the FADT's
+# reset register and, on the second boot, a power-off through ACPI.
+wait burrow>
+type hw
+key ret
+wait mounts:
+type net
+key ret
+wait inet 10.0.2.15
+type run /bin/doom -iwad /mnt/freedoom1.wad
+key ret
+wait Auto-scaling
+waitpixel 250 560 #ff801c
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+sleep 1
+key ret
+waitpixel 240 575 #8b8b8b
+waitpixel 780 535 #9f9f9f
+key ctrl
+sleep 1
+key up
+key up
+key up
+sleep 1
+key esc
+sleep 1
+key up
+sleep 1
+key ret
+sleep 1
+type y
+wait burrow>
+type reboot
+key ret
+wait [nucleus] reset:
+wait BURROW:GO:OK
+wait burrow>
+type poweroff
+key ret

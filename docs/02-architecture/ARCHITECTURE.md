@@ -648,6 +648,49 @@ screen with kargs `hwreport`, for the tester of a real PC.
 | AHCI (`sda`) | 100.0 MiB/s | 114.1 MiB/s |
 | NVMe (`nvme0n1`) | 137.9 MiB/s | 162.0 MiB/s |
 
+### 7.13 More of a real PC (Wave 28)
+
+W28 filled in what W27's hardware report still called "no driver" on a modern
+PC, inside the shapes W27 built. The e1000 driver takes a model table and
+drives the 82574L (QEMU's `e1000e`, `q35`'s own card) on MSI; every network
+card takes the lowest free `ethN`, so a second card never renames the first.
+USB hubs are a class driver in `kernel/usb` that asks the host controller,
+through `usb.HubHost`, to address what is on its ports: xHCI writes the route
+string, the root port and, for a slow device behind a high-speed hub, that
+hub's slot and port as its transaction translator. HD Audio is a second
+`sound.Output` behind `/dev/dsp`: codec verbs over the CORB and RIRB, a path
+found by searching the codec's widget graph from an output pin to a DAC, and a
+ring of pages the controller plays round and round. ACPI still has no
+interpreter (ADR-0014): `\_S5` is found in the DSDT or an SSDT, and a restart
+tries the FADT's reset register, port 0xCF9, the keyboard controller and a
+triple fault, saying each on the screen first.
+
+```mermaid
+flowchart TB
+    subgraph usb["USB through a hub"]
+        X["drivers/xhci: Device as usb.HubHost"] -->|"route string, TT, Hub slot fields"| H["kernel/usb hub.go: power, reset, status changes"]
+        H -->|"Attach(port, speed)"| X
+        H --> C["usb.Connect: Bind and one line per device (port 5.2.1)"]
+    end
+    subgraph snd["HD Audio"]
+        R["CORB / RIRB: codec verbs"] --> W["widget walk: pin to DAC"]
+        W --> S["stream: 32-page BDL ring, LPIB from its start"]
+        S --> D["sound.Output: /dev/dsp"]
+    end
+    subgraph pwr["Restart and power-off"]
+        K["reboot(2), PID 1's signals, the console"] --> P["cmd/kernel power: SetPower"]
+        P --> N["nu_reset: reset register, 0xCF9, 8042, triple fault"]
+        P --> A["poweroff: ACPI S5 from the DSDT or an SSDT"]
+    end
+```
+
+The M28 run (`make q35-full-smoke`) is one `q35` boot under OVMF with QEMU's
+own devices and no PS/2 controller: the stick behind a hub (with the keyboard
+and the mouse), an NVMe disk with Doom's WAD, the e1000e with an address from
+DHCP, the ICH9's HD Audio recording Doom, a restart through the reset register
+into a second boot, and a power-off. Its hardware report names a driver for
+every PCI function but the two bridges and the SMBus controller.
+
 ## 8. Design principles applied (SOLID and friends)
 
 | Principle | Where you will see it |

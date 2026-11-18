@@ -14,6 +14,24 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-18 — W28 done: more of a real PC (M28)
+
+**Did:** the wave in five slices. The 82574L (e1000e) in the e1000 driver, every card the lowest free `ethN`, `nic-smoke` and q35's own card in `q35-smoke` (S01); USB hubs over `usb.HubHost`, with route strings, transaction translators and hot-plug, `usb-smoke-hub` (S02); Intel HD Audio as a second `sound.Output`, `hda-smoke` (S03); `\_S5` from SSDTs and every AML integer encoding, the FADT's reset register with three fallbacks, `reboot(2)` and busybox's halt applets, `reboot-smoke` (S04); the M28 run on `q35` with every device, `checkhw.py`, `net-bench` on the e1000e (4.9 MB/s and 29.8 connections a second, beside the e1000's 5 and 30.4), ARCHITECTURE.md §7.13 (S05). `make test` green on four CPUs and on one.
+
+**Surprise:** the host tests passed first time for every driver and every boot still found something: QEMU's HD Audio decodes registers by exact address and width, runs its command ring only while a flag is cleared, and learns which stream stopped from the value that clears RUN; OVMF cannot boot a stick behind a hub by `bootindex`; `smoke.sh`'s `-no-reboot` hid every restart. None was in a specification; all were one boot away.
+
+**Learned:** a wave without a real machine's report can still be honest about what it proves: each driver says what it found (the codec and its path, the reset register or its absence, the hub's ports), so the first report will say which guess was wrong.
+
+**Next:** a real PC's report (R-06); else the later list: gcc, Python, GTK.
+
+## 2026-11-18 — W28-S05 M28
+
+**Did:** `make q35-full-smoke` (the stick behind a hub, NVMe, the e1000e by DHCP, HD Audio recording Doom, a restart and a power-off in one run) with `smoke.sh`'s `BOOT_IF=usbhub` and `tests/smoke/checkhw.py`; the new smokes in `make test`; `net-bench` on the e1000e; ARCHITECTURE.md §7.13, REAL_HARDWARE.md, RISKS.md R-06.
+
+**Surprise:** with `bootindex` on a stick behind a hub OVMF kept nothing but its shell: QEMU names the device by a path through `hub@1` that OVMF cannot match. Without it, OVMF's own entry for the removable disk boots the stick. And W27's `usb-desktop-smoke` failed once on four CPUs: st's XIO error, printed after X went, landed between the console's prompt and the typed `poweroff` (BUG-0038); the session now waits for its clients first.
+
+**Next:** see the wave entry above.
+
 ## 2026-11-18 — W28-S04 ACPI power-off and reset
 
 **Did:** `\_S5` from the SSDTs and in every AML integer encoding, the FADT's reset register, and a restart that tries the register, 0xCF9, the 8042 and a triple fault, each said on the screen first (`nu_reset`). `reboot(2)`, busybox's `reboot`/`poweroff`/`halt` (by signal to PID 1, which the kernel answers), `sync`, the console's `reboot [way]`. `make reboot-smoke`: six boots of one disk in one run on `pc`, and `q35` through its reset register.

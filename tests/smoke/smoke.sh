@@ -9,6 +9,11 @@
 # MACHINE picks QEMU's machine (pc; q35 for make q35-smoke, W27-S01);
 # BOOT_IF=usb puts <disk.img> on a USB stick (usb-storage behind an xHCI
 # controller of its own, the firmware's boot device) instead of IDE (W27-S05);
+# BOOT_IF=usbhub puts that stick on port 1 of a USB hub on that controller,
+# whose other ports QEMU_EXTRA may fill (bus bootxhci.0, port 1.N; W28-S05;
+# no bootindex there: OVMF cannot match QEMU's boot path through a hub and
+# would keep only its shell, while its own entry for the removable stick
+# boots it);
 # MEM is the guest's RAM (default 128M; the Go images use 512M, W14-S01).
 # SMP is the guest's CPU count (W20-S07; the Makefile exports 4 since S08,
 # unset here means one), on multi-threaded TCG.
@@ -63,6 +68,9 @@ BOOT=(-drive "file=$IMG,format=raw,if=ide,index=0,media=disk")
 if [ "${BOOT_IF:-ide}" = usb ]; then
   BOOT=(-device qemu-xhci,id=bootxhci -drive "file=$IMG,format=raw,if=none,id=bootstick"
         -device usb-storage,bus=bootxhci.0,drive=bootstick,bootindex=0)
+elif [ "${BOOT_IF:-ide}" = usbhub ]; then
+  BOOT=(-device qemu-xhci,id=bootxhci -device usb-hub,bus=bootxhci.0,port=1 -drive "file=$IMG,format=raw,if=none,id=bootstick"
+        -device usb-storage,bus=bootxhci.0,port=1.1,drive=bootstick)   # no bootindex: OVMF matches no hub path
 fi
 
 NO_REBOOT=(-no-reboot)

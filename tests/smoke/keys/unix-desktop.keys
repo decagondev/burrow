@@ -6,7 +6,9 @@
 # NetSurf on the page, then dwm) and runs startx. While X runs, the host
 # checks the programs over ssh (tests/smoke/unix-desktop.py) and ends the
 # session with pkill dwm; startx gives the console back and the report is
-# printed. Then burrow logs out and the console powers off.
+# printed. Then burrow waits for st and NetSurf to be gone (BUG-0038: st's
+# XIO error could land between the console's prompt and the typed
+# poweroff), logs out and the console powers off.
 wait login:
 type burrow
 key ret
@@ -32,6 +34,9 @@ key ret
 wait startx: /home/burrow/.xinitrc
 wait startx: done
 wait desk: the host over ssh sees
+type while pidof st netsurf > /dev/null; do sleep 1; done; echo desk: clients'' gone
+key ret
+wait desk: clients gone
 type exit
 key ret
 wait burrow>

@@ -233,11 +233,11 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E25 More of a real PC
 *Exit: on `q35` with its own devices, Burrow boots from a stick behind a USB hub, is on the network over the e1000e, plays sound through HD Audio, and reboots and powers off by ACPI.* [W28]
 
-- [ ] E25.F01 As a user, I want the Intel 82574L (e1000e) network card, so that `q35` and PCs with that card are on the network. [W28-S01]
-- [ ] E25.F02 As a user, I want USB hubs, so that keyboards, mice and sticks plugged into a hub, a monitor or a dock are found. [W28-S02]
-- [ ] E25.F03 As a user, I want Intel HD Audio, so that Doom and `/dev/dsp` play sound on a PC without an AC'97. [W28-S03]
-- [ ] E25.F04 As a user, I want power-off and reboot to work on firmware that is not QEMU's (ACPI mode, `\_S5` in an SSDT, the FADT's reset register), so that Burrow can turn a real PC off and restart it. [W28-S04]
-- [ ] E25.F05 As a tester, I want one `q35` boot with every one of these devices and a report with no desktop device left without a driver, so that the next real machine has the best chance. [W28-S05]
+- [x] E25.F01 As a user, I want the Intel 82574L (e1000e) network card, so that `q35` and PCs with that card are on the network. [W28-S01]
+- [x] E25.F02 As a user, I want USB hubs, so that keyboards, mice and sticks plugged into a hub, a monitor or a dock are found. [W28-S02]
+- [x] E25.F03 As a user, I want Intel HD Audio, so that Doom and `/dev/dsp` play sound on a PC without an AC'97. [W28-S03]
+- [x] E25.F04 As a user, I want power-off and reboot to work on firmware that is not QEMU's (ACPI mode, `\_S5` in an SSDT, the FADT's reset register), so that Burrow can turn a real PC off and restart it. [W28-S04]
+- [x] E25.F05 As a tester, I want one `q35` boot with every one of these devices and a report with no desktop device left without a driver, so that the next real machine has the best chance. [W28-S05]
 - Later: Realtek r8169 and Intel I210/I219 cards · EHCI/OHCI/UHCI · USB audio · HDMI audio and microphones · suspend.
 
 ## E12 Hardening & Evolution

@@ -35,6 +35,16 @@ None (BUG-0036 closed in its own commit after W26-S06: QEMU's, not Burrow's).
 
 ## Closed
 
+### BUG-0038: usb-desktop-smoke's typed poweroff could share a line with st's XIO error (not a kernel bug)
+- Found: 2026-11-18, W28-S05's `make test` on four CPUs: `SMOKE FAIL [usb-desktop]: missing (or out of order): 'burrow> poweroff'`; one of three reruns failed the same way.
+- Severity: minor (a flaky smoke; the boot itself was right).
+- Symptom: `burrow> XIO:  fatal IO error 2 (No such file or directory) on X server ":0"` and then `poweroff` on the next line, so the expected `burrow> poweroff` never appeared whole.
+- Root cause: `.xinitrc` starts st in the background with the console as its terminal. When dwm is killed and the X server goes, st notices on its own time and prints its XIO error there; on four CPUs that was sometimes after the shell had logged out and the console had printed `burrow> `.
+- Fix: `tests/smoke/keys/unix-desktop.keys` waits until `pidof st netsurf` finds nothing before `exit`, so the clients' last words are printed before the console's prompt.
+- Mitigation: a session's background programs are waited for before the next prompt a test matches.
+- Regression: `make usb-desktop-smoke` and `make unix-desktop-smoke` (same keys file), on four CPUs.
+- Lesson: a background program that shares the terminal can print between any two lines a test expects together.
+
 ### BUG-0037: net-serve.sh could forward two host ports that were the same port (not a kernel bug)
 - Found: 2026-11-14, W27-S02's run of `make virtio-smoke`: `virtio-net-smoke`'s server half never reached `burrow>`.
 - Severity: minor (a flaky smoke; QEMU refused to start).
