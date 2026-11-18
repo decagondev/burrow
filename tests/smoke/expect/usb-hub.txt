@@ -1,0 +1,39 @@
+# Ordered markers for go-uefi.img on QEMU's q35 machine under OVMF with no
+# PS/2 controller (make usb-smoke-hub, W28-S02). Append-only. QEMU's
+# usb-hub (full speed) on root port 5 carries the keyboard on its port 1, a
+# second hub on its port 2 with the mouse behind it, and a stick on its
+# port 3; kernel/usb's hub driver enumerates each tier through xhci's route
+# strings, the stick's volume is mounted at /mnt, the session is typed and
+# mousetest driven through the hubs, and the stick is pulled out and
+# plugged back in (tests/smoke/keys/usb-hub.keys), which the status-change
+# endpoint reports and the hardware report records.
+BURROW:EFI:OK
+BURROW:GO:OK goroutine says 42
+[xhci] INFO: port 5.1: full-speed 0627:0001 "QEMU USB Keyboard"; interface 0: keyboard
+[xhci] INFO: port 5.2.1: full-speed 0627:0001 "QEMU USB Mouse"; interface 0: mouse
+[xhci] INFO: port 5.2: full-speed 0409:55aa "QEMU USB Hub"; interface 0: hub, 8 ports
+[xhci] INFO: uba: 34 MiB in 512-byte blocks
+[xhci] INFO: port 5.3: full-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage uba
+[xhci] INFO: port 5: full-speed 0409:55aa "QEMU USB Hub"; interface 0: hub, 8 ports
+[fat] INFO: uba: FAT32 volume "BURROWDATA" mounted at /mnt
+[console] INFO: ready: type on the keyboard
+burrow> hw
+usb:
+  port 5.1: full-speed 0627:0001 "QEMU USB Keyboard"; interface 0: keyboard
+  port 5.2.1: full-speed 0627:0001 "QEMU USB Mouse"; interface 0: mouse
+  port 5: full-speed 0409:55aa "QEMU USB Hub"; interface 0: hub, 8 ports
+burrow> cat /mnt/hello.txt
+Hello from the FAT32 data disk
+burrow> run /bin/hello
+hello from ring 3
+burrow> run /bin/mousetest
+mousetest: left down at
+mousetest: saw packets on /dev/input/mice
+mousetest: done at
+[xhci] INFO: port 5.3: disconnected
+[xhci] INFO: ubb: 34 MiB in 512-byte blocks
+[xhci] INFO: port 5.3: full-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage ubb
+  port 5.3: disconnected
+  port 5.3: full-speed 46f4:0001 "QEMU USB HARDDRIVE"; interface 0: storage ubb
+burrow> poweroff
+[nucleus] acpi: powering off

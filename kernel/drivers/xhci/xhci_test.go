@@ -92,7 +92,7 @@ func TestContexts(t *testing.T) {
 		ep := usb.Endpoint{Address: 0x81, Attributes: usb.XferInterrupt, MaxPacket: 8, Interval: 10}
 		x := dci(ep)
 		l.inputControl(page, 1|1<<x)
-		l.slotContext(page, 3, usb.SpeedFull, x)
+		l.slotContext(page, slotInfo{rootPort: 3, speed: usb.SpeedFull, lastDCI: x})
 		l.endpointContext(page, x, epType(ep), 8, interval(usb.SpeedFull, ep), 0x5000)
 		if x != 3 || le.Uint32(page[4:]) != 1|1<<3 {
 			t.Fatalf("%d: dci %d, add flags %#x", l, x, le.Uint32(page[4:]))

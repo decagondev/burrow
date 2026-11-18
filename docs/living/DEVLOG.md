@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-18 — W28-S02 USB hubs
+
+**Did:** the hub class driver in `kernel/usb` (descriptor, port power and reset, hot-plug through the status-change endpoint) over `usb.HubHost`, which xHCI's `Device` implements: route strings, transaction translators, the hub's own slot fields, Disable Slot on a detach. Root ports and hub ports share `enumerate` and `usb.Connect`. `usb-smoke-hub`: two tiers of QEMU hubs with the keyboard, the mouse and a stick, the stick pulled and another plugged in.
+
+**Surprise:** the second plug failed first for a reason that was QEMU's, not the hub's: a `-drive` is deleted with the device it belongs to, so `device_add` had no drive to name; a second drive declared at start fixed the test. And QEMU's hub is a full-speed hub, so the transaction translator, the part most likely to be wrong on a real high-speed hub, is proved only by host tests (PIT-107).
+
+**Next:** S03, Intel HD Audio.
+
 ## 2026-11-18 — W28-S01 The e1000e
 
 **Did:** `drivers/e1000` drives the Intel 82574L (QEMU's `e1000e`, q35's own card) beside the 82540EM: a model table with the EEPROM register's layout and MSI; every card found registers as the lowest free `ethN` (`netdev.RegisterNext`, virtionet too). `make nic-smoke` (net-smoke and net-serve on the e1000e with DHCP) and a second `q35-smoke` boot on q35's own card.

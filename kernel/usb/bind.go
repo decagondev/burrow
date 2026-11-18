@@ -3,7 +3,9 @@
 // starts that driver. HID boot keyboards feed driver.Env's keyboard path
 // (Scancodes first, then the console's input through drivers/ps2's
 // Decoder), boot mice driver.Env.Mouse; a mass storage interface becomes a
-// block device named uba, ubb, ... (W27-S04, storage.go). Each interface's reports are read
+// block device named uba, ubb, ... (W27-S04, storage.go), a hub runs the
+// hub driver, which enumerates and binds what is behind it (W28-S02,
+// hub.go). Each interface's reports are read
 // by a goroutine of its own that ends when its pipe fails (the device is
 // gone). Never blocks the caller on a report.
 package usb
@@ -58,6 +60,8 @@ func bindInterface(env *driver.Env, d Device, ifc Interface) (string, error) {
 	case ifc.Class == ClassStorage && ifc.SubClass == subclassSCSI && ifc.Protocol == protocolBOT:
 		what, err := startStorage(env, d, ifc)
 		return "storage" + what, err
+	case ifc.Class == ClassHub:
+		return startHub(env, d, ifc)
 	}
 	return fmt.Sprintf("class %02x.%02x.%02x (no driver)", ifc.Class, ifc.SubClass, ifc.Protocol), nil
 }

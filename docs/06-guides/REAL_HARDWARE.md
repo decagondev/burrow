@@ -59,7 +59,7 @@ What Burrow drives, and what it does not yet:
 | A real PC has | Burrow since W27 |
 |---|---|
 | The I/O APIC, MSI and MSI-X | yes: the ISA lines through the I/O APIC (the MADT's overrides), PCI devices by MSI-X or MSI where they have it |
-| A USB keyboard and mouse (xHCI) | yes: HID boot protocol on the xHCI's root ports; no USB hubs yet, so plug them into the PC itself, not a hub or a keyboard's own ports |
+| A USB keyboard and mouse (xHCI) | yes: HID boot protocol, on the xHCI's root ports or behind USB 2 hubs (W28-S02: a monitor's, a dock's or a keyboard's own ports; five tiers); a USB 3 hub's devices are found through its USB 2 half |
 | The stick, a USB disk | yes: USB mass storage (bulk-only, SCSI), `uba`, `ubb`, ... |
 | SATA through AHCI, NVMe | yes: `sda`.., `nvme0n1`.., their FAT32 and ext2 volumes mounted by label (see above) |
 | PS/2, IDE | yes, as before |

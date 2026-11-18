@@ -26,6 +26,7 @@ const (
 	trbLink         = 6
 	trbNoOp         = 8
 	cmdEnableSlot   = 9
+	cmdDisableSlot  = 10
 	cmdAddress      = 11
 	cmdConfigureEP  = 12
 	cmdEvaluate     = 13

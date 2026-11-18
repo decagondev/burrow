@@ -6,6 +6,7 @@
 package xhci
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ import (
 )
 
 const controlTimeout = 2 * time.Second
+
+var errGone = errors.New("the device was detached")
 
 // Device is a device with a slot and an address.
 type Device struct {
@@ -24,6 +27,17 @@ type Device struct {
 	Desc    usb.DeviceDescriptor
 	Config  usb.Config
 	Product string
+
+	place place         // where it is: root port, route, TT (W28-S02)
+	gone  chan struct{} // closed when the device is detached
+	once  sync.Once
+
+	cmu      sync.Mutex // children
+	children map[int]*Device
+	hub      bool // MakeHub was called
+	hubPorts int
+	think    int
+	multiTT  bool
 
 	mu      sync.Mutex // endpoint 0, the input context
 	in      []byte
@@ -141,7 +155,7 @@ func (d *Device) Open(ep usb.Endpoint) (usb.Pipe, error) {
 	d.lastDCI = max(d.lastDCI, x)
 	l := d.h.ctx
 	l.inputControl(d.in, 1<<0|1<<x)
-	l.slotContext(d.in, d.Port, d.Speed, d.lastDCI)
+	l.slotContext(d.in, d.slotInfo())
 	l.endpointContext(d.in, x, typ, int(ep.MaxPacket), interval(d.Speed, ep), ringPA)
 	if _, err := d.h.command(TRB{Param: d.inPA, Control: cmdConfigureEP<<ctlTypeSh | uint32(d.Slot)<<ctlSlotSh}); err != nil {
 		return nil, fmt.Errorf("endpoint %#x: %w", ep.Address, err)
@@ -179,7 +193,18 @@ func (p *pipe) Transfer(b []byte) (int, error) {
 	if p.wait {
 		timeout = 10 * time.Second
 	}
-	ev, err := p.d.h.await(ch, pa, timeout)
+	var ev TRB
+	var err error
+	if timeout == 0 { // an interrupt IN: until a report, or the device goes
+		select {
+		case ev = <-ch:
+		case <-p.d.gone:
+			p.d.h.forget(pa)
+			return 0, errGone
+		}
+	} else {
+		ev, err = p.d.h.await(ch, pa, timeout)
+	}
 	if err == nil {
 		err = p.d.result(ev, p.dci, p.ring)
 	}

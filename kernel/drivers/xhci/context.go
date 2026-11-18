@@ -31,12 +31,43 @@ type layout int
 // slot, 1+DCI an endpoint.
 func (l layout) in(page []byte, i int) []byte { return page[i*int(l) : (i+1)*int(l)] }
 
-// slotContext writes the slot: a root-hub port's device (route 0) of a
-// speed, with entries up to lastDCI.
-func (l layout) slotContext(page []byte, port int, speed usb.Speed, lastDCI int) {
-	s := l.in(page, 1)
-	le.PutUint32(s[0:], uint32(speed)<<20|uint32(lastDCI)<<27)
-	le.PutUint32(s[4:], uint32(port)<<16)
+// slotInfo is what a slot context says about a device (spec §6.2.2):
+// where it is (its root-hub port and the route string of hub ports below
+// it, four bits a tier), its speed, the last endpoint context in use, the
+// transaction translator a low- or full-speed device behind a high-speed
+// hub talks through, and, for a hub, its ports and TT (W28-S02).
+type slotInfo struct {
+	rootPort       int
+	route          uint32
+	speed          usb.Speed
+	lastDCI        int
+	ttSlot, ttPort int
+	hub            bool
+	multiTT        bool
+	ports          int
+	thinkTime      int
+}
+
+// slotContext writes the slot context from s.
+func (l layout) slotContext(page []byte, s slotInfo) {
+	c := l.in(page, 1)
+	dw0 := s.route&0xFFFFF | uint32(s.speed)<<20 | uint32(s.lastDCI)<<27
+	if s.multiTT {
+		dw0 |= 1 << 25
+	}
+	if s.hub {
+		dw0 |= 1 << 26
+	}
+	le.PutUint32(c[0:], dw0)
+	le.PutUint32(c[4:], uint32(s.rootPort)<<16|uint32(s.ports)<<24)
+	le.PutUint32(c[8:], uint32(s.ttSlot)|uint32(s.ttPort)<<8|uint32(s.thinkTime)<<16)
+	le.PutUint32(c[12:], 0)
+}
+
+// childRoute is the route string of the device on port of a hub at depth
+// with route parent: tier depth+1's nibble is the port (15 at most).
+func childRoute(parent uint32, depth, port int) uint32 {
+	return parent | uint32(min(port, 15))<<(4*depth)
 }
 
 // endpointContext writes endpoint dci: its type, packet size, interval

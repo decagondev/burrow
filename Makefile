@@ -126,7 +126,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: nic-smoke nic-smoke-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: nic-smoke nic-smoke-run usb-smoke-hub storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -413,6 +413,7 @@ usb-smoke: $(BUILD)/go-uefi.img $(BUILD)/data.img
 	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "USB SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
 	$(call USB_Q35,usb) QEMU_EXTRA="$(Q35_EXTRA) $(USB_HID)" \
 		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/usb.txt 180 tests/smoke/keys/usb.keys && \
+	$(MAKE) --no-print-directory usb-smoke-hub && \
 	if [ -f $(BUILD)/x11-root/bin/Xfbdev ] && [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ] && [ -f $(BUILD)/doom-root/freedoom1.wad ]; then \
 		$(MAKE) --no-print-directory usb-smoke-x11; else echo "USB SMOKE X11 SKIP (make x11 busybox ports doom)"; fi; fi
 	$(MAKE) --no-print-directory usb-smoke-storage
@@ -424,6 +425,19 @@ usb-smoke-storage: $(BUILD)/go.img $(BUILD)/data.img
 	$(MAKE) --no-print-directory DISK_IF=usb disk-smoke dev-smoke
 	cp $(BUILD)/data.img $(BUILD)/usb-stick.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(USB_STICK)" tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/usb-unplug.txt 120 tests/smoke/keys/usb-unplug.keys
+# W28-S02: hubs. QEMU's usb-hub (full speed) on a root port carries the
+# keyboard, a second hub with the mouse behind it, and a stick; the console
+# session, the stick's file and mousetest go through them, then the stick is
+# pulled and a second one plugged into the same hub port (QEMU deletes a
+# -drive with its device: stick2 is declared up front).
+USB_HUBS = -device qemu-xhci,id=xhci -device usb-hub,bus=xhci.0,port=1,id=hub1 \
+	-device usb-kbd,bus=xhci.0,port=1.1 -device usb-hub,bus=xhci.0,port=1.2,id=hub2 -device usb-mouse,bus=xhci.0,port=1.2.1 \
+	-drive file=$(BUILD)/usb-stick.img,format=raw,if=none,id=stick -device usb-storage,bus=xhci.0,port=1.3,drive=stick,id=stickdev \
+	-drive file=$(BUILD)/usb-stick2.img,format=raw,if=none,id=stick2
+usb-smoke-hub: $(BUILD)/go-uefi.img $(BUILD)/data.img
+	cp $(BUILD)/data.img $(BUILD)/usb-stick.img && cp $(BUILD)/data.img $(BUILD)/usb-stick2.img
+	$(call USB_Q35,usb-hub) QEMU_EXTRA="$(USB_HUBS)" \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/usb-hub.txt 180 tests/smoke/keys/usb-hub.keys
 usb-smoke-x11: $(BUILD)/go-dev-uefi.img $(BUILD)/x11-data.img
 	$(call USB_Q35,usb-x11) QEMU_EXTRA="$(call virtio_drive,$(BUILD)/x11-data.img) $(USB_HID)" \
 		tests/smoke/smoke.sh $(BUILD)/go-dev-uefi.img tests/smoke/expect/x11.txt 360 tests/smoke/keys/x11.keys

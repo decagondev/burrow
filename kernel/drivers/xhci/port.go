@@ -1,6 +1,6 @@
-// port.go enumerates the device on a root-hub port (spec §4.3): reset the
-// port (a USB 2 port; a USB 3 port is enabled by its link training), take
-// a slot, give the device an address with endpoint 0 at its speed's
+// port.go enumerates the device on a root-hub port (spec §4.3), or since
+// W28-S02 on a hub's port (hub.go: the hub resets it): reset the port (a
+// USB 2 port; a USB 3 port is enabled by its link training), take a slot, give the device an address with endpoint 0 at its speed's
 // default packet size, correct the size from the first 8 bytes of the
 // device descriptor, then read the whole descriptor and configuration.
 // USB's settle times are real milliseconds (WAVE-27's risks): they are
@@ -10,6 +10,7 @@ package xhci
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"burrow/kernel/usb"
@@ -51,53 +52,81 @@ func (h *Controller) resetPort(port int) (usb.Speed, error) {
 	return usb.Speed(h.portsc(port) >> portSpeedShift & portSpeedMask), nil
 }
 
-// Enumerate addresses the device on port and reads its descriptors.
+// place is where a device is: its root-hub port, the hub ports below it
+// (route, depth, path) and the transaction translator it uses (W28-S02).
+type place struct {
+	rootPort       int
+	route          uint32
+	depth          int
+	path           string
+	ttSlot, ttPort int
+}
+
+// Enumerate addresses the device on root-hub port and reads its
+// descriptors.
 func (h *Controller) Enumerate(port int) (*Device, error) {
 	speed, err := h.resetPort(port)
 	if err != nil {
 		return nil, err
 	}
+	return h.enumerate(place{rootPort: port, path: strconv.Itoa(port)}, speed)
+}
+
+// enumerate gives the device at p a slot and an address and reads its
+// descriptors; on failure the slot is given back.
+func (h *Controller) enumerate(p place, speed usb.Speed) (*Device, error) {
 	ev, err := h.command(TRB{Control: cmdEnableSlot << ctlTypeSh})
 	if err != nil {
 		return nil, err
 	}
-	d, err := h.newDevice(ev.slot(), port, speed)
+	d, err := h.newDevice(ev.slot(), p, speed)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.address(); err != nil {
+	if err := d.describe(); err != nil {
+		d.release()
 		return nil, err
+	}
+	return d, nil
+}
+
+// describe addresses d and reads its device descriptor, configuration and
+// product string.
+func (d *Device) describe() error {
+	if err := d.address(); err != nil {
+		return err
 	}
 	head := make([]byte, 8)
 	if _, err := usb.GetDescriptor(d, usb.DescDevice, 0, 0, head); err != nil {
-		return nil, fmt.Errorf("device descriptor: %w", err)
+		return fmt.Errorf("device descriptor: %w", err)
 	}
 	dd, _ := usb.ParseDevice(head) // 8 bytes: only MaxPacket0
-	if m := maxPacket0(speed, dd.MaxPacket0); m != d.mps0 && m >= 8 {
+	if m := maxPacket0(d.Speed, dd.MaxPacket0); m != d.mps0 && m >= 8 {
 		if err := d.setMaxPacket0(m); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	full := make([]byte, 18)
 	n, err := usb.GetDescriptor(d, usb.DescDevice, 0, 0, full)
 	if err != nil {
-		return nil, fmt.Errorf("device descriptor: %w", err)
+		return fmt.Errorf("device descriptor: %w", err)
 	}
 	if d.Desc, err = usb.ParseDevice(full[:n]); err != nil {
-		return nil, err
+		return err
 	}
 	if d.Config, err = usb.ReadConfig(d); err != nil {
-		return nil, fmt.Errorf("configuration: %w", err)
+		return fmt.Errorf("configuration: %w", err)
 	}
 	d.Product = usb.ReadString(d, d.Desc.IProduct)
-	return d, nil
+	return nil
 }
 
-func (h *Controller) newDevice(slot, port int, speed usb.Speed) (*Device, error) {
+func (h *Controller) newDevice(slot int, p place, speed usb.Speed) (*Device, error) {
 	if slot <= 0 || slot > h.Slots {
 		return nil, fmt.Errorf("slot %d out of range", slot)
 	}
-	d := &Device{h: h, Slot: slot, Port: port, Speed: speed, lastDCI: 1, mps0: defaultMaxPacket0(speed)}
+	d := &Device{h: h, Slot: slot, Port: p.rootPort, Speed: speed, lastDCI: 1, mps0: defaultMaxPacket0(speed),
+		place: p, gone: make(chan struct{}), children: map[int]*Device{}}
 	var outPA, ringPA uint64
 	var err error
 	var ring []byte
@@ -122,7 +151,7 @@ func (h *Controller) newDevice(slot, port int, speed usb.Speed) (*Device, error)
 func (d *Device) address() error {
 	l := d.h.ctx
 	l.inputControl(d.in, 1<<0|1<<1)
-	l.slotContext(d.in, d.Port, d.Speed, 1)
+	l.slotContext(d.in, d.slotInfo())
 	l.endpointContext(d.in, 1, epControl, d.mps0, 0, d.ep0.pa)
 	_, err := d.h.command(TRB{Param: d.inPA, Control: cmdAddress<<ctlTypeSh | uint32(d.Slot)<<ctlSlotSh})
 	if err != nil {

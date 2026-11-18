@@ -8,6 +8,7 @@ package xhci
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 	"unsafe"
 
@@ -113,23 +114,13 @@ func start(env *driver.Env, dev pci.Device, index int) error {
 	return nil
 }
 
-// attach enumerates the device on port and binds its interfaces.
+// attach enumerates the device on a root-hub port and binds its
+// interfaces (a hub's binds what is behind it, W28-S02).
 func attach(env *driver.Env, h *Controller, port int) {
 	d, err := h.Enumerate(port)
 	if err != nil {
-		env.Log.Warnf("port %d: %v", port, err)
-		usb.Note(fmt.Sprintf("port %d: not enumerated: %v", port, err))
+		usb.NotConnected(env, strconv.Itoa(port), err)
 		return
 	}
-	bound, err := usb.Bind(env, d, d.Config)
-	what := ""
-	for _, b := range bound {
-		what += fmt.Sprintf("; interface %d: %s", b.Interface, b.What)
-	}
-	if err != nil {
-		what = "; " + err.Error()
-	}
-	line := fmt.Sprintf("port %d: %v %04x:%04x %q%s", port, d.Speed, d.Desc.Vendor, d.Desc.Product, d.Product, what)
-	env.Log.Infof("%s", line)
-	usb.Note(line) // the hardware report (W27-S05)
+	usb.Connect(env, d.attached())
 }

@@ -1,0 +1,35 @@
+# Typed into the Go console of go-uefi.img on q35 with no PS/2 controller,
+# through a USB keyboard behind a hub (make usb-smoke-hub, W28-S02): the
+# hardware report's USB lines, a file from the stick on the hub's third
+# port, a program, mousetest with the mouse behind the second hub; the
+# stick pulled from the hub and plugged back (QEMU's monitor; QEMU deletes
+# a -drive with its device, so the second plug is a second drive), found
+# again as the next ub disk and in the report; then poweroff.
+wait burrow>
+type hw
+key ret
+wait mounts:
+type cat /mnt/hello.txt
+key ret
+wait Hello from the FAT32
+type run /bin/hello
+key ret
+wait hello from ring 3
+type run /bin/mousetest
+key ret
+wait right click ends
+mouse 100 50
+click left
+wait left down at
+click right
+wait mousetest: done
+wait burrow>
+monitor device_del stickdev
+wait disconnected
+monitor device_add usb-storage,bus=xhci.0,port=1.3,drive=stick2,id=stickdev2
+wait storage ubb
+type hw
+key ret
+wait irq 1
+type poweroff
+key ret
