@@ -153,6 +153,7 @@ func main() {
 	}
 	k.writeHWReport(log.With("hw"), out) // W27-S05: /var/log/hw.txt, and the screen with kargs hwreport
 	k.procs = proc.NewSystem(amd64.Nucleus{}, k.fs, out, log.With("proc"))
+	k.procs.SetPower(k.power) // W28-S04: reboot(2) and PID 1's signals
 	k.mountProc(log.With("procfs"))
 	k.tty, k.input = tty.New(out, rows, cols), input
 	k.procs.SetTerminal(k.tty)

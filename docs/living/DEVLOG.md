@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-18 — W28-S04 ACPI power-off and reset
+
+**Did:** `\_S5` from the SSDTs and in every AML integer encoding, the FADT's reset register, and a restart that tries the register, 0xCF9, the 8042 and a triple fault, each said on the screen first (`nu_reset`). `reboot(2)`, busybox's `reboot`/`poweroff`/`halt` (by signal to PID 1, which the kernel answers), `sync`, the console's `reboot [way]`. `make reboot-smoke`: six boots of one disk in one run on `pc`, and `q35` through its reset register.
+
+**Surprise:** QEMU's `pc` FADT names no reset register while `q35`'s does (0xCF9, value 0x0F), so the two machines prove different ways; naming the way on the console let one run prove all four. And `smoke.sh` had always passed `-no-reboot`, so the first restart looked like QEMU quitting: `ALLOW_REBOOT=1` for this smoke alone, since everywhere else a reset is a crash.
+
+**Next:** S05, M28.
+
 ## 2026-11-18 — W28-S03 Intel HD Audio
 
 **Did:** `drivers/hda`: the controller reset and the CORB/RIRB command rings, the codec's widget graph walked from an output pin to a DAC, the path turned on, and a 32-page BDL ring as `sound.Output` behind `/dev/dsp`. `make hda-smoke`: the tone on `pc` and `q35`, and Doom's sounds, recorded and measured.

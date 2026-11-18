@@ -48,6 +48,14 @@ static inline void cpu_cli(void) { __asm__ volatile("cli" ::: "memory"); }
 static inline void cpu_sti(void) { __asm__ volatile("sti" ::: "memory"); }
 /* sti then hlt: an interrupt pending at the sti ends the hlt (one-instruction shadow). */
 static inline void cpu_sti_hlt(void) { __asm__ volatile("sti; hlt" ::: "memory"); }
+/* An IDT of no entries, then a breakpoint: no handler, no double-fault
+ * handler, so the CPU shuts down and the machine resets (W28-S04's last
+ * way to restart). */
+static inline __attribute__((noreturn)) void cpu_triple_fault(void) {
+    struct __attribute__((packed)) { uint16_t limit; uint64_t base; } none = {0, 0};
+    __asm__ volatile("lidt %0; int3" : : "m"(none) : "memory");
+    __builtin_unreachable();
+}
 #define RFLAGS_IF (1ull << 9)
 /* Disable interrupts, return the previous RFLAGS for irq_restore. On one CPU
  * this alone makes a short section atomic with respect to IRQ handlers. */

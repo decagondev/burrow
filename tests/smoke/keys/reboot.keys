@@ -1,0 +1,35 @@
+# Typed into go-busybox.img on pc (make reboot-smoke, W28-S04): the
+# console's reboot, busybox's reboot (a signal to PID 1) and reboot -f
+# (reboot(2)), then the console's reboot from the keyboard controller and
+# from a triple fault, so each way the nucleus has is seen to restart the
+# machine (QEMU boots the same disk again: ALLOW_REBOOT); then busybox's
+# poweroff (a signal to PID 1) ends the run. Each wait for the next prompt
+# comes after the new boot's own marker.
+wait burrow>
+type reboot
+key ret
+wait [nucleus] reset:
+wait BURROW:GO:OK
+wait burrow>
+type run /bin/busybox reboot
+key ret
+wait [nucleus] reset:
+wait BURROW:GO:OK
+wait burrow>
+type run /bin/busybox reboot -f
+key ret
+wait [nucleus] reset:
+wait BURROW:GO:OK
+wait burrow>
+type reboot kbc
+key ret
+wait reset: keyboard
+wait BURROW:GO:OK
+wait burrow>
+type reboot triple
+key ret
+wait reset: triple
+wait BURROW:GO:OK
+wait burrow>
+type run /bin/busybox poweroff
+key ret

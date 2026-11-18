@@ -12,6 +12,9 @@
 # MEM is the guest's RAM (default 128M; the Go images use 512M, W14-S01).
 # SMP is the guest's CPU count (W20-S07; the Makefile exports 4 since S08,
 # unset here means one), on multi-threaded TCG.
+# A guest reset ends the run (-no-reboot: a crash that resets must not loop
+# until the timeout) unless ALLOW_REBOOT=1, for make reboot-smoke (W28-S04),
+# where QEMU boots the same disk again.
 #
 # PASS requires ALL of:
 #   1. every non-comment line of <expect-file> appears in the serial log,
@@ -62,11 +65,13 @@ if [ "${BOOT_IF:-ide}" = usb ]; then
         -device usb-storage,bus=bootxhci.0,drive=bootstick,bootindex=0)
 fi
 
+NO_REBOOT=(-no-reboot)
+[ "${ALLOW_REBOOT:-0}" = 1 ] && NO_REBOOT=()
 set +e
 timeout "$TIMEOUT" "$QEMU" -machine "${MACHINE:-pc}" -cpu "${QEMU_CPU:-Broadwell-noTSX-IBRS}" -m "${MEM:-128M}" -smp "${SMP:-1}" -accel tcg,thread=multi \
   "${FIRMWARE[@]}" "${BOOT[@]}" \
   "${DEBUG_EXIT[@]}" \
-  "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none -no-reboot
+  "${MONITOR[@]}" ${QEMU_EXTRA:-} -serial "file:$LOG" -display none "${NO_REBOOT[@]}"
 STATUS=$?
 [ -n "$KEYS" ] && wait
 set -e

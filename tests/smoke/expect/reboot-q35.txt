@@ -1,0 +1,13 @@
+# Ordered markers for go-uefi.img on q35 under OVMF (make reboot-smoke's
+# second half, W28-S04; keys tests/smoke/keys/reboot-q35.keys). Append-only.
+# q35's FADT names a reset register (I/O port 0xCF9); the console's reboot
+# writes it, OVMF boots the disk again, and poweroff goes through ACPI.
+BURROW:EFI:OK
+[nucleus] acpi: reset register io cf9 =
+BURROW:GO:OK goroutine says 42
+burrow> reboot
+[nucleus] reset: the FADT's reset register (io cf9 =
+BURROW:EFI:OK
+BURROW:GO:OK goroutine says 42
+burrow> poweroff
+[nucleus] acpi: powering off

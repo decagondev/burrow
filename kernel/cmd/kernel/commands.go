@@ -65,6 +65,8 @@ func addCommands(con *console.Console, k *kernel) {
 			fmt.Fprintf(out, "heap %d MiB in use, %d MiB from the nucleus, %d GC cycles, %d goroutines\n",
 				m.HeapInuse/mib, m.Sys/mib, m.NumGC, runtime.NumGoroutine())
 		}})
+	con.Add(console.Command{Name: "reboot", Help: "reboot [register|cf9|kbc|triple]: restart the machine, trying each way from the one named (W28-S04)",
+		Run: func(args []string, out io.Writer) { k.reboot(args, out) }})
 	con.Add(console.Command{Name: "poweroff", Help: "end the QEMU run",
 		Run: func(_ []string, out io.Writer) {
 			log.Infof("poweroff")

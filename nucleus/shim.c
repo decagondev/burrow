@@ -96,6 +96,9 @@ static long nu_irq_alloc_msi(struct syscall_frame *f) {
     return line;
 }
 static long nu_irq_route(struct syscall_frame *f) { return irq_route(SYSARG0(f)); }
+/* W28-S04: restart the machine, trying each way from the one named (0 the
+ * FADT's reset register, 1 port 0xCF9, 2 the 8042, 3 a triple fault). */
+static long nu_reset(struct syscall_frame *f) { acpi_reset((uint32_t)SYSARG0(f)); }
 /* boot_info v2 into a Go buffer (same address space, trusted caller). */
 static long nu_bootinfo(struct syscall_frame *f) {
     uint64_t n = SYSARG1(f) < sizeof(struct boot_info) ? SYSARG1(f) : sizeof(struct boot_info);
@@ -200,6 +203,7 @@ static const sys_fn g_nu_table[] = {
     [NU_irq_ack - NU_BASE] = nu_irq_ack,
     [NU_irq_alloc_msi - NU_BASE] = nu_irq_alloc_msi,
     [NU_irq_route - NU_BASE] = nu_irq_route,
+    [NU_reset - NU_BASE] = nu_reset,
     [NU_bootinfo - NU_BASE] = nu_bootinfo,
     [NU_mmio_map - NU_BASE] = nu_mmio_map,
     [NU_mem_info - NU_BASE] = nu_mem_info,

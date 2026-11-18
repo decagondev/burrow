@@ -66,6 +66,7 @@ What Burrow drives, and what it does not yet:
 | An Intel 82540EM or 82574L network card | yes (W28-S01): `eth0`; the 82574L is the e1000e |
 | An Intel I210/I219, Realtek or Wi-Fi network card | no: the report lists it as "no driver" |
 | HD Audio | yes (W28-S03): the first codec with an output pin that reaches a DAC (line out, then speaker, then headphones); the report names the codec and the path; no HDMI audio or microphones |
+| Power off and restart | yes (W28-S04): `poweroff` through ACPI S5 (ACPI mode switched on first, `\_S5` from the DSDT or an SSDT); `reboot` tries the FADT's reset register, then port 0xCF9, then the keyboard controller, then a triple fault, each said on the screen first; `reboot cf9`, `reboot kbc` or `reboot triple` starts further down when one hangs |
 | A GPU | the firmware's framebuffer (GOP) only |
 
 ## What to send back

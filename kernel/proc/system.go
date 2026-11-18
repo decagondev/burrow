@@ -46,6 +46,7 @@ type System struct {
 	vt                   *vt.VT              // its keyboard and display modes (SetVT), or nil
 	init                 *Process            // pid 1 (kernel-side, no thread)
 	loadAvg              [3]float64          // 1, 5 and 15 minutes (procsource.go, W23-S01)
+	power                func(cmd uint32)    // restart or power off (reboot.go, W28-S04), or nil
 
 	futexMu sync.Mutex
 	futexes map[futexKey][]*futexWaiter // futex.go

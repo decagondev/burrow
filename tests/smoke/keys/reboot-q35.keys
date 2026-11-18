@@ -1,0 +1,11 @@
+# Typed into go-uefi.img on q35 under OVMF (make reboot-smoke's second
+# half, W28-S04): the console's reboot through the FADT's reset register
+# (q35 has one), OVMF boots the disk again, then poweroff through ACPI.
+wait burrow>
+type reboot
+key ret
+wait [nucleus] reset:
+wait BURROW:GO:OK
+wait burrow>
+type poweroff
+key ret

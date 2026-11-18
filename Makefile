@@ -126,7 +126,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: nic-smoke nic-smoke-run usb-smoke-hub hda-smoke hda-smoke-doom hda-smoke-doom-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: nic-smoke nic-smoke-run usb-smoke-hub reboot-smoke reboot-smoke-pc hda-smoke hda-smoke-doom hda-smoke-doom-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -579,7 +579,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke hda-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke hda-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke reboot-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -1293,6 +1293,21 @@ hda-smoke-doom-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
 	SMOKE_NAME=doom-hda MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE) $(call HDA_SOUND,$(HDA_WAV),intel-hda)" \
 		tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
 	python3 tests/smoke/checkwav.py $(HDA_WAV) sounds 4
+
+# W28-S04: restarting. go-busybox.img on pc is restarted five ways in one
+# run (the console's reboot, busybox's reboot and reboot -f, then the
+# keyboard controller and a triple fault by name; QEMU boots the disk again
+# with ALLOW_REBOOT) and powered off by busybox; then go-uefi.img on q35
+# through the FADT's reset register and OVMF again (skipped without ovmf).
+reboot-smoke: $(BUILD)/go-uefi.img
+	@if [ -f $(BUILD)/busybox ]; then $(MAKE) --no-print-directory reboot-smoke-pc; \
+	else echo "REBOOT SMOKE SKIP (make busybox)"; fi
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "REBOOT Q35 SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
+	ALLOW_REBOOT=1 SMOKE_NAME=reboot-q35 MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/reboot-q35.txt 300 tests/smoke/keys/reboot-q35.keys; fi
+reboot-smoke-pc: $(BUILD)/go-busybox.img
+	ALLOW_REBOOT=1 MEM=$(GO_MEM) QEMU="$(QEMU)" \
+		tests/smoke/smoke.sh $(BUILD)/go-busybox.img tests/smoke/expect/reboot.txt 480 tests/smoke/keys/reboot.keys
 
 # W22-S04: go.img with QEMU's virtio tablet: the driver names it and its
 # axes, and a click reaches it as EV_KEY BTN_LEFT. S05: the pointer put on

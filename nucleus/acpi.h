@@ -1,7 +1,8 @@
 /* acpi.h - the machine's ACPI tables (W20-S04), read once at boot: the
  * CPUs (local APIC ids from the MADT), the I/O APIC, and what turning the
  * machine off takes (the FADT's PM1 control ports, the DSDT's \_S5 sleep
- * type, the SMI command that enables ACPI mode). acpi.c is pure: it reads
+ * type, the SMI command that enables ACPI mode) and restarting it (the
+ * FADT's reset register, W28-S04). acpi.c is pure: it reads
  * physical memory only through acpi_mem (the nucleus's physmap, or a host
  * test's buffer), never I/O ports. ACPI 6.5 spec, ch. 5.2. */
 #ifndef NUCLEUS_ACPI_H
@@ -43,9 +44,19 @@ struct acpi_info {
     uint32_t smi_cmd;                  /* port to send acpi_enable to, 0 if ACPI is always on */
     uint8_t  acpi_enable;
     uint16_t pm1a_cnt, pm1b_cnt;       /* PM1 control ports (b: 0 if none) */
-    int      has_s5;                   /* \_S5 found in the DSDT */
-    uint16_t slp_typa, slp_typb;       /* its sleep types for PM1a and PM1b */
+    int      has_s5;                   /* \_S5 found in the DSDT or an SSDT */
+    uint8_t  s5_table;                 /* where: ACPI_S5_DSDT or ACPI_S5_SSDT (W28-S04) */
+    uint16_t slp_typa, slp_typb;       /* its sleep types for PM1a and PM1b (3 bits each) */
+    int      has_reset;                /* the FADT names a reset register it supports (W28-S04) */
+    uint8_t  reset_space;              /* ACPI_SPACE_*: where the register is */
+    uint64_t reset_addr;               /* its address in that space */
+    uint8_t  reset_value;              /* the byte to write there */
 };
+
+enum { ACPI_S5_DSDT = 1, ACPI_S5_SSDT = 2 };
+/* Generic address spaces (ACPI 6.5 Table 5.25) a reset register may be in. */
+enum { ACPI_SPACE_MEMORY = 0, ACPI_SPACE_IO = 1, ACPI_SPACE_PCI = 2 };
+#define ACPI_FADT_RESET_REG_SUP (1u << 10)   /* FADT flags: the reset register works */
 
 enum { ACPI_OK = 0, ACPI_NO_RSDP = -1, ACPI_NO_MADT = -2, ACPI_NO_FADT = -3 };
 
@@ -60,4 +71,8 @@ const char *acpi_error(int code);
 void acpi_init(void);                        /* after vmm_init: prints "[nucleus] acpi ..." */
 const struct acpi_info *acpi_machine(void);  /* 0 when the tables could not be read */
 void acpi_poweroff(void);                    /* returns only if ACPI cannot do it */
+/* acpi_reset restarts the machine, trying each way from `from` on: the
+ * FADT's reset register, port 0xCF9, the 8042, a triple fault (W28-S04). */
+enum { ACPI_RESET_REGISTER = 0, ACPI_RESET_CF9 = 1, ACPI_RESET_KBC = 2, ACPI_RESET_TRIPLE = 3 };
+void acpi_reset(uint32_t from) __attribute__((noreturn));
 #endif

@@ -1,6 +1,7 @@
 /* acpi: the RSDP found where firmware puts it, RSDT and XSDT, the MADT's
  * processors (disabled ones left out) and I/O APIC, the FADT's ports, and
- * \_S5 in the DSDT's AML in the forms QEMU and others write it; tables
+ * \_S5 in the DSDT's AML in the forms QEMU and others write it (in an SSDT
+ * and every integer encoding since W28-S04, with the reset register); tables
  * with bad checksums skipped. The tables are built here, byte by byte, as
  * the spec lays them out (W20-S04). */
 #include <stdlib.h>
@@ -214,4 +215,92 @@ TEST(acpi_rsdp_from_firmware) {
     m.rsdp_pa = 0x17E000;                /* not an RSDP: the scan finds the BIOS one */
     rsdp(0xF5A10, 2, 0, 0x113000);
     CHECK(acpi_parse(&m, &i) == ACPI_OK);
+}
+
+/* W28-S04: a FADT with flags and a reset register (ACPI 2.0+, 244 bytes). */
+static void fadt_reset(uint64_t pa, uint32_t dsdt, uint32_t flags, uint8_t space, uint64_t addr, uint8_t value) {
+    header(pa, "FACP", 244);
+    put32(pa + 40, dsdt);
+    put32(pa + 64, 0x604);
+    put32(pa + 112, flags);
+    g_mem[pa + 116] = space;
+    g_mem[pa + 117] = 8;                  /* a byte wide */
+    put64(pa + 120, addr);
+    g_mem[pa + 128] = value;
+    sum_fix(pa, 244, 9);
+}
+
+static void ssdt(uint64_t pa, const uint8_t *aml, uint32_t n) {
+    memcpy(g_mem + pa + 36, aml, n);
+    header(pa, "SSDT", 36 + n);
+    sum_fix(pa, 36 + n, 9);
+}
+
+/* rsdt_of lists n tables in an RSDT at 0x130000 and puts the RSDP in the BIOS area. */
+static void rsdt_of(const uint32_t *t, uint32_t n) {
+    header(0x130000, "RSDT", 36 + 4 * n);
+    for (uint32_t i = 0; i < n; i++) put32(0x130000 + 36 + 4 * i, t[i]);
+    sum_fix(0x130000, 36 + 4 * n, 9);
+    rsdp(0xF0000, 0, 0x130000, 0);
+}
+
+/* A DSDT with no \_S5 and an SSDT that has it, as some firmware splits
+ * them; the SSDT is listed before the FADT. A real machine's reset
+ * register in I/O space (0xCF9 = 6). */
+TEST(acpi_s5_in_ssdt_and_reset_register) {
+    fresh();
+    static const uint8_t none[] = {0x10, 0x05, 0x5C, '_', 'S', 'B', '_'};
+    static const uint8_t s5[] = {0x08, '_', 'S', '5', '_', 0x12, 0x08, 0x04, 0x0A, 0x07, 0x0A, 0x07, 0x00, 0x00};
+    dsdt(0x120000, none, sizeof none);
+    ssdt(0x121000, s5, sizeof s5);
+    fadt_reset(0x122000, 0x120000, ACPI_FADT_RESET_REG_SUP, ACPI_SPACE_IO, 0xCF9, 6);
+    madt(0x123000, 0);
+    const uint32_t t[] = {0x121000, 0x122000, 0x123000};
+    rsdt_of(t, 3);
+    struct acpi_info i;
+    CHECK(acpi_parse(&g_m, &i) == ACPI_OK);
+    CHECK(i.has_s5 && i.s5_table == ACPI_S5_SSDT && i.slp_typa == 7 && i.slp_typb == 7);
+    CHECK(i.has_reset && i.reset_space == ACPI_SPACE_IO && i.reset_value == 6);
+    CHECK_EQ_U64(i.reset_addr, 0xCF9);
+}
+
+/* Integer encodings: WordPrefix and Ones in a two-element package; a
+ * one-element package (One) gives both types; a DWordPrefix'd package. */
+TEST(acpi_s5_encodings) {
+    static const uint8_t word_ones[] = {0x08, '_', 'S', '5', '_', 0x12, 0x07, 0x02, 0x0B, 0x05, 0x00, 0xFF};
+    static const uint8_t one[] = {0x08, '_', 'S', '5', '_', 0x12, 0x03, 0x01, 0x01};
+    static const uint8_t dword[] = {0x08, '_', 'S', '5', '_', 0x12, 0x0D, 0x02, 0x0C, 0x06, 0, 0, 0, 0x0C, 0x02, 0, 0, 0};
+    static const struct { const uint8_t *aml; uint32_t n; uint16_t a, b; } c[] = {
+        {word_ones, sizeof word_ones, 5, 7}, {one, sizeof one, 1, 1}, {dword, sizeof dword, 6, 2},
+    };
+    for (unsigned k = 0; k < 3; k++) {
+        fresh();
+        dsdt(0x120000, c[k].aml, c[k].n);
+        fadt(0x122000, 0x120000, 0);
+        madt(0x123000, 0);
+        const uint32_t t[] = {0x122000, 0x123000};
+        rsdt_of(t, 2);
+        struct acpi_info i;
+        CHECK(acpi_parse(&g_m, &i) == ACPI_OK);
+        CHECK(i.has_s5 && i.s5_table == ACPI_S5_DSDT);
+        CHECK(i.slp_typa == c[k].a && i.slp_typb == c[k].b);
+        CHECK(!i.has_reset);                  /* a 116-byte FADT has none */
+    }
+}
+
+/* The reset register only counts with RESET_REG_SUP, and in a space the
+ * nucleus can write: memory and PCI configuration space are kept. */
+TEST(acpi_reset_register_needs_its_flag) {
+    fresh();
+    fadt_reset(0x122000, 0, 0, ACPI_SPACE_IO, 0xCF9, 6);
+    madt(0x123000, 0);
+    const uint32_t t[] = {0x122000, 0x123000};
+    rsdt_of(t, 2);
+    struct acpi_info i;
+    CHECK(acpi_parse(&g_m, &i) == ACPI_OK && !i.has_reset && !i.has_s5);
+    fadt_reset(0x122000, 0, ACPI_FADT_RESET_REG_SUP, ACPI_SPACE_PCI, 0x0000001F00000044ull, 0xA);
+    CHECK(acpi_parse(&g_m, &i) == ACPI_OK && i.has_reset && i.reset_space == ACPI_SPACE_PCI);
+    CHECK_EQ_U64(i.reset_addr, 0x0000001F00000044ull);
+    fadt_reset(0x122000, 0, ACPI_FADT_RESET_REG_SUP, 0x7F /* functional fixed hardware */, 0x1000, 1);
+    CHECK(acpi_parse(&g_m, &i) == ACPI_OK && !i.has_reset);
 }

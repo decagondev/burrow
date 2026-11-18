@@ -36,6 +36,7 @@ Linux numbers stop well below 0x1000, so nucleus-private calls live at `0x1000-0
 | 0x102C | `nu_vdso` | buf | 0, -ENODEV before `vdso_init`; writes {data page phys, code bytes, code pages, then each code page's phys} (at most 7 words): the vDSO's frames, which the Go kernel maps into every process as `[vvar]` and `[vdso]`; the data page is `struct vdso_data` (`include/burrow/vdso.h`) | W25 |
 | 0x102E | `nu_irq_alloc_msi` | buf | a new MSI line (16-47), and writes {address, data} of its message to buf: fixed delivery to the CPU that took the interrupts at boot, edge; `-ENOSPC` when all 32 are taken | W27 |
 | 0x102F | `nu_irq_route` | line | where the line goes: bits 7:0 the kind (1 the 8259, 2 an I/O APIC pin, 3 MSI), bit 8 level, bit 9 active low, bits 31:16 the 8259 line, the GSI or the vector; `-EINVAL` for a line that is not routed | W27 |
+| 0x1030 | `nu_reset` | from | restarts the machine, trying each way from `from` on (0 the FADT's reset register, 1 port 0xCF9, 2 the 8042's reset pulse, 3 a triple fault), each announced on the console first; does not return | W28 |
 | 0x102D | `nu_syscall_reply_wait` | tid, result, buf, max | as `nu_syscall_reply` then `nu_syscall_wait` in one crossing (a reply to a thread killed meanwhile is dropped); for the dispatcher after it answered a request itself | W25 |
 
 Rules: every new call gets a row here **before** code, a Go wrapper in `kernel/arch/amd64/nucleus.go`, and a nucleus self-test. Numbers are never reused.

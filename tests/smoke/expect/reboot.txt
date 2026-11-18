@@ -1,0 +1,29 @@
+# Ordered markers for go-busybox.img on pc restarted five times in one QEMU
+# run (make reboot-smoke, W28-S04; keys tests/smoke/keys/reboot.keys).
+# Append-only. QEMU's pc machine has no FADT reset register, so a restart
+# goes on to port 0xCF9; the console's reboot, busybox's reboot (SIGTERM
+# to PID 1) and reboot -f (reboot(2)) each restart it; then the keyboard
+# controller and a triple fault, named on the console; then busybox's
+# poweroff (SIGUSR2 to PID 1) ends the run.
+[nucleus] acpi: no reset register
+BURROW:GO:OK goroutine says 42
+burrow> reboot
+[power] INFO: reboot from register
+[nucleus] reset: port cf9
+BURROW:GO:OK goroutine says 42
+burrow> run /bin/busybox reboot
+[power] INFO: reboot
+[nucleus] reset: port cf9
+BURROW:GO:OK goroutine says 42
+burrow> run /bin/busybox reboot -f
+[power] INFO: reboot
+[nucleus] reset: port cf9
+BURROW:GO:OK goroutine says 42
+burrow> reboot kbc
+[nucleus] reset: keyboard controller
+BURROW:GO:OK goroutine says 42
+burrow> reboot triple
+[nucleus] reset: triple fault
+BURROW:GO:OK goroutine says 42
+burrow> run /bin/busybox poweroff
+[power] INFO: poweroff

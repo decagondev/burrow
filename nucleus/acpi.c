@@ -6,7 +6,10 @@
  * interrupt source overrides since W27-S01), the FADT
  * (SCI, SMI command, PM1 control blocks, the DSDT, X_DSDT when there) and
  * the DSDT's \_S5 package, found by the usual scan for its AML (NameOp
- * "_S5_" PackageOp) rather than by an AML interpreter. Never trusts a
+ * "_S5_" PackageOp) rather than by an AML interpreter; since W28-S04 in
+ * the SSDTs too when the DSDT has none, with every integer encoding a
+ * compiler writes (Zero, One, Ones, Byte-, Word-, DWord- and QWordPrefix),
+ * and the FADT's reset register (RESET_REG_SUP). Never trusts a
  * length or a pointer before mapping it, and skips tables whose checksum
  * is wrong. */
 #include "acpi.h"
@@ -19,6 +22,14 @@
 #define AML_NAME     0x08
 #define AML_PACKAGE  0x12
 #define AML_BYTE     0x0A
+#define AML_WORD     0x0B
+#define AML_DWORD    0x0C
+#define AML_QWORD    0x0E
+#define AML_ONES     0xFF
+#define SLP_TYP_MASK 7u
+#define FADT_FLAGS   112u
+#define FADT_RESET   116u   /* the reset register's generic address */
+#define FADT_RESET_V 128u   /* RESET_VALUE */
 
 static uint32_t rd32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
 static uint64_t rd64(const uint8_t *p) { uint64_t v; memcpy(&v, p, 8); return v; }
@@ -92,32 +103,42 @@ static void read_madt(const uint8_t *t, uint32_t len, struct acpi_info *out) {
     }
 }
 
-/* aml_int reads one package element within len: a BytePrefix'd byte, or
- * Zero/One/a small constant. */
+/* aml_int reads one package element within len: Zero, One, Ones, or a
+ * Byte-, Word-, DWord- or QWordPrefix'd integer (its low byte is enough
+ * for a sleep type); any other byte is taken as a small constant. */
 static int aml_int(const uint8_t *p, uint32_t len, uint32_t *i) {   /* -1: past the end */
     if (*i >= len) return -1;
-    if (p[*i] == AML_BYTE) {
-        if (*i + 1 >= len) return -1;
-        int v = p[*i + 1];
-        *i += 2;
-        return v;
+    uint32_t bytes = 0;
+    switch (p[*i]) {
+    case AML_BYTE:  bytes = 1; break;
+    case AML_WORD:  bytes = 2; break;
+    case AML_DWORD: bytes = 4; break;
+    case AML_QWORD: bytes = 8; break;
+    case AML_ONES:  (*i)++; return 0xFF;
     }
-    return p[(*i)++];
+    if (!bytes) return p[(*i)++];
+    if (*i + bytes >= len) return -1;
+    int v = p[*i + 1];
+    *i += 1 + bytes;
+    return v;
 }
 
-static void read_s5(const uint8_t *d, uint32_t len, struct acpi_info *out) {
+static void read_s5(const uint8_t *d, uint32_t len, struct acpi_info *out, uint8_t from) {
     for (uint32_t i = HDR_BYTES + 1; i + 7 <= len; i++) {   /* "_S5_", PackageOp, PkgLength, NumElements */
         if (memcmp(d + i, "_S5_", 4) != 0) continue;
         int named = d[i - 1] == AML_NAME || (d[i - 1] == '\\' && d[i - 2] == AML_NAME);
         if (!named || d[i + 4] != AML_PACKAGE) continue;
         uint32_t p = i + 5;
         p += ((d[p] >> 6) & 3) + 1;       /* PkgLength: 1 to 4 bytes */
-        if (p >= len || d[p++] < 2) return;   /* NumElements */
-        int a = aml_int(d, len, &p), b = aml_int(d, len, &p);
+        if (p >= len) return;
+        uint8_t count = d[p++];           /* NumElements: one means both types are the same */
+        if (count < 1) return;
+        int a = aml_int(d, len, &p), b = count >= 2 ? aml_int(d, len, &p) : a;
         if (a < 0 || b < 0) return;
-        out->slp_typa = (uint16_t)a;
-        out->slp_typb = (uint16_t)b;
+        out->slp_typa = (uint16_t)((uint32_t)a & SLP_TYP_MASK);
+        out->slp_typb = (uint16_t)((uint32_t)b & SLP_TYP_MASK);
         out->has_s5 = 1;
+        out->s5_table = from;
         return;
     }
 }
@@ -132,7 +153,17 @@ static int read_fadt(const struct acpi_mem *m, const uint8_t *t, uint32_t len, s
     if (len >= 148 && rd64(t + 140)) dsdt = rd64(t + 140);
     uint32_t dlen;
     const uint8_t *d = dsdt ? table(m, dsdt, "DSDT", &dlen) : 0;
-    if (d) read_s5(d, dlen, out);
+    if (d) read_s5(d, dlen, out, ACPI_S5_DSDT);
+    if (len > FADT_RESET_V && (rd32(t + FADT_FLAGS) & ACPI_FADT_RESET_REG_SUP)) {
+        uint8_t space = t[FADT_RESET];
+        uint64_t addr = rd64(t + FADT_RESET + 4);
+        if (addr && space <= ACPI_SPACE_PCI) {
+            out->has_reset = 1;
+            out->reset_space = space;
+            out->reset_addr = addr;
+            out->reset_value = t[FADT_RESET_V];
+        }
+    }
     return 1;
 }
 
@@ -157,6 +188,12 @@ int acpi_parse(const struct acpi_mem *m, struct acpi_info *out) {
             madt = 1;
         } else if (!fadt && memcmp(t, "FACP", 4) == 0 && tlen >= 72)
             fadt = read_fadt(m, t, tlen, out);
+    }
+    for (uint32_t off = HDR_BYTES; !out->has_s5 && off + step <= len; off += step) {   /* W28-S04 */
+        uint64_t pa = wide ? rd64(sdt + off) : rd32(sdt + off);
+        uint32_t tlen;
+        const uint8_t *t = table(m, pa, "SSDT", &tlen);
+        if (t) read_s5(t, tlen, out, ACPI_S5_SSDT);
     }
     if (!madt) return ACPI_NO_MADT;
     return fadt ? ACPI_OK : ACPI_NO_FADT;

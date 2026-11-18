@@ -118,6 +118,11 @@ func (s *System) kill(from *Process, pid int64, sig int) int64 {
 	if sig < 0 || sig > nSig {
 		return -int64(syscall.EINVAL)
 	}
+	if pid == 1 { // W28-S04: busybox's reboot, poweroff and halt ask init by signal
+		if res, handled := s.killInit(from, sig); handled {
+			return res
+		}
+	}
 	s.mu.Lock()
 	var targets []*Process
 	for _, t := range s.byPID {
