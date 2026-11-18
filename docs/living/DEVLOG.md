@@ -14,6 +14,16 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-18 — W28-S03 Intel HD Audio
+
+**Did:** `drivers/hda`: the controller reset and the CORB/RIRB command rings, the codec's widget graph walked from an output pin to a DAC, the path turned on, and a 32-page BDL ring as `sound.Output` behind `/dev/dsp`. `make hda-smoke`: the tone on `pc` and `q35`, and Doom's sounds, recorded and measured.
+
+**Surprise:** three of QEMU's habits, each found by a boot after the host tests passed. Its controller answers the register at the address whatever the width (a 32-bit read meant for STATESTS returned WAKEEN, so no codec "answered"). It runs the CORB only while RIRBSTS's response flag is cleared after each response. And it tells the codecs which stream stopped from the value that clears RUN: writing 0 told stream 0, the codec's stream 1 went on "running", and after a rate change reopened its voice the next start was ignored; the second tone was silent. QEMU also keeps LPIB across a stream reset and clears it when RUN is set, so positions are counted from just after the start.
+
+**Learned:** a fake built from the specification passes what the specification says; the boot finds what the device actually does. Each of the three is now in the fake (`keepLPIB`, the stops' stream numbers).
+
+**Next:** S04, ACPI power-off and reset.
+
 ## 2026-11-18 — W28-S02 USB hubs
 
 **Did:** the hub class driver in `kernel/usb` (descriptor, port power and reset, hot-plug through the status-change endpoint) over `usb.HubHost`, which xHCI's `Device` implements: route strings, transaction translators, the hub's own slot fields, Disable Slot on a detach. Root ports and hub ports share `enumerate` and `usb.Connect`. `usb-smoke-hub`: two tiers of QEMU hubs with the keyboard, the mouse and a stick, the stick pulled and another plugged in.

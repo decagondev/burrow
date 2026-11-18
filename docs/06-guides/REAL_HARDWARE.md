@@ -65,7 +65,7 @@ What Burrow drives, and what it does not yet:
 | PS/2, IDE | yes, as before |
 | An Intel 82540EM or 82574L network card | yes (W28-S01): `eth0`; the 82574L is the e1000e |
 | An Intel I210/I219, Realtek or Wi-Fi network card | no: the report lists it as "no driver" |
-| HD Audio | no (AC'97 only) |
+| HD Audio | yes (W28-S03): the first codec with an output pin that reaches a DAC (line out, then speaker, then headphones); the report names the codec and the path; no HDMI audio or microphones |
 | A GPU | the firmware's framebuffer (GOP) only |
 
 ## What to send back

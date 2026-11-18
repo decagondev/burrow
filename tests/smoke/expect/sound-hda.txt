@@ -1,0 +1,15 @@
+# Ordered markers for user/tone through /dev/dsp on an Intel HD Audio
+# controller with QEMU's output codec (make hda-smoke, W28-S03): go.img on
+# pc with intel-hda, then go-uefi.img on q35 with ich9-intel-hda; keys
+# tests/smoke/keys/sound.keys. Append-only. drivers/hda resets the
+# controller, finds the codec, walks its widgets from the line-out pin to a
+# DAC and plays the stream by MSI; tests/smoke/checkwav.py measures the
+# recording (440 Hz at 48 kHz, then 880 Hz after a change to 22050 Hz).
+BURROW:GO:OK goroutine says 42
+[hdaudio] INFO: /dev/dsp: codec 0 1af40012, pin 3 (line out) <- dac 2, msi line
+: hdaudio
+[console] INFO: ready: type on the keyboard
+burrow> run /bin/tone
+tone: 48000 Hz s16 stereo, 31 of 31 fragments of 4096 bytes free
+tone: 22050 Hz u8 mono
+tone: ok

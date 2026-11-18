@@ -126,7 +126,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: nic-smoke nic-smoke-run usb-smoke-hub storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: nic-smoke nic-smoke-run usb-smoke-hub hda-smoke hda-smoke-doom hda-smoke-doom-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -579,7 +579,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke hda-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -1267,6 +1267,32 @@ sound-smoke: $(BUILD)/go.img
 	MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="-audiodev wav,id=snd0,path=$(SOUND_WAV) -device AC97,audiodev=snd0" \
 		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/sound.txt 120 tests/smoke/keys/sound.keys
 	python3 tests/smoke/checkwav.py $(SOUND_WAV) tone
+
+# W28-S03: sound-smoke's tone on Intel HD Audio with QEMU's output codec
+# (drivers/hda): go.img on pc with intel-hda, go-uefi.img on q35 with the
+# ICH9's (skipped without ovmf), then doom-smoke's recording on intel-hda
+# (skipped without make doom); checkwav.py measures each.
+HDA_SOUND = -audiodev wav,id=snd0,path=$(1) -device $(2) -device hda-output,audiodev=snd0
+HDA_WAV  := $(BUILD)/hda-smoke.wav
+hda-smoke: $(BUILD)/go.img $(BUILD)/go-uefi.img
+	rm -f $(HDA_WAV)
+	SMOKE_NAME=sound-hda MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(call HDA_SOUND,$(HDA_WAV),intel-hda)" \
+		tests/smoke/smoke.sh $(BUILD)/go.img tests/smoke/expect/sound-hda.txt 120 tests/smoke/keys/sound.keys
+	python3 tests/smoke/checkwav.py $(HDA_WAV) tone
+	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "HDA Q35 SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
+	rm -f $(HDA_WAV) && SMOKE_NAME=sound-hda-q35 MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) \
+		QEMU_EXTRA="$(call HDA_SOUND,$(HDA_WAV),ich9-intel-hda)" \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/sound-hda.txt 120 tests/smoke/keys/sound.keys && \
+	python3 tests/smoke/checkwav.py $(HDA_WAV) tone; fi
+	$(MAKE) --no-print-directory hda-smoke-doom
+hda-smoke-doom:
+	@if [ -f $(BUILD)/doom-root/doom ]; then $(MAKE) --no-print-directory hda-smoke-doom-run; \
+	else echo "HDA DOOM SMOKE SKIP (make doom)"; fi
+hda-smoke-doom-run: $(BUILD)/go-doom.img $(BUILD)/doom-data.img
+	rm -f $(HDA_WAV)
+	SMOKE_NAME=doom-hda MEM=$(GO_MEM) QEMU="$(QEMU)" QEMU_EXTRA="$(DOOM_DRIVE) $(call HDA_SOUND,$(HDA_WAV),intel-hda)" \
+		tests/smoke/smoke.sh $(BUILD)/go-doom.img tests/smoke/expect/doom.txt 120 tests/smoke/keys/doom.keys
+	python3 tests/smoke/checkwav.py $(HDA_WAV) sounds 4
 
 # W22-S04: go.img with QEMU's virtio tablet: the driver names it and its
 # axes, and a click reaches it as EV_KEY BTN_LEFT. S05: the pointer put on
