@@ -1,6 +1,6 @@
 package e1000
 
-// fakeCard plays an 82540EM for host tests: a register file, an EEPROM
+// fakeCard plays an 82540EM or an 82574L (W28-S01) for host tests: a register file, an EEPROM
 // holding the MAC, and DMA into fake physical pages. It walks the transmit
 // ring when the tail moves and fills receive descriptors when the test
 // delivers a frame, raising its interrupt like the real card.
@@ -41,6 +41,7 @@ func (m *fakeMem) at(pa uint64, n int) []byte {
 
 type fakeCard struct {
 	mu      sync.Mutex
+	model   Model
 	reg     map[uint32]uint32
 	eeprom  [3]uint16
 	mem     *fakeMem
@@ -49,8 +50,9 @@ type fakeCard struct {
 	stalled bool // the transmitter does not move (a full ring)
 }
 
-func newFakeCard() *fakeCard {
+func newFakeCard(model Model) *fakeCard {
 	return &fakeCard{
+		model:  model,
 		reg:    map[uint32]uint32{regSTATUS: statusLU},
 		eeprom: [3]uint16{0x5452, 0x1200, 0x5634}, // 52:54:00:12:34:56
 		mem:    newFakeMem(),
@@ -75,8 +77,8 @@ func (c *fakeCard) Write(off, v uint32) {
 	case regCTRL:
 		v &^= ctrlRST // the reset is over at once
 	case regEERD:
-		if v&eerdStart != 0 {
-			v = eerdDone | uint32(c.eeprom[(v>>8)&0xFF])<<16
+		if v&eerdStart != 0 { // the address and done bit where the model has them
+			v = c.model.eerdDone | uint32(c.eeprom[(v>>c.model.eerdShift)&0xFF])<<16
 		}
 	case regIMS:
 		c.reg[regIMS] |= v

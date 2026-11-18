@@ -97,3 +97,23 @@ func TestRegistry(t *testing.T) {
 	}()
 	Register(name, &loopCard{})
 }
+
+// TestRegisterNextTakesTheLowestFreeName: names fill gaps in order and a
+// later card never takes an earlier one's (W28-S01, PIT-110).
+func TestRegisterNextTakesTheLowestFreeName(t *testing.T) {
+	mu.Lock()
+	saved := devices
+	devices = map[string]Device{"eth1": &loopCard{}}
+	mu.Unlock()
+	defer func() { mu.Lock(); devices = saved; mu.Unlock() }()
+	a, b := &loopCard{}, &loopCard{}
+	if got := RegisterNext(a); got != "eth0" {
+		t.Fatalf("first card: %s", got)
+	}
+	if got := RegisterNext(b); got != "eth2" {
+		t.Fatalf("second card: %s", got)
+	}
+	if d, _ := Get("eth0"); d != a {
+		t.Error("eth0 is not the first card")
+	}
+}

@@ -19,9 +19,10 @@ const (
 
 // NIC is a started card; it is a netdev.Device.
 type NIC struct {
-	regs Regs
-	mac  netdev.MAC
-	rx   *ring
+	regs  Regs
+	model Model
+	mac   netdev.MAC
+	rx    *ring
 
 	txMu sync.Mutex // Send may come from any goroutine
 	tx   *ring
@@ -31,11 +32,11 @@ type NIC struct {
 	stats netdev.Stats
 }
 
-// New resets the card behind regs, reads its address, sets up both rings in
-// pages from page and turns receiving, sending and interrupts on. The
-// caller serves the interrupt line with Interrupt.
-func New(regs Regs, page DMAPage) (*NIC, error) {
-	n := &NIC{regs: regs}
+// New resets the card behind regs (a model's), reads its address, sets up
+// both rings in pages from page and turns receiving, sending and interrupts
+// on. The caller serves the interrupt line with Interrupt.
+func New(regs Regs, page DMAPage, model Model) (*NIC, error) {
+	n := &NIC{regs: regs, model: model}
 	if err := n.reset(); err != nil {
 		return nil, err
 	}
@@ -73,15 +74,16 @@ func (n *NIC) reset() error {
 	return nil
 }
 
-// readMAC reads the address from the EEPROM (words 0-2); if the EEPROM does
-// not answer, the address the card already holds in RAL0/RAH0.
+// readMAC reads the address from the EEPROM (words 0-2, through EERD in
+// the model's layout); if the EEPROM does not answer, the address the card
+// already holds in RAL0/RAH0.
 func (n *NIC) readMAC() netdev.MAC {
 	var mac netdev.MAC
 	for w := uint32(0); w < eepromMACLen; w++ {
-		n.regs.Write(regEERD, eerdStart|w<<8)
+		n.regs.Write(regEERD, eerdStart|w<<n.model.eerdShift)
 		start := time.Now()
 		v := n.regs.Read(regEERD)
-		for ; v&eerdDone == 0; v = n.regs.Read(regEERD) {
+		for ; v&n.model.eerdDone == 0; v = n.regs.Read(regEERD) {
 			if time.Since(start) > eepromWait {
 				lo, hi := n.regs.Read(regRAL0), n.regs.Read(regRAH0)
 				return netdev.MAC{byte(lo), byte(lo >> 8), byte(lo >> 16), byte(lo >> 24), byte(hi), byte(hi >> 8)}
@@ -187,5 +189,6 @@ func (n *NIC) Stats() netdev.Stats {
 }
 
 func (n *NIC) MAC() netdev.MAC { return n.mac }
+func (n *NIC) Model() Model    { return n.model }
 func (n *NIC) MTU() int        { return MTU }
 func (n *NIC) LinkUp() bool    { return n.regs.Read(regSTATUS)&statusLU != 0 }

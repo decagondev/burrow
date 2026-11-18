@@ -48,11 +48,7 @@ func (d *netDriver) Start(env *driver.Env) error {
 		return err
 	}
 	virtiopci.Serve(env, d.dev, "virtionet", nic.Interrupt)
-	name := "eth0"
-	if _, taken := netdev.Get(name); taken {
-		name = "eth1"
-	}
-	netdev.Register(name, nic)
+	name := netdev.RegisterNext(nic) // eth1 beside an e1000's eth0 (PIT-110)
 	link := "down"
 	if nic.LinkUp() {
 		link = "up"

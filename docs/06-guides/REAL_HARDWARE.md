@@ -63,7 +63,8 @@ What Burrow drives, and what it does not yet:
 | The stick, a USB disk | yes: USB mass storage (bulk-only, SCSI), `uba`, `ubb`, ... |
 | SATA through AHCI, NVMe | yes: `sda`.., `nvme0n1`.., their FAT32 and ext2 volumes mounted by label (see above) |
 | PS/2, IDE | yes, as before |
-| An Intel e1000e/igc, Realtek or Wi-Fi network card | no: the report lists it as "no driver" |
+| An Intel 82540EM or 82574L network card | yes (W28-S01): `eth0`; the 82574L is the e1000e |
+| An Intel I210/I219, Realtek or Wi-Fi network card | no: the report lists it as "no driver" |
 | HD Audio | no (AC'97 only) |
 | A GPU | the firmware's framebuffer (GOP) only |
 

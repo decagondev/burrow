@@ -1,13 +1,19 @@
-// Package e1000 drives the Intel 82540EM Ethernet card (PCI 8086:100E),
-// QEMU's default NIC (W17-S01): reset, the MAC address from the EEPROM, one
-// receive and one transmit descriptor ring in frames the nucleus hands out
-// (physical memory that never moves: DMA must not see Go's heap, PIT-44),
-// and receive and transmit-done interrupts served as wake-ups (ADR-0005).
-// The card registers as netdev "eth0". Registers sit behind Regs and DMA
-// pages behind a function, so host tests drive a fake card.
-// Reference: Intel's PCI/PCI-X Family of Gigabit Ethernet Controllers
-// Software Developer's Manual (8254x), chapters 3, 13 and 14.
-// Docs: docs/04-plan/waves/WAVE-17-networking.md.
+// Package e1000 drives Intel's 8254x-family Ethernet cards (W17-S01): the
+// 82540EM (PCI 8086:100E), QEMU's default NIC, and since W28-S01 the 82574L
+// (8086:10D3, QEMU's `e1000e` and q35's own card), which keeps the 8254x's
+// registers, legacy descriptors and interrupt causes and differs where the
+// model table says: the EEPROM read register's layout and an MSI
+// capability. Reset, the MAC address from the EEPROM, one receive and one
+// transmit descriptor ring in frames the nucleus hands out (physical memory
+// that never moves: DMA must not see Go's heap, PIT-44), and receive and
+// transmit-done interrupts served as wake-ups (ADR-0005). Every card found
+// registers as the next netdev name (eth0, eth1, ...; PIT-110). Registers
+// sit behind Regs and DMA pages behind a function, so host tests drive a
+// fake card as either model. Never touches the 82574L's PCIe extras (they
+// stay at their reset values). Reference: Intel's 8254x Software
+// Developer's Manual (chapters 3, 13, 14) and the 82574 GbE Controller
+// Datasheet (10.2.2.4, EERD). Docs: docs/04-plan/waves/WAVE-17-networking.md,
+// WAVE-28-more-devices.md.
 package e1000
 
 import (
@@ -17,7 +23,6 @@ import (
 
 const (
 	Vendor = 0x8086
-	Device = 0x100E // 82540EM
 
 	MMIOBytes = 0x20000 // BAR 0: 128 KiB of registers
 
@@ -56,7 +61,6 @@ const (
 	statusLU = 1 << 1 // link up
 
 	eerdStart = 1 << 0
-	eerdDone  = 1 << 4
 
 	rahAV = 1 << 31 // the receive address is valid
 
@@ -77,6 +81,31 @@ const (
 	intRXT0   = 1 << 7 // a frame received
 	intWanted = intTXDW | intLSC | intRXDMT0 | intRXO | intRXT0
 )
+
+// Model is what differs between the cards this driver knows.
+type Model struct {
+	Name      string
+	Device    uint16 // PCI device id (vendor 8086)
+	eerdShift uint   // where EERD takes the word's address
+	eerdDone  uint32 // EERD's done bit
+	MSI       bool   // the card has an MSI capability worth using
+}
+
+// Models are the cards this driver drives, in the order it looks for them.
+var Models = []Model{
+	{Name: "82540EM", Device: 0x100E, eerdShift: 8, eerdDone: 1 << 4},
+	{Name: "82574L", Device: 0x10D3, eerdShift: 2, eerdDone: 1 << 1, MSI: true},
+}
+
+// ModelFor is the model with PCI device id dev.
+func ModelFor(dev uint16) (Model, bool) {
+	for _, m := range Models {
+		if m.Device == dev {
+			return m, true
+		}
+	}
+	return Model{}, false
+}
 
 // Regs is the card's register file.
 type Regs interface {

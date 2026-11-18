@@ -14,8 +14,13 @@ import (
 
 func start(t *testing.T) (*fakeCard, *NIC) {
 	t.Helper()
-	c := newFakeCard()
-	nic, err := New(c, c.mem.page)
+	return startModel(t, Models[0])
+}
+
+func startModel(t *testing.T, m Model) (*fakeCard, *NIC) {
+	t.Helper()
+	c := newFakeCard(m)
+	nic, err := New(c, c.mem.page, m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +55,54 @@ func TestNewSetsUpTheCard(t *testing.T) {
 		t.Error("link or MTU")
 	}
 	var _ netdev.Device = nic
+}
+
+// TestModelsReadTheirEEPROM: each model's EERD layout gives the address
+// (W28-S01: the 82574L's address sits at bit 2 and its done bit is bit 1).
+func TestModelsReadTheirEEPROM(t *testing.T) {
+	for _, m := range Models {
+		_, nic := startModel(t, m)
+		if got := nic.MAC().String(); got != "52:54:00:12:34:56" {
+			t.Errorf("%s: MAC %s", m.Name, got)
+		}
+		if found, ok := ModelFor(m.Device); !ok || found.Name != m.Name || nic.Model().Name != m.Name {
+			t.Errorf("%s: ModelFor %v %v", m.Name, found, ok)
+		}
+	}
+	if _, ok := ModelFor(0x1234); ok {
+		t.Error("ModelFor found a card it does not know")
+	}
+}
+
+// TestModelsMoveFrames: the 82574L runs the same rings with legacy
+// descriptors (RFCTL.EXSTEN stays 0).
+func TestModelsMoveFrames(t *testing.T) {
+	for _, m := range Models {
+		c, nic := startModel(t, m)
+		got := make(chan []byte, 1)
+		nic.SetReceiver(func(f []byte) { got <- f })
+		if !c.deliver(frame(7)) {
+			t.Fatalf("%s: no receive buffer", m.Name)
+		}
+		select {
+		case f := <-got:
+			if !bytes.Equal(f, frame(7)) {
+				t.Errorf("%s: received %q", m.Name, f)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: nothing received", m.Name)
+		}
+		if err := nic.Send(frame(9)); err != nil {
+			t.Fatalf("%s: %v", m.Name, err)
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for len(c.sentFrames()) == 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if s := c.sentFrames(); len(s) != 1 || !bytes.Equal(s[0], frame(9)) {
+			t.Errorf("%s: sent %q", m.Name, s)
+		}
+	}
 }
 
 func TestSendWrapsAroundTheRing(t *testing.T) {
@@ -152,8 +205,8 @@ func TestReceiveWithoutReceiverDrops(t *testing.T) {
 // W22-S01: on a shared line the card claims an interrupt only when its own
 // cause register says so; a cause of 0 is another device's interrupt.
 func TestInterruptClaimsOnlyItsOwn(t *testing.T) {
-	c := newFakeCard()
-	nic, err := New(c, c.mem.page)
+	c := newFakeCard(Models[0])
+	nic, err := New(c, c.mem.page, Models[0])
 	if err != nil {
 		t.Fatal(err)
 	}

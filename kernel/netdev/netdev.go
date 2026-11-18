@@ -9,6 +9,7 @@ package netdev
 import (
 	"errors"
 	"sort"
+	"strconv"
 	"sync"
 )
 
@@ -53,6 +54,21 @@ func Register(name string, d Device) {
 		panic("netdev: " + name + " registered twice")
 	}
 	devices[name] = d
+}
+
+// RegisterNext registers d as the lowest ethN no card has and returns the
+// name. Drivers start in name order and each takes its cards in PCI order,
+// so a second card never renames the first (W28-S01, PIT-110).
+func RegisterNext(d Device) string {
+	mu.Lock()
+	defer mu.Unlock()
+	for i := 0; ; i++ {
+		name := "eth" + strconv.Itoa(i)
+		if _, taken := devices[name]; !taken {
+			devices[name] = d
+			return name
+		}
+	}
 }
 
 // Get returns the card registered as name.

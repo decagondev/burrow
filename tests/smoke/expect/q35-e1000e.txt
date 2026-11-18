@@ -1,0 +1,21 @@
+# Ordered markers for go-uefi-dhcp.img on QEMU's q35 machine under OVMF with
+# no -nic option, so its own card, the Intel 82574L (e1000e) (make
+# q35-smoke's second boot, W28-S01). Append-only. drivers/e1000 reads the
+# 82574L's address through its EEPROM register's own layout, interrupts by
+# MSI, takes 10.0.2.15 from QEMU's DHCP server (kargs net=dhcp) and hears
+# an ARP reply; the hardware report names its driver.
+BURROW:EFI:OK
+BURROW:GO:OK goroutine says 42
+[e1000] INFO: eth0: 82574L, 52:54:00:12:34:56, link up, msi line
+[driver] INFO: started: [ahci bga e1000 pci ps2 rtc serial virtioblk]
+[net] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease
+[e1000] INFO: 10.0.2.2 is at
+[console] INFO: ready: type on the keyboard
+burrow> hw
+8086:10d3 ethernet (class 02.00.00, irq
+mounts:
+burrow> net
+eth0: mtu 1500 ether 52:54:00:12:34:56
+    inet 10.0.2.15/24
+burrow> poweroff
+[nucleus] acpi: powering off

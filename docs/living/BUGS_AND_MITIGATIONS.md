@@ -497,7 +497,7 @@ Pre-registered hazards with planned mitigations. If one bites anyway, open a BUG
 | PIT-107 | W28 | A hub's speeds mix: a full- or low-speed device behind a high-speed hub needs the hub's transaction translator in its slot context, and QEMU's `usb-hub` (full speed) never needs one | open |
 | PIT-108 | W28 | HD Audio codecs differ: widget graphs, pin defaults, amplifiers and EAPD vary, and QEMU's `hda-output` is the simplest graph; walk from pin defaults, never fixed node ids, and report the path | open |
 | PIT-109 | W28 | ACPI mode and reset differ per firmware: legacy mode until `ACPI_ENABLE`, reset registers in memory space, 0xCF9 ignored; try in order and say on the screen what each step did | open |
-| PIT-110 | W28 | A second network card must not rename the first: `eth0` stays the first card in PCI order, so `/etc/net.conf` keeps meaning it | open |
+| PIT-110 | W28 | A second network card must not rename the first: `eth0` stays the first card in PCI order, so `/etc/net.conf` keeps meaning it | mitigated (S01: `netdev.RegisterNext` gives the lowest free name; drivers start in name order and take their cards in PCI order; host-tested) |
 | PIT-61 | W20 | A lost wake-up across CPUs: check-then-block not under the waker's lock (PIT-23's rule with a real second CPU) | S06: ktests ping-pong across CPUs millions of times |
 | PIT-62 | W20 | Stale TLB entries on other CPUs: copy-on-write breaks silently, a reused frame is corrupted | S07: shootdown before any frame is reused; ktests aim at exactly this |
 | PIT-63 | W20 | The AP trampoline is 16-bit code in a page the loader must leave alone | S05: the page in the memory map and MEMORY_MAP.md; a regression case corrupts it and must fail loudly |

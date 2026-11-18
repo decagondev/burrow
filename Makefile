@@ -101,10 +101,11 @@ drive_on = $(if $(filter virtio,$(3)),$(call virtio_drive,$(1)),$(if $(filter ah
 data_drive = $(call drive_on,$(1),$(2),$(DISK_IF))
 run_drive = $(call drive_on,$(1),$(2),$(RUN_DISK_IF))
 # W23-S05: the network card of the run targets: virtio-net since W23-S07
-# (make net-bench: 12.3 MB/s against the e1000's 5), or NIC=e1000. The
-# smokes choose theirs (NIC_MODEL, e1000 unless virtio-smoke).
+# (make net-bench: 12.3 MB/s against the e1000's 5), or NIC=e1000, or
+# NIC=e1000e (the 82574L, W28-S01). The smokes choose theirs (NIC_MODEL,
+# e1000 unless virtio-smoke or nic-smoke).
 NIC ?= virtio
-NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,e1000)
+NIC_MODEL = $(if $(filter virtio,$(NIC)),virtio-net-pci,$(if $(filter e1000e,$(NIC)),e1000e,e1000))
 RUN_NIC = $(if $(filter virtio,$(NIC)),-nic user$(comma)model=virtio-net-pci)
 # the expect file of a smoke on DISK_IF: the IDE one, or its virtio copy
 xp = $(if $(filter virtio ahci nvme usb,$(DISK_IF)),$(BUILD)/$(DISK_IF)-expect/$(notdir $(1)),$(1))
@@ -125,7 +126,7 @@ QEMU_COMMON := -machine pc -cpu $(QEMU_CPU) -m 128M -smp $(SMP) -accel tcg,threa
 	-drive file=$(BUILD)/disk.img,format=raw,if=ide,index=0,media=disk \
 	-no-reboot
 
-.PHONY: storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
+.PHONY: nic-smoke nic-smoke-run storage-smoke q35-smoke usb-smoke usb-desktop-smoke usb-desktop-smoke-run usb-initrd usb-initrd-smoke usb-smoke-x11 usb-smoke-storage uefi-smoke uefi-smoke-doom uefi-smoke-doom-run uefi-smoke-net uefi-smoke-net-run uefi-smoke-usb uefi-smoke-usb-run uefi-usb run-usb uefi-interop uefi-ktest boot-bench all run run-go run-busybox run-doom hostsim debug test test-unit test-c test-go census fat-interop ext2-interop acpi-smoke vbe-smoke fb-smoke fb-smoke-doom fb-smoke-x11 sound-smoke tablet-smoke tablet-smoke-x11 tablet-smoke-qt poweroff-smoke smoke go-smoke devices-smoke desk-smoke disk-smoke run-dev dev-smoke dev-smoke-run ports-smoke mem-smoke ports x11 x11-census x11-smoke x11-smoke-run x11-bench run-desktop desktop-smoke desktop-smoke-run net-smoke net-smoke-run unix-smoke unix-smoke-run run-unix net-bench run-net mem-bench smp-bench fb-bench qt qt-census qt-bench qt-smoke qt-smoke-run qtpad-smoke run-qt ports-dl-smoke ports-dl-smoke-run doom doom-smoke doom-smoke-run doom-bench busybox busybox-smoke busybox-smoke-run proc-smoke proc-smoke-run virtio-smoke virtio-net-smoke disk-bench net-ports net-census tls-smoke tls-smoke-run ssh-census ssh-smoke ssh-smoke-run ssh-bench browser browser-census browser-smoke browser-smoke-run browser-bench unix-desktop-smoke unix-desktop-smoke-run lat-bench lat-linux keys-lint ktest regress sizes docs-check site gallery clean
 all: $(BUILD)/disk.img
 
 # ---- boot sectors -----------------------------------------------------------
@@ -258,6 +259,11 @@ $(BUILD)/uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/m
 $(BUILD)/go-uefi.img: $(BUILD)/efi/BOOTX64.EFI $(BUILD)/nucleus.disk.elf $(BUILD)/kernel.elf $(BUILD)/initrd.tar $(BUILD)/mkimage $(wildcard kernel/fs/fat/*.go kernel/cmd/mkfat/*.go)
 	$(call uefi_image,go-uefi,-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar)
 
+# W28-S01: go-uefi.img with kargs net=dhcp, for q35's own card in q35-smoke.
+$(BUILD)/go-uefi-dhcp.img: $(UEFI_PARTS) $(BUILD)/initrd.tar
+	echo net=dhcp > $(BUILD)/kargs-uefi-dhcp.txt
+	$(call uefi_image,go-uefi-dhcp,-video $(VIDEO) -payload nucleus=$(BUILD)/nucleus.disk.elf -payload kernel=$(BUILD)/kernel.elf -payload initrd=$(BUILD)/initrd.tar -payload kargs=$(BUILD)/kargs-uefi-dhcp.txt)
+
 # W26-S05: the other Go images' UEFI twins (go-busybox, go-doom, go-dev,
 # go-unix), each from its BIOS image's payload list (GO_*_PAYLOADS), the
 # nucleus and the video request; $(call uefi_go_image,name,payloads).
@@ -383,13 +389,18 @@ uefi-ktest: $(patsubst %,$(BUILD)/uefi-ktest-%.img,$(UEFI_KTEST_SUITES))
 # CPU and four, then go-uefi.img with the data disk on virtio-blk (MSI-X)
 # and an e1000 (its INTx line through the I/O APIC). The BIOS images stay on
 # pc: their loader reads the disk by IDE, which q35 has not (W27-S02).
+# W28-S01: then go-uefi-dhcp.img with no -nic, so q35's own card, the
+# 82574L (e1000e), on MSI, takes its address by DHCP (kargs net=dhcp).
 Q35_EXTRA = -drive file=$(BUILD)/data.img,format=raw,if=virtio -nic user,model=e1000
-q35-smoke: $(BUILD)/uefi-ktest-irq.img $(BUILD)/go-uefi.img $(BUILD)/data.img
+q35-smoke: $(BUILD)/uefi-ktest-irq.img $(BUILD)/go-uefi.img $(BUILD)/go-uefi-dhcp.img $(BUILD)/data.img
 	@if [ ! -f "$(OVMF_CODE)" ] || [ ! -f "$(OVMF_VARS)" ]; then echo "Q35 SMOKE SKIP (no $(OVMF_CODE): apt install ovmf)"; else \
 	for n in 1 4; do SMOKE_NAME=q35-irq-$$n SMP=$$n MACHINE=q35 $(OVMF_ENV) \
 		tests/smoke/smoke.sh $(BUILD)/uefi-ktest-irq.img tests/ktest/expect/irq.txt 90 || exit 1; done && \
 	SMOKE_NAME=q35 MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) QEMU_EXTRA="$(Q35_EXTRA)" \
-		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/boot_to_q35.txt 120 tests/smoke/keys/q35.keys; fi
+		tests/smoke/smoke.sh $(BUILD)/go-uefi.img tests/smoke/expect/boot_to_q35.txt 120 tests/smoke/keys/q35.keys && \
+	SMOKE_NAME=q35-e1000e MACHINE=q35 MEM=$(GO_MEM) POWEROFF=acpi $(OVMF_ENV) \
+		QEMU_EXTRA="-drive file=$(BUILD)/data.img,format=raw,if=virtio" \
+		tests/smoke/smoke.sh $(BUILD)/go-uefi-dhcp.img tests/smoke/expect/q35-e1000e.txt 120 tests/smoke/keys/q35-e1000e.keys; fi
 
 # W27-S03: q35 under OVMF with no PS/2 controller (i8042=off): the keyboard
 # and mouse are USB devices on QEMU's xHCI controller. usb.keys types into
@@ -554,7 +565,7 @@ debug: $(BUILD)/disk.img
 	$(QEMU) $(QEMU_COMMON) -serial mon:stdio -display none -s -S
 
 # ---- tests ------------------------------------------------------------------
-test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
+test: test-unit census fat-interop ext2-interop uefi-interop smoke uefi-smoke go-smoke devices-smoke disk-smoke ports-smoke mem-smoke desk-smoke ports-dl-smoke dev-smoke doom-smoke busybox-smoke qt-smoke x11-smoke desktop-smoke net-smoke unix-smoke acpi-smoke vbe-smoke fb-smoke sound-smoke tablet-smoke proc-smoke virtio-smoke nic-smoke storage-smoke q35-smoke usb-smoke usb-desktop-smoke tls-smoke ssh-smoke browser-smoke unix-desktop-smoke poweroff-smoke ktest uefi-ktest regress
 
 test-unit: test-c test-go keys-lint
 
@@ -1122,6 +1133,22 @@ virtio-net-smoke: $(BUILD)/go-dev-dhcp.img
 	rm -f $(BUILD)/home-net.img
 	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
 	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=virtio-net-pci tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev-dhcp.img $(BUILD)/home-net.img 240
+# W28-S01: net-smoke's two parts once more on the 82574L (QEMU's e1000e,
+# driven by drivers/e1000 on MSI), the address from DHCP.
+nic-smoke:
+	@if [ -f $(BUILD)/busybox ] && [ -f $(BUILD)/ports-root/bin/lua ]; then $(MAKE) --no-print-directory nic-smoke-run; \
+	else echo "NIC SMOKE SKIP (make busybox ports builds what it needs)"; fi
+nic-smoke-run: $(BUILD)/go-dev-dhcp.img
+	SMOKE_NAME=net-e1000e MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=e1000e tests/smoke/net-smoke.sh $(BUILD) $(BUILD)/go-dev-dhcp.img net 120
+	@grep -aq '\[e1000\] INFO: eth0: 82574L, 52:54:00:12:34:56, link up, msi line' $(BUILD)/smoke-net-e1000e.log \
+		&& grep -aq '\[net\] INFO: eth0 dhcp 10.0.2.15/24 via 10.0.2.2, lease' $(BUILD)/smoke-net-e1000e.log \
+		&& grep -aq '\[e1000\] INFO: 10.0.2.2 is at' $(BUILD)/smoke-net-e1000e.log \
+		&& echo "E1000E NET PASS (the 82574L's eth0 took 10.0.2.15/24 from DHCP, on MSI)" \
+		|| { echo "E1000E NET FAIL: no 82574L, lease or ARP answer in build/smoke-net-e1000e.log"; exit 1; }
+	rm -f $(BUILD)/home-net.img
+	cd kernel && $(GO) run ./cmd/mkfat -o ../$(BUILD)/home-net.img -label burrowhome -size 64 ../workbench
+	MEM=$(GO_MEM) QEMU="$(QEMU)" NIC_MODEL=e1000e tests/smoke/net-serve.sh $(BUILD) $(BUILD)/go-dev-dhcp.img $(BUILD)/home-net.img 240
+
 # The disks' speed (W23-S04, not in make test): the kernel writes and reads
 # 64 MiB of a scratch disk at boot (kargs diskbench=), on IDE then virtio,
 # AHCI and NVMe (W27-S02); tests/smoke/disk-budgets.py wants each no slower than IDE.

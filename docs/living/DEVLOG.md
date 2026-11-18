@@ -14,6 +14,14 @@ Links:     BUG-xxxx, ADR-xxxx
 
 ---
 
+## 2026-11-18 — W28-S01 The e1000e
+
+**Did:** `drivers/e1000` drives the Intel 82574L (QEMU's `e1000e`, q35's own card) beside the 82540EM: a model table with the EEPROM register's layout and MSI; every card found registers as the lowest free `ethN` (`netdev.RegisterNext`, virtionet too). `make nic-smoke` (net-smoke and net-serve on the e1000e with DHCP) and a second `q35-smoke` boot on q35's own card.
+
+**Surprise:** how little differs: the 82574L took the 82540EM's legacy descriptors, rings and causes unchanged, and only the EEPROM read register moved its bits (address at 2, done at 1). With the old layout the driver would have waited out the EEPROM's timeout and still found the address in RAL0, so the difference only shows on a card whose firmware leaves RAL0 empty.
+
+**Next:** S02, USB hubs.
+
 ## 2026-11-14 — W27 done: a real PC's devices (M27)
 
 **Did:** the wave in six slices. The ISA lines through the I/O APIC by the MADT's overrides, MSI and MSI-X for PCI devices, virtio on MSI-X, `irqs`, `q35-smoke` (S01); AHCI and NVMe disks, partitions on every disk, the boot disk on any interface, `storage-smoke` (S02); xHCI and a USB stack with HID boot keyboards and mice on the PS/2 path, `usb-smoke` with an X session (S03); USB mass storage, a stick pulled while mounted (S04); the M27 stick booting on `q35` from USB alone with the desktop, the hardware report, the initrd-only stick, REAL_HARDWARE.md (S05); `disk-bench` on four interfaces, ARCHITECTURE.md §7.12, ADR-0014, R-06 (S06). `make test` green on four CPUs and on one.

@@ -1,0 +1,12 @@
+# Typed into the Go console of go-uefi-dhcp.img on q35 with its own 82574L
+# (make q35-smoke's second boot, W28-S01): the hardware report (its line for
+# the card), the network's state, then poweroff.
+wait burrow>
+type hw
+key ret
+wait mounts:
+type net
+key ret
+wait inet 10.0.2.15
+type poweroff
+key ret
