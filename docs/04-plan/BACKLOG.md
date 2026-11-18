@@ -223,12 +223,22 @@ Status: `[x]` done · `[ ]` open. Waves in brackets show where stories are sched
 ## E24 A real PC's devices
 *Exit: Burrow boots from a USB stick on a machine with no legacy devices and runs the desktop with USB input and modern disks.* [W27]
 
-- [ ] E24.F01 As a kernel dev, I want interrupts through the I/O APIC and MSI, so that devices interrupt on machines without a usable 8259 path. [W27-S01]
-- [ ] E24.F02 As a user, I want SATA (AHCI) and NVMe disks, and partitions found on every disk, so that Burrow reads the disks a real PC has. [W27-S02]
-- [ ] E24.F03 As a user, I want USB keyboards and mice (xHCI, HID), so that I can use a PC with no PS/2 ports. [W27-S03]
-- [ ] E24.F04 As a user, I want USB storage, so that the stick Burrow boots from also holds its root and data volumes. [W27-S04]
-- [ ] E24.F05 As a tester, I want one stick image that boots q35 and a real PC, a smaller initrd-only image, and a report of what the kernel found, so that a real machine's result comes back as one photo or file. [W27-S05]
-- Later: Intel HD Audio · real network cards (e1000e/igc, r8169) · ACPI AML for power-off · EHCI and external hubs · Wi-Fi.
+- [x] E24.F01 As a kernel dev, I want interrupts through the I/O APIC and MSI, so that devices interrupt on machines without a usable 8259 path. [W27-S01]
+- [x] E24.F02 As a user, I want SATA (AHCI) and NVMe disks, and partitions found on every disk, so that Burrow reads the disks a real PC has. [W27-S02]
+- [x] E24.F03 As a user, I want USB keyboards and mice (xHCI, HID), so that I can use a PC with no PS/2 ports. [W27-S03]
+- [x] E24.F04 As a user, I want USB storage, so that the stick Burrow boots from also holds its root and data volumes. [W27-S04]
+- [x] E24.F05 As a tester, I want one stick image that boots q35 and a real PC, a smaller initrd-only image, and a report of what the kernel found, so that a real machine's result comes back as one photo or file. [W27-S05]
+- Later: more of a real PC (E25, W28) · Realtek and newer Intel network cards · an AML interpreter · Wi-Fi.
+
+## E25 More of a real PC
+*Exit: on `q35` with its own devices, Burrow boots from a stick behind a USB hub, is on the network over the e1000e, plays sound through HD Audio, and reboots and powers off by ACPI.* [W28]
+
+- [ ] E25.F01 As a user, I want the Intel 82574L (e1000e) network card, so that `q35` and PCs with that card are on the network. [W28-S01]
+- [ ] E25.F02 As a user, I want USB hubs, so that keyboards, mice and sticks plugged into a hub, a monitor or a dock are found. [W28-S02]
+- [ ] E25.F03 As a user, I want Intel HD Audio, so that Doom and `/dev/dsp` play sound on a PC without an AC'97. [W28-S03]
+- [ ] E25.F04 As a user, I want power-off and reboot to work on firmware that is not QEMU's (ACPI mode, `\_S5` in an SSDT, the FADT's reset register), so that Burrow can turn a real PC off and restart it. [W28-S04]
+- [ ] E25.F05 As a tester, I want one `q35` boot with every one of these devices and a report with no desktop device left without a driver, so that the next real machine has the best chance. [W28-S05]
+- Later: Realtek r8169 and Intel I210/I219 cards · EHCI/OHCI/UHCI · USB audio · HDMI audio and microphones · suspend.
 
 ## E12 Hardening & Evolution
 *Exit: a platform worth extending.* [W20, then later]
